@@ -29,11 +29,11 @@ export function deserialize(raw: string, now: number): GameState {
       ...parsed,
       resources: { ...base.resources, ...(parsed.resources ?? {}) },
       stations: (parsed.stations ?? []).map((s) => ({
-        cycleProgress: 0,
-        buffer: {},
-        tendCooldownRemaining: 0,
-        level: 1,
         ...s,
+        level: s.level ?? 1,
+        cycleProgress: s.cycleProgress ?? 0,
+        buffer: s.buffer ?? {},
+        tendCooldownRemaining: s.tendCooldownRemaining ?? 0,
       })),
     };
   } catch {
