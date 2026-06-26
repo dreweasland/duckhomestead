@@ -70,8 +70,9 @@ export default function App() {
           </div>
           {state.stations.length === 0 && (
             <div className="max-w-[460px] text-center text-xs text-[#9a8a6a]">
-              You have 10 eggs to start. Pick a Feed Plot below and click a tile to plant your first
-              corn — then build the chain up to a Coop.
+              You start with {state.resources.eggs} eggs — enough to build the whole chain. Place a
+              Feed Plot (corn), a Feed Mill (corn → pellets), and a Coop (pellets → eggs). Eggs only
+              come from the Coop, so build all three, then Collect corn so the Mill can run.
             </div>
           )}
         </div>
@@ -81,6 +82,18 @@ export default function App() {
           <HUD state={state} />
           <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
           <StationPanel engine={engine} state={state} station={selected} />
+          <button
+            onClick={() => {
+              if (window.confirm('Wipe this homestead and start over?')) {
+                engine.reset();
+                setSelectedId(null);
+                setBuildType(null);
+              }
+            }}
+            className="self-start text-[10px] text-[#6a5a3a] underline hover:text-[#9a8a6a]"
+          >
+            New homestead (reset save)
+          </button>
         </div>
       </div>
     </div>

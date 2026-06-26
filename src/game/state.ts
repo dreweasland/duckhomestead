@@ -1,4 +1,4 @@
-import type { StationType } from '../config/balance';
+import { BALANCE, type StationType } from '../config/balance';
 
 /** The three chain resources. `eggs` is the primary spendable currency. */
 export type Resource = 'corn' | 'pellets' | 'eggs';
@@ -54,8 +54,8 @@ export function initialResources(): Resources {
 export function initialState(now: number): GameState {
   return {
     version: 1,
-    // Seed enough eggs to place the first Feed Plot so the loop can start.
-    resources: { corn: 0, pellets: 0, eggs: 10 },
+    // Seed enough eggs to build the full starter chain (see STARTING_EGGS).
+    resources: { corn: 0, pellets: 0, eggs: BALANCE.STARTING_EGGS },
     stations: [],
     nextStationId: 1,
     rank: 1,

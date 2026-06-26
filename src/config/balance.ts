@@ -46,6 +46,14 @@ export const BALANCE = {
   } as Record<StationType, number>,
 
   /**
+   * Eggs the player starts with. MUST cover the full starter chain
+   * (plot 10 + mill 25 + coop 50 = 85) or the economy softlocks: eggs only
+   * come from a Coop, so you can't bootstrap without affording one. The
+   * surplus lets you misplace once or grab an early upgrade.
+   */
+  STARTING_EGGS: 100,
+
+  /**
    * Cost in EGGS to upgrade a station to the next level.
    * Cost for level L -> L+1 = base * growth^(L-1). Each level multiplies the
    * station's output by UPGRADE_OUTPUT_MULT per level above 1.

@@ -8,9 +8,9 @@ import {
   type ActionResult,
 } from './actions';
 import type { Milestone } from './rank';
-import { loadGame, saveToStorage, type AwaySummary } from './save';
+import { clearStorage, loadGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
-import type { GameState } from './state';
+import { initialState, type GameState } from './state';
 
 export interface DingEvent {
   newRank: number;
@@ -156,6 +156,15 @@ export class GameEngine {
   /** Dismiss the "While you were away" summary. */
   clearAway() {
     this.away = null;
+    this.notify();
+  }
+
+  /** Wipe the save and start a fresh homestead. */
+  reset() {
+    clearStorage();
+    this.state = initialState(Date.now());
+    this.away = null;
+    this.saveNow();
     this.notify();
   }
 }
