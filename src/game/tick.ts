@@ -1,0 +1,97 @@
+import { BALANCE, STATION_DEFS } from '../config/balance';
+import type { Resource } from './state';
+import type { GameState, Station } from './state';
+import { UPGRADE_OUTPUT } from './actions';
+
+export type SimMode = 'online' | 'offline';
+
+export interface TickOptions {
+  mode: SimMode;
+  /**
+   * When true, station buffers are auto-hauled into central storage every
+   * step so the chain flows hands-free. Online this requires the Auto-Haul
+   * unlock; offline catch-up always hauls (idle is the floor — resources only).
+   */
+  autoHaul: boolean;
+}
+
+/** Effective output of a station per cycle for a given resource. */
+function stationOutput(station: Station, resource: Resource): number {
+  const base = STATION_DEFS[station.type].outputs[resource] ?? 0;
+  return base * UPGRADE_OUTPUT(station.level);
+}
+
+/** Move everything in a station's buffer into central storage. */
+function haul(state: GameState, station: Station): void {
+  for (const key of Object.keys(station.buffer) as Resource[]) {
+    const amt = station.buffer[key] ?? 0;
+    if (amt > 0) state.resources[key] += amt;
+  }
+  station.buffer = {};
+}
+
+/**
+ * Attempt to run one production cycle for a station: if central storage holds
+ * the required inputs, consume them and deposit outputs into the buffer.
+ * Returns true if a cycle ran. Inputs are scaled by level the same as outputs
+ * so throughput stays balanced across the chain.
+ */
+function runCycle(state: GameState, station: Station): boolean {
+  const def = STATION_DEFS[station.type];
+  const mult = UPGRADE_OUTPUT(station.level);
+
+  // Check inputs are affordable from central storage.
+  for (const key of Object.keys(def.inputs) as Resource[]) {
+    const need = (def.inputs[key] ?? 0) * mult;
+    if (state.resources[key] < need) return false;
+  }
+  // Consume inputs.
+  for (const key of Object.keys(def.inputs) as Resource[]) {
+    state.resources[key] -= (def.inputs[key] ?? 0) * mult;
+  }
+  // Deposit outputs into the station buffer.
+  for (const key of Object.keys(def.outputs) as Resource[]) {
+    station.buffer[key] = (station.buffer[key] ?? 0) + stationOutput(station, key);
+  }
+  return true;
+}
+
+/**
+ * Advance the simulation by `dt` seconds. Pure with respect to GameState
+ * (mutates it in place). Production is decoupled from render: callers feed
+ * fixed timesteps. Offline applies OFFLINE_RATE_MULT and never grants XP
+ * (XP only ever comes from tending, which is online — see actions.tend).
+ */
+export function tick(state: GameState, dt: number, opts: TickOptions): void {
+  const rateMult = opts.mode === 'offline' ? BALANCE.OFFLINE_RATE_MULT : 1;
+  const willHaul = opts.autoHaul || opts.mode === 'offline';
+
+  // Process plot -> mill -> coop so corn made this step can be hauled and
+  // consumed downstream within the same step when hauling is active.
+  const order: Record<string, number> = { plot: 0, mill: 1, coop: 2 };
+  const stations = [...state.stations].sort((a, b) => order[a.type] - order[b.type]);
+
+  for (const station of stations) {
+    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds;
+
+    // Tend cooldown ticks down in real seconds regardless of rate.
+    if (station.tendCooldownRemaining > 0) {
+      station.tendCooldownRemaining = Math.max(0, station.tendCooldownRemaining - dt);
+    }
+
+    station.cycleProgress += dt * rateMult;
+
+    // Run as many cycles as progress allows. If inputs are missing, cap
+    // progress at one cycle so the station fires the instant inputs arrive.
+    let guard = 100000; // runaway guard for very long offline steps
+    while (station.cycleProgress >= cycleSeconds && guard-- > 0) {
+      if (runCycle(state, station)) {
+        station.cycleProgress -= cycleSeconds;
+        if (willHaul) haul(state, station);
+      } else {
+        station.cycleProgress = cycleSeconds; // ready, waiting on inputs
+        break;
+      }
+    }
+  }
+}

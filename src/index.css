@@ -1,0 +1,17 @@
+@import 'tailwindcss';
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #1a1410;
+  color: #f5ecd8;
+  font-family: ui-monospace, 'SF Mono', 'Menlo', monospace;
+  -webkit-font-smoothing: none;
+  image-rendering: pixelated;
+  user-select: none;
+}
