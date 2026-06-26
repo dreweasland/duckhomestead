@@ -37,15 +37,17 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
     const app = new Application();
     const cleanups: Array<() => void> = [];
 
-    app
+    // app.init() is async; under React StrictMode the effect can be torn down
+    // before it resolves. We must NOT destroy a half-initialized Application
+    // (its plugins aren't wired yet — destroy() would throw). So teardown is
+    // always chained off `ready` and runs only after init has fully resolved.
+    const ready = app
       .init({ width: W, height: H, background: 0x2a2018, antialias: false })
       .then(() => {
-        if (disposed) {
-          app.destroy(true);
-          return;
-        }
+        if (disposed) return; // unmounted mid-init; cleanup will destroy.
         const host = hostRef.current;
         if (host) host.appendChild(app.canvas);
+        cleanups.push(() => app.canvas?.remove());
 
         const gridLayer = new Graphics();
         const stationLayer = new Container();
@@ -200,8 +202,16 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
 
     return () => {
       disposed = true;
-      for (const fn of cleanups) fn();
-      app.destroy(true, { children: true });
+      // Wait for init to settle, then tear down exactly once on a fully
+      // initialized Application — avoids the ResizePlugin destroy crash.
+      ready
+        .then(() => {
+          for (const fn of cleanups) fn();
+          app.destroy(true, { children: true });
+        })
+        .catch(() => {
+          /* init failed; nothing to destroy */
+        });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine]);
