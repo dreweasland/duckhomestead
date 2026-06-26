@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { STATION_DEFS } from '../config/balance';
-import { UPGRADE_OUTPUT, upgradeCost } from '../game/actions';
+import { stationStatus, UPGRADE_OUTPUT, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import type { GameState, Resource, Station } from '../game/state';
 import { fmt } from './format';
@@ -44,6 +44,7 @@ export function StationPanel({ engine, state, station }: Props) {
   const outEntries = (Object.keys(def.outputs) as Resource[]).map(
     (k) => [k, (def.outputs[k] ?? 0) * UPGRADE_OUTPUT(station.level)] as const,
   );
+  const status = stationStatus(state, station);
 
   const flash = (m: string) => {
     setMsg(m);
@@ -76,6 +77,21 @@ export function StationPanel({ engine, state, station }: Props) {
           </span>
         ))}
       </div>
+
+      {/* Production status — explains a starved station (e.g. Coop needs pellets). */}
+      {status.producing ? (
+        <div className="flex items-center gap-1.5 text-[11px] text-[#8fe388]">
+          <span className="inline-block h-2 w-2 rounded-full bg-[#8fe388]" />
+          Producing
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1 text-[11px] text-[#e8a35a]">
+          <span className="inline-block h-2 w-2 rounded-full bg-[#e8a35a]" />
+          <span>Idle — needs</span>
+          {status.missing && <ResAmount res={status.missing.res} amount={status.missing.need} />}
+          <span>in storage. Collect the station that makes {status.missing?.res}.</span>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-1 text-[11px] text-[#c9b88f]">
         <span>Buffer:</span>
         {hasBuffer ? (

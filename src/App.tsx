@@ -28,6 +28,7 @@ export default function App() {
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
+  const anyBuffer = state.stations.some((s) => Object.values(s.buffer).some((v) => (v ?? 0) > 0));
 
   const onTileClick = useCallback(
     (x: number, y: number) => {
@@ -80,6 +81,19 @@ export default function App() {
         {/* Side panel */}
         <div className="flex w-full flex-col gap-4 md:w-[300px]">
           <HUD state={state} />
+          {!state.autoHaulUnlocked && state.stations.length > 0 && (
+            <button
+              onClick={() => engine.collectEverything()}
+              disabled={!anyBuffer}
+              className={`rounded-md px-3 py-2 text-sm font-bold transition ${
+                anyBuffer
+                  ? 'bg-[#b87333] text-[#fff4d6] hover:bg-[#c9823c]'
+                  : 'cursor-not-allowed bg-[#1f1812] text-[#6a5a3a]'
+              }`}
+            >
+              Collect All — haul every station to storage
+            </button>
+          )}
           <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
           <StationPanel engine={engine} state={state} station={selected} />
           <button

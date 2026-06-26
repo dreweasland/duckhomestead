@@ -14,6 +14,27 @@ export function upgradeCost(station: Station): number {
   return Math.round(base * Math.pow(BALANCE.UPGRADE.costGrowth, station.level - 1));
 }
 
+/**
+ * Whether a station can currently run a cycle, i.e. central storage holds its
+ * inputs. Stations buffer their own output separately; downstream stations only
+ * see an input once it's been hauled to central (manual Collect or auto-haul).
+ * This is what surfaces "Coop idle — needs pellets" in the UI.
+ */
+export function stationStatus(
+  state: GameState,
+  station: Station,
+): { producing: boolean; missing?: { res: Resource; need: number; have: number } } {
+  const def = STATION_DEFS[station.type];
+  const mult = UPGRADE_OUTPUT(station.level);
+  for (const key of Object.keys(def.inputs) as Resource[]) {
+    const need = (def.inputs[key] ?? 0) * mult;
+    if (state.resources[key] < need) {
+      return { producing: false, missing: { res: key, need, have: state.resources[key] } };
+    }
+  }
+  return { producing: true };
+}
+
 export type ActionResult<T = unknown> =
   | { ok: true; value: T }
   | { ok: false; reason: string };

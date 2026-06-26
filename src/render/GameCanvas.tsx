@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { BALANCE, STATION_DEFS } from '../config/balance';
+import { stationStatus } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import type { Resource, Station } from '../game/state';
 
@@ -123,15 +124,20 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
             const py = PAD + s.y * TILE;
             entry.c.position.set(px, py);
 
-            // Body.
+            // Body. Starved stations (missing inputs in central storage) are
+            // dimmed so it's obvious why they aren't producing.
+            const starved = !stationStatus(state, s).producing;
             entry.body.clear();
             entry.body.roundRect(6, 6, TILE - 12, TILE - 12, 6).fill(def.color);
+            entry.c.alpha = starved ? 0.5 : 1;
             // Cycle progress bar at the bottom of the tile.
             const cyc = def.cycleSeconds;
             const prog = Math.min(1, s.cycleProgress / cyc);
             entry.body
               .rect(6, TILE - 12, (TILE - 12) * prog, 4)
               .fill(0xfff4d6);
+            // Amber "needs input" pip on starved stations.
+            if (starved) entry.body.circle(TILE - 22, 12, 3).fill(0xe8a35a);
 
             // Selection / tend-cooldown ring.
             entry.ring.clear();
