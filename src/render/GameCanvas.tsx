@@ -28,9 +28,14 @@ const RES_COLOR: Record<Resource, number> = {
  */
 export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
-  // Keep latest selection available to the ticker without re-init.
+  // Keep latest selection + click handler available to the long-lived Pixi
+  // objects without re-running the init effect (which would rebuild the app).
+  // Without these refs the pointer handler would close over the FIRST render's
+  // onTileClick (where buildType was null), so placement never fired.
   const selRef = useRef(selectedId);
   selRef.current = selectedId;
+  const clickRef = useRef(onTileClick);
+  clickRef.current = onTileClick;
 
   useEffect(() => {
     let disposed = false;
@@ -77,7 +82,7 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
           const gx = Math.floor((e.global.x - PAD) / TILE);
           const gy = Math.floor((e.global.y - PAD) / TILE);
           if (gx >= 0 && gy >= 0 && gx < BALANCE.GRID.width && gy < BALANCE.GRID.height) {
-            onTileClick(gx, gy);
+            clickRef.current(gx, gy);
           }
         };
         app.stage.on('pointertap', onPointer);
