@@ -55,9 +55,11 @@ export function StationPanel({ engine, state, station }: Props) {
     <div className="flex flex-col gap-2 rounded-md bg-[#2a2018] px-3 py-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span
-            className="inline-block h-4 w-4 rounded-sm"
-            style={{ background: `#${def.color.toString(16).padStart(6, '0')}` }}
+          <img
+            src={`/assets/tiny-town/${station.type}.png`}
+            alt=""
+            className="h-8 w-6 object-contain"
+            style={{ imageRendering: 'pixelated' }}
           />
           <span className="font-bold">{def.label}</span>
           <span className="rounded bg-[#1a1410] px-1.5 py-0.5 text-[10px] text-[#ffe9a8]">

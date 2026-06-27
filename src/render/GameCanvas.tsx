@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js';
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import { stationStatus } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import type { Resource, Station } from '../game/state';
+import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './assets';
 
 const TILE = 56;
 const PAD = 16;
@@ -49,32 +50,47 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
     // always chained off `ready` and runs only after init has fully resolved.
     const ready = app
       .init({ width: W, height: H, background: 0x2a2018, antialias: false })
-      .then(() => {
+      .then(async () => {
         if (disposed) return; // unmounted mid-init; cleanup will destroy.
+        let textures: GameTextures = { stations: {}, ground: [] };
+        try {
+          textures = await loadTextures();
+        } catch {
+          /* fall back to placeholders */
+        }
+        if (disposed) return;
+
         const host = hostRef.current;
         if (host) host.appendChild(app.canvas);
         cleanups.push(() => app.canvas?.remove());
 
-        const gridLayer = new Graphics();
+        const SCALE = TILE / 16; // all art is 16px; scale uniformly, no smoothing
+        const gridLayer = new Container();
         const stationLayer = new Container();
+        stationLayer.sortableChildren = true; // taller buildings sort by row
         const overlay = new Graphics();
         app.stage.addChild(gridLayer, stationLayer, overlay);
 
-        // Static grid background.
-        const drawGrid = () => {
-          gridLayer.clear();
-          for (let gy = 0; gy < BALANCE.GRID.height; gy++) {
-            for (let gx = 0; gx < BALANCE.GRID.width; gx++) {
-              const px = PAD + gx * TILE;
-              const py = PAD + gy * TILE;
-              const dark = (gx + gy) % 2 === 0;
-              gridLayer
-                .rect(px + 1, py + 1, TILE - 2, TILE - 2)
-                .fill(dark ? 0x3a2e22 : 0x352a1f);
+        // Ground: real grass tiles when available, else a flat checker.
+        const haveGround = textures.ground.some(Boolean);
+        for (let gy = 0; gy < BALANCE.GRID.height; gy++) {
+          for (let gx = 0; gx < BALANCE.GRID.width; gx++) {
+            const px = PAD + gx * TILE;
+            const py = PAD + gy * TILE;
+            if (haveGround) {
+              const v = groundVariant(gx, gy, GROUND_URLS.length);
+              const tex = textures.ground[v] ?? textures.ground.find(Boolean)!;
+              const tile = new Sprite(tex);
+              tile.position.set(px, py);
+              tile.scale.set(SCALE);
+              gridLayer.addChild(tile);
+            } else {
+              const g = new Graphics();
+              g.rect(px + 1, py + 1, TILE - 2, TILE - 2).fill((gx + gy) % 2 === 0 ? 0x3a2e22 : 0x352a1f);
+              gridLayer.addChild(g);
             }
           }
-        };
-        drawGrid();
+        }
 
         // Click -> tile.
         app.stage.eventMode = 'static';
@@ -94,18 +110,29 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
 
         const sprites = new Map<
           string,
-          { c: Container; body: Graphics; ring: Graphics; lvl: Text; buf: Text }
+          { c: Container; art: Sprite | null; body: Graphics; ring: Graphics; lvl: Text; buf: Text }
         >();
 
         const makeSprite = (s: Station) => {
           const c = new Container();
+          // Real station art, bottom-anchored so buildings rise above their
+          // tile (classic tile-RPG look). Falls back to a drawn block.
+          const tex = textures.stations[s.type];
+          let art: Sprite | null = null;
+          if (tex) {
+            art = new Sprite(tex);
+            art.anchor.set(0.5, 1);
+            art.scale.set(SCALE);
+            art.position.set(TILE / 2, TILE);
+            c.addChild(art);
+          }
           const body = new Graphics();
           const ring = new Graphics();
           const lvl = new Text({ text: '', style: smallStyle });
           const buf = new Text({ text: '', style: labelStyle });
           c.addChild(body, ring, lvl, buf);
           stationLayer.addChild(c);
-          const entry = { c, body, ring, lvl, buf };
+          const entry = { c, art, body, ring, lvl, buf };
           sprites.set(s.id, entry);
           return entry;
         };
@@ -123,21 +150,24 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
             const px = PAD + s.x * TILE;
             const py = PAD + s.y * TILE;
             entry.c.position.set(px, py);
+            entry.c.zIndex = s.y; // lower rows paint over the buildings above them
 
-            // Body. Starved stations (missing inputs in central storage) are
-            // dimmed so it's obvious why they aren't producing.
+            // Starved stations (missing inputs in central storage) are dimmed
+            // so it's obvious why they aren't producing.
             const starved = !stationStatus(state, s).producing;
-            entry.body.clear();
-            entry.body.roundRect(6, 6, TILE - 12, TILE - 12, 6).fill(def.color);
             entry.c.alpha = starved ? 0.5 : 1;
-            // Cycle progress bar at the bottom of the tile.
+
+            entry.body.clear();
+            // No texture? Draw the flat-color placeholder block.
+            if (!entry.art) {
+              entry.body.roundRect(6, 6, TILE - 12, TILE - 12, 6).fill(def.color);
+            }
+            // Cycle progress bar along the bottom of the tile.
             const cyc = def.cycleSeconds;
             const prog = Math.min(1, s.cycleProgress / cyc);
-            entry.body
-              .rect(6, TILE - 12, (TILE - 12) * prog, 4)
-              .fill(0xfff4d6);
+            entry.body.rect(6, TILE - 5, (TILE - 12) * prog, 3).fill(0xfff4d6);
             // Amber "needs input" pip on starved stations.
-            if (starved) entry.body.circle(TILE - 22, 12, 3).fill(0xe8a35a);
+            if (starved) entry.body.circle(TILE - 10, 10, 3).fill(0xe8a35a);
 
             // Selection / tend-cooldown ring.
             entry.ring.clear();

@@ -46,9 +46,11 @@ export function BuildBar({ state, buildType, onPick }: Props) {
               } ${affordable ? '' : 'opacity-50'}`}
             >
               <div className="flex w-full items-center gap-1.5">
-                <span
-                  className="inline-block h-3 w-3 rounded-sm"
-                  style={{ background: `#${STATION_DEFS[t].color.toString(16).padStart(6, '0')}` }}
+                <img
+                  src={`/assets/tiny-town/${t}.png`}
+                  alt=""
+                  className="h-7 w-5 object-contain"
+                  style={{ imageRendering: 'pixelated' }}
                 />
                 <span className="text-sm font-bold">{STATION_DEFS[t].label}</span>
               </div>
