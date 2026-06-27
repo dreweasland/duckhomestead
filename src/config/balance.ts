@@ -156,6 +156,17 @@ export const BALANCE = {
       brewersYeast: { energy: 0, protein: 0.3, niacin: 1.0, calcium: 0 },
       oysterShell: { energy: 0, protein: 0, niacin: 0, calcium: 1.0 },
     },
+    /**
+     * The active ration: units of each ingredient fed per coop per coop-cycle.
+     * Players retune this in the dashboard. Default satisfies all axes once all
+     * five ingredient lines exist and keep up; a corn-only starter covers energy
+     * but is short on the rest (throttled, buffered by flock condition).
+     * Satisfaction[axis] (fully stocked) = Σ ration[i]·INGREDIENT[i][axis] / REQUIREMENT[axis].
+     */
+    DEFAULT_RATION: { corn: 2.5, peas: 1, mealworms: 1.5, brewersYeast: 1, oysterShell: 1 },
+    /** Feed throughput a single mill can blend per second (level-scaled). Coops
+     * eat ~1.75 feed/s each at the default ration, so ~1 mill per 1–2 coops. */
+    MILL_CAPACITY: 3,
     /** Output multiplier floor when an axis is fully starved (throttle, not wall). */
     THROTTLE_FLOOR: 0.2,
     /** Flock condition reserve (the "battery"). */
@@ -213,17 +224,21 @@ export const STATION_DEFS: Record<
     outputs: { corn: BALANCE.PLOT.cornPerCycle },
   },
   mill: {
+    // Phase 2: the mill blends the active ration (formulation + feed capacity);
+    // it no longer makes pellets. Production is handled in nutrition.ts.
     label: 'Feed Mill',
     color: 0xb87333,
     cycleSeconds: BALANCE.MILL.cycleSeconds,
-    inputs: { corn: BALANCE.MILL.cornPerPellet * BALANCE.MILL.pelletPerCycle },
-    outputs: { pellets: BALANCE.MILL.pelletPerCycle },
+    inputs: {},
+    outputs: {},
   },
   coop: {
+    // Phase 2: coops lay eggs throttled by ration satisfaction (nutrition.ts),
+    // not by consuming pellets. `outputs.eggs` is the base lay used there + tend.
     label: 'Coop',
     color: 0xd95f5f,
     cycleSeconds: BALANCE.COOP.cycleSeconds,
-    inputs: { pellets: BALANCE.COOP.pelletPerEgg * BALANCE.COOP.eggPerCycle },
+    inputs: {},
     outputs: { eggs: BALANCE.COOP.eggPerCycle },
   },
   // Phase 2 ingredient producers — raw, no inputs (like the plot).

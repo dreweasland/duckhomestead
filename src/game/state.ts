@@ -42,6 +42,23 @@ export interface Station {
   tendCooldownRemaining: number;
 }
 
+export type Axis = 'energy' | 'protein' | 'niacin' | 'calcium';
+export const AXES: Axis[] = ['energy', 'protein', 'niacin', 'calcium'];
+
+/** Derived nutrition snapshot, recomputed every tick (for the dashboard + tend). */
+export interface NutritionState {
+  satisfaction: Record<Axis, number>; // supply / requirement (raw, can exceed 1)
+  supply: Record<Axis, number>;
+  requirement: Record<Axis, number>;
+  /** Raw egg multiplier from the egg axes (energy·protein·calcium), pre-condition. */
+  eggMultRaw: number;
+  /** Egg multiplier actually applied (raw, buffered by flock condition). */
+  eggMult: number;
+  /** Mill-capacity scaling on feed throughput (1 = enough mills). */
+  feedScale: number;
+  hasMill: boolean;
+}
+
 export interface GameState {
   /** Schema version for save migration. */
   version: number;
@@ -58,6 +75,15 @@ export interface GameState {
 
   // Milestones / unlocks
   autoHaulUnlocked: boolean;
+
+  // ── Phase 2: nutrition ──
+  /** Active ration: units of each ingredient fed per coop per cycle. */
+  ration: Record<Ingredient, number>;
+  /** Flock condition reserve (0..CONDITION_MAX) — the battery that buffers
+   *  shortfalls and powers offline. */
+  condition: number;
+  /** Derived nutrition snapshot (recomputed each tick; not authoritative). */
+  nutrition?: NutritionState;
 
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
@@ -77,6 +103,8 @@ export function initialState(now: number): GameState {
     rank: 1,
     xp: 0,
     autoHaulUnlocked: false,
+    ration: { ...BALANCE.NUTRITION.DEFAULT_RATION },
+    condition: BALANCE.NUTRITION.CONDITION_MAX,
     lastSeen: now,
   };
 }

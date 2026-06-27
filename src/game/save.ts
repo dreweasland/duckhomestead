@@ -28,6 +28,10 @@ export function deserialize(raw: string, now: number): GameState {
       ...base,
       ...parsed,
       resources: { ...base.resources, ...(parsed.resources ?? {}) },
+      // Default Phase 2 fields for Phase 1 saves; merge ration so a partial
+      // saved ration still has every ingredient key.
+      ration: { ...base.ration, ...(parsed.ration ?? {}) },
+      condition: parsed.condition ?? base.condition,
       stations: (parsed.stations ?? []).map((s) => ({
         ...s,
         level: s.level ?? 1,

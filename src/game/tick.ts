@@ -2,6 +2,7 @@ import { BALANCE, STATION_DEFS } from '../config/balance';
 import type { Resource } from './state';
 import type { GameState, Station } from './state';
 import { UPGRADE_OUTPUT } from './actions';
+import { runNutrition } from './nutrition';
 
 export type SimMode = 'online' | 'offline';
 
@@ -80,13 +81,16 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   const stations = [...state.stations].sort((a, b) => order[a.type] - order[b.type]);
 
   for (const station of stations) {
-    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds;
-
     // Tend cooldown ticks down in real seconds regardless of rate.
     if (station.tendCooldownRemaining > 0) {
       station.tendCooldownRemaining = Math.max(0, station.tendCooldownRemaining - dt);
     }
 
+    // Mills (formulation) and coops (nutrition-throttled laying) are handled by
+    // runNutrition below, not the generic producer path.
+    if (station.type === 'mill' || station.type === 'coop') continue;
+
+    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds;
     station.cycleProgress += dt * rateMult;
 
     // Run as many cycles as progress allows. If inputs are missing, cap
@@ -102,4 +106,8 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
       }
     }
   }
+
+  // The nutrition grid: feed the flock from storage per the active ration and
+  // lay eggs throttled by per-axis satisfaction (buffered by flock condition).
+  runNutrition(state, dt, rateMult, willHaul);
 }

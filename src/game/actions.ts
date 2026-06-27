@@ -207,6 +207,8 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   const def = STATION_DEFS[station.type];
   const mult = UPGRADE_OUTPUT(station.level);
   const burst: Partial<Record<Resource, number>> = {};
+  // A coop's burst is throttled by current nutrition, same as its passive lay.
+  const nutritionMult = station.type === 'coop' ? state.nutrition?.eggMult ?? 1 : 1;
 
   for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {
     // Affordable inputs?
@@ -222,7 +224,7 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
       state.resources[key] -= (def.inputs[key] ?? 0) * mult;
     }
     for (const key of Object.keys(def.outputs) as Resource[]) {
-      const out = (def.outputs[key] ?? 0) * mult;
+      const out = (def.outputs[key] ?? 0) * mult * nutritionMult;
       station.buffer[key] = (station.buffer[key] ?? 0) + out;
       burst[key] = (burst[key] ?? 0) + out;
     }
