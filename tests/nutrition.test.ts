@@ -54,6 +54,23 @@ describe('flock condition battery', () => {
     expect(fed.condition).toBeGreaterThan(20);
   });
 
+  it('relaxes toward the nutrition level from both directions (never frozen mid)', () => {
+    // Calcium pinned to ~50% via the ration -> condition should settle ~50,
+    // converging from both 100 and 0 (the old hard threshold could freeze a
+    // near-fed flock mid-range and never recover).
+    const settle = (start: number) => {
+      const s = stockAll(fullSetup());
+      s.ration = { ...s.ration, oysterShell: 0.5 };
+      s.condition = start;
+      run(s, 600);
+      return s.condition;
+    };
+    expect(settle(100)).toBeGreaterThan(40);
+    expect(settle(100)).toBeLessThan(60);
+    expect(settle(0)).toBeGreaterThan(40); // can RISE up to the target, not stuck at 0
+    expect(Math.abs(settle(100) - settle(0))).toBeLessThan(5); // same equilibrium
+  });
+
   it('an empty battery applies the full penalty', () => {
     const s = build({ plot: 1, mill: 1, coop: 1 });
     s.resources.corn = 1e6;

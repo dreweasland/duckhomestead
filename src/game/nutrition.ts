@@ -75,16 +75,20 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
     satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
   }
 
-  // Flock condition (battery): rises when the egg axes are all satisfied,
-  // drains (severity-scaled) when short. Buffers the throttle so brief dips
-  // don't strobe egg output.
+  // Flock condition (battery): relaxes toward where the flock's nutrition
+  // actually sits — a target set by the worst egg axis. Below target it rises
+  // (regen rate, module-boosted); above target it drains (faster the more
+  // undernourished the flock). This lag IS the buffer that smooths brief dips,
+  // and it avoids the old hard threshold that left a 99%-fed flock frozen
+  // mid-range (could never recover without every axis strictly over 100%).
   const minEggSat = Math.min(...EGG_AXES.map((a) => satisfaction[a]));
-  if (hasMill && minEggSat >= 1) {
-    const rise = N.CONDITION_RISE_PER_S * conditionRegenMult(state); // module-boosted regen
-    state.condition = Math.min(N.CONDITION_MAX, state.condition + rise * step);
-  } else {
+  const target = (hasMill ? clamp01(minEggSat) : 0) * N.CONDITION_MAX;
+  if (state.condition < target) {
+    const rise = N.CONDITION_RISE_PER_S * conditionRegenMult(state);
+    state.condition = Math.min(target, state.condition + rise * step);
+  } else if (state.condition > target) {
     const severity = clamp01(1 - minEggSat);
-    state.condition = Math.max(0, state.condition - N.CONDITION_DRAIN_PER_S * severity * step);
+    state.condition = Math.max(target, state.condition - N.CONDITION_DRAIN_PER_S * severity * step);
   }
   const cond = state.condition / N.CONDITION_MAX;
 
