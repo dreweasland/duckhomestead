@@ -162,12 +162,13 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         // grows with the number of coops and free-roams the grass.
         interface Duck { sp: Sprite; x: number; y: number; tx: number; ty: number; facing: number; frame: number; frameT: number; pause: number }
         const ducks: Duck[] = [];
+        const DUCK_SCALE = SCALE * 0.78; // ducks read a touch smaller than tiles
         const rand = (a: number, b: number) => a + Math.random() * (b - a);
         const haveDucks = textures.ducks.some(Boolean);
         const spawnDuck = (): Duck => {
           const sp = new Sprite(textures.ducks[0]);
           sp.anchor.set(0.5, 1);
-          sp.scale.set(SCALE);
+          sp.scale.set(DUCK_SCALE);
           duckLayer.addChild(sp);
           const x = rand(fieldX0, fieldX1), y = rand(fieldY0, fieldY1);
           return { sp, x, y, tx: rand(fieldX0, fieldX1), ty: rand(fieldY0, fieldY1), facing: 1, frame: 0, frameT: 0, pause: 0 };
@@ -295,7 +296,7 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
                 }
               }
               d.sp.position.set(d.x, d.y);
-              d.sp.scale.x = d.facing * SCALE; // mirror to face travel direction
+              d.sp.scale.x = d.facing * DUCK_SCALE; // mirror to face travel direction
               d.sp.zIndex = d.y;
             }
             duckLayer.sortableChildren = true;
