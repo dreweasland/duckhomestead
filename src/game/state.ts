@@ -40,6 +40,8 @@ export interface Station {
   buffer: Partial<Record<Resource, number>>;
   /** Seconds remaining on the tend cooldown (0 = ready). */
   tendCooldownRemaining: number;
+  /** Coops only: a leg debuff from sustained niacin shortfall (halves output). */
+  debuffed?: boolean;
 }
 
 export type Axis = 'energy' | 'protein' | 'niacin' | 'calcium';
@@ -82,6 +84,10 @@ export interface GameState {
   /** Flock condition reserve (0..CONDITION_MAX) — the battery that buffers
    *  shortfalls and powers offline. */
   condition: number;
+  /** Seconds of sustained niacin shortfall accrued toward the next leg debuff. */
+  niacinShortfall: number;
+  /** Global cooldown (s) on the active "Dose Brewer's Yeast" intervention. */
+  doseCooldownRemaining: number;
   /** Derived nutrition snapshot (recomputed each tick; not authoritative). */
   nutrition?: NutritionState;
 
@@ -105,6 +111,8 @@ export function initialState(now: number): GameState {
     autoHaulUnlocked: false,
     ration: { ...BALANCE.NUTRITION.DEFAULT_RATION },
     condition: BALANCE.NUTRITION.CONDITION_MAX,
+    niacinShortfall: 0,
+    doseCooldownRemaining: 0,
     lastSeen: now,
   };
 }

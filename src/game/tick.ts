@@ -107,6 +107,12 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     }
   }
 
+  // Global Dose cooldown ticks down in real seconds (offline too, so it's ready
+  // on return — the dose itself can only be triggered by an active player).
+  if (state.doseCooldownRemaining > 0) {
+    state.doseCooldownRemaining = Math.max(0, state.doseCooldownRemaining - dt);
+  }
+
   // The nutrition grid: feed the flock from storage per the active ration and
   // lay eggs throttled by per-axis satisfaction (buffered by flock condition).
   runNutrition(state, dt, rateMult, willHaul);

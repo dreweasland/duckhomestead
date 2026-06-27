@@ -178,6 +178,7 @@ export const BALANCE = {
     NIACIN_DEBUFF_ONSET_S: 300, // sustained shortfall before a duck is debuffed
     DEBUFF_COOP_OUTPUT_MULT: 0.5, // a debuffed coop's output
     DOSE_COOLDOWN_S: 60,
+    DOSE_COST_YEAST: 3, // brewer's yeast spent per dose
     DOSE_XP: 8,
   },
 

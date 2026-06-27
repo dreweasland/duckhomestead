@@ -183,6 +183,29 @@ export function gainXP(state: GameState, amount: number): XpResult {
   };
 }
 
+// ── Dose Brewer's Yeast (active-only intervention; clears a leg debuff) ──
+export interface DoseResult {
+  station: Station;
+  xp: XpResult;
+}
+
+export function doseNiacin(state: GameState, stationId: string): ActionResult<DoseResult> {
+  const station = state.stations.find((s) => s.id === stationId);
+  if (!station) return fail('No such station');
+  if (!station.debuffed) return fail('No duck to dose here');
+  if (state.doseCooldownRemaining > 0) {
+    return fail(`Dosing in ${Math.ceil(state.doseCooldownRemaining)}s`);
+  }
+  const cost = BALANCE.NUTRITION.DOSE_COST_YEAST;
+  if (state.resources.brewersYeast < cost) return fail(`Need ${cost} brewer's yeast`);
+
+  state.resources.brewersYeast -= cost;
+  station.debuffed = false;
+  state.doseCooldownRemaining = BALANCE.NUTRITION.DOSE_COOLDOWN_S;
+  const xp = gainXP(state, BALANCE.NUTRITION.DOSE_XP);
+  return done({ station, xp });
+}
+
 // ── Tend (the active engine; ONLY source of XP) ───────────────────────
 export interface TendResult {
   station: Station;
@@ -207,8 +230,12 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   const def = STATION_DEFS[station.type];
   const mult = UPGRADE_OUTPUT(station.level);
   const burst: Partial<Record<Resource, number>> = {};
-  // A coop's burst is throttled by current nutrition, same as its passive lay.
-  const nutritionMult = station.type === 'coop' ? state.nutrition?.eggMult ?? 1 : 1;
+  // A coop's burst is throttled by current nutrition + any leg debuff, same as
+  // its passive lay.
+  const nutritionMult =
+    station.type === 'coop'
+      ? (state.nutrition?.eggMult ?? 1) * (station.debuffed ? BALANCE.NUTRITION.DEBUFF_COOP_OUTPUT_MULT : 1)
+      : 1;
 
   for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {
     // Affordable inputs?

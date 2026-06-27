@@ -23,6 +23,52 @@ function ResAmount({ res, amount }: { res: Resource; amount: number }) {
   );
 }
 
+/** Coop-specific status: current lay % and the niacin leg-debuff + Dose action. */
+function CoopStatus({
+  engine,
+  state,
+  station,
+  flash,
+}: {
+  engine: GameEngine;
+  state: GameState;
+  station: Station;
+  flash: (m: string) => void;
+}) {
+  const layPct = Math.round((state.nutrition?.eggMult ?? 1) * 100);
+  const doseCost = BALANCE.NUTRITION.DOSE_COST_YEAST;
+  const doseReady = state.doseCooldownRemaining <= 0 && state.resources.brewersYeast >= doseCost;
+  const layColor = layPct >= 90 ? '#8fe388' : layPct >= 50 ? '#e8c45a' : '#e8835a';
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5 text-[11px]" style={{ color: layColor }}>
+        <span className="inline-block h-2 w-2 rounded-full" style={{ background: layColor }} />
+        Laying at {layPct}% {station.debuffed && <span className="text-[#d95f5f]">· leg debuff</span>}
+      </div>
+      {station.debuffed && (
+        <button
+          onClick={() => {
+            const r = engine.dose(station.id);
+            if (r.ok) playUpgrade();
+            flash(r.ok ? 'Dosed — duck recovering!' : r.reason);
+          }}
+          disabled={!doseReady}
+          className={`rounded-md px-2 py-1.5 text-xs font-bold transition ${
+            doseReady
+              ? 'bg-[#6b4f9e] text-[#fff4d6] hover:bg-[#7a5cae]'
+              : 'cursor-not-allowed bg-[#1f1812] text-[#6a5a3a]'
+          }`}
+        >
+          {state.doseCooldownRemaining > 0
+            ? `Dosing in ${Math.ceil(state.doseCooldownRemaining)}s`
+            : `Dose Brewer's Yeast · ${doseCost}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function StationPanel({ engine, state, station }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   // Two-click confirm: armed only for the station whose id this matches.
@@ -83,8 +129,14 @@ export function StationPanel({ engine, state, station }: Props) {
         ))}
       </div>
 
-      {/* Production status — explains a starved station (e.g. Coop needs pellets). */}
-      {status.producing ? (
+      {/* Production status — station-specific. */}
+      {station.type === 'coop' ? (
+        <CoopStatus engine={engine} state={state} station={station} flash={flash} />
+      ) : station.type === 'mill' ? (
+        <div className="text-[11px] text-[#c9b88f]">
+          Blends the active ration. Open the Nutrition panel to formulate feed.
+        </div>
+      ) : status.producing ? (
         <div className="flex items-center gap-1.5 text-[11px] text-[#8fe388]">
           <span className="inline-block h-2 w-2 rounded-full bg-[#8fe388]" />
           Producing

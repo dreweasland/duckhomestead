@@ -2,6 +2,7 @@ import { BALANCE, type StationType } from '../config/balance';
 import {
   collectAll,
   collectStation,
+  doseNiacin,
   gainXP,
   moveStation,
   placeStation,
@@ -181,6 +182,17 @@ export class GameEngine {
 
   tend(stationId: string): ActionResult<unknown> {
     const r = tend(this.state, stationId);
+    if (r.ok) {
+      this.emitTend({ stationId, xp: r.value.xp.xpGained });
+      this.fireXp(r.value.xp);
+    }
+    this.notify();
+    return r;
+  }
+
+  /** Active-only intervention: clear a coop's niacin leg debuff. */
+  dose(stationId: string): ActionResult<unknown> {
+    const r = doseNiacin(this.state, stationId);
     if (r.ok) {
       this.emitTend({ stationId, xp: r.value.xp.xpGained });
       this.fireXp(r.value.xp);

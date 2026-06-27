@@ -85,14 +85,32 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
 
   state.nutrition = { satisfaction, supply, requirement, eggMultRaw, eggMult, feedScale, hasMill };
 
-  // Lay eggs per coop at base × eggMult.
+  // Niacin debuff: sustained shortfall accrues a timer; each time it crosses the
+  // onset threshold, one healthy coop's duck gets a leg debuff (halves output).
+  // Accrual happens offline too (idle leaves you exposed); only the Dose
+  // intervention that clears it is active-only.
+  if (satisfaction.niacin < N.NIACIN_DEBUFF_THRESHOLD) {
+    state.niacinShortfall += step;
+    while (state.niacinShortfall >= N.NIACIN_DEBUFF_ONSET_S) {
+      state.niacinShortfall -= N.NIACIN_DEBUFF_ONSET_S;
+      const healthy = coops.find((c) => !c.debuffed);
+      if (healthy) healthy.debuffed = true;
+      else break; // whole flock already debuffed
+    }
+  } else {
+    state.niacinShortfall = Math.max(0, state.niacinShortfall - step);
+  }
+
+  // Lay eggs per coop at base × eggMult (× debuff penalty for limping ducks).
   for (const coop of coops) {
     coop.cycleProgress += step;
     let guard = 100000;
     while (coop.cycleProgress >= coopCycle && guard-- > 0) {
       coop.cycleProgress -= coopCycle;
+      const debuff = coop.debuffed ? N.DEBUFF_COOP_OUTPUT_MULT : 1;
       coop.buffer.eggs =
-        (coop.buffer.eggs ?? 0) + BALANCE.COOP.eggPerCycle * UPGRADE_OUTPUT(coop.level) * eggMult;
+        (coop.buffer.eggs ?? 0) +
+        BALANCE.COOP.eggPerCycle * UPGRADE_OUTPUT(coop.level) * eggMult * debuff;
       if (willHaul) {
         state.resources.eggs += coop.buffer.eggs ?? 0;
         coop.buffer = {};

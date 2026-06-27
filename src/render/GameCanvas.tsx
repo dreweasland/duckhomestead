@@ -381,6 +381,15 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
             entry.lvl.text = `L${s.level}`;
             entry.lvl.position.set(8, TILE - 23);
 
+            // Niacin leg-debuff marker (red medical badge), top-center.
+            if (s.debuffed) {
+              const bx = TILE / 2;
+              entry.body.circle(bx, 9, 6).fill(DARK);
+              entry.body.circle(bx, 9, 4.5).fill(0xd95f5f);
+              entry.body.rect(bx - 2.5, 8.3, 5, 1.4).fill(0xffffff);
+              entry.body.rect(bx - 0.7, 6.5, 1.4, 5).fill(0xffffff);
+            }
+
             // Selection outline.
             entry.ring.clear();
             if (selRef.current === s.id) {

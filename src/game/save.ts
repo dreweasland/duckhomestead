@@ -32,6 +32,8 @@ export function deserialize(raw: string, now: number): GameState {
       // saved ration still has every ingredient key.
       ration: { ...base.ration, ...(parsed.ration ?? {}) },
       condition: parsed.condition ?? base.condition,
+      niacinShortfall: parsed.niacinShortfall ?? 0,
+      doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,
       stations: (parsed.stations ?? []).map((s) => ({
         ...s,
         level: s.level ?? 1,
