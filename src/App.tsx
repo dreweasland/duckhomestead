@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { playCollect, playDing, playPlace, playTend } from './audio/sfx';
+import { playCollect, playDing, playLoot, playPlace, playTend } from './audio/sfx';
 import type { StationType } from './config/balance';
-import type { DingEvent } from './game/engine';
-import { stationAt } from './game/state';
+import type { DingEvent, LootEvent } from './game/engine';
+import { RARITIES, stationAt } from './game/state';
 import { useGame } from './game/useGame';
 import { GameCanvas } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
@@ -11,6 +11,8 @@ import { DevPanel } from './ui/DevPanel';
 import { DingBanner } from './ui/DingBanner';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { HUD } from './ui/HUD';
+import { LootBanner } from './ui/LootBanner';
+import { ModulesPanel } from './ui/ModulesPanel';
 import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
 import { StationPanel } from './ui/StationPanel';
 
@@ -33,10 +35,22 @@ export default function App() {
   // Tend SFX for both entry points (board double-click and panel button).
   useEffect(() => engine.onTend(() => playTend()), [engine]);
 
+  // The loot moment.
+  const [loot, setLoot] = useState<LootEvent | null>(null);
+  useEffect(
+    () =>
+      engine.onLoot((e) => {
+        setLoot(e);
+        playLoot(RARITIES.indexOf(e.module.rarity));
+      }),
+    [engine],
+  );
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [awayOpen, setAwayOpen] = useState(true);
   const [nutritionOpen, setNutritionOpen] = useState(false);
+  const [modulesOpen, setModulesOpen] = useState(false);
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
@@ -69,6 +83,7 @@ export default function App() {
         <div key={milestoneFlash} className="milestone-flash pointer-events-none fixed inset-0 z-40" />
       )}
       <DingBanner ding={ding} onDone={() => setDing(null)} />
+      <LootBanner loot={loot} onDone={() => setLoot(null)} />
       {engine.away && awayOpen && (
         <AwayModal
           away={engine.away}
@@ -81,6 +96,9 @@ export default function App() {
 
       {nutritionOpen && (
         <NutritionPanel engine={engine} state={state} onClose={() => setNutritionOpen(false)} />
+      )}
+      {modulesOpen && (
+        <ModulesPanel engine={engine} state={state} onClose={() => setModulesOpen(false)} />
       )}
 
       <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
@@ -122,6 +140,17 @@ export default function App() {
               <span>Nutrition</span>
               <span className="tabular-nums">
                 eggs {Math.round((state.nutrition?.eggMult ?? 1) * 100)}%
+              </span>
+            </button>
+          )}
+          {(state.inventory.length > 0 || state.dust > 0) && (
+            <button
+              onClick={() => setModulesOpen(true)}
+              className="flex items-center justify-between rounded-md bg-[#2e2746] px-3 py-2 text-sm font-bold text-[#cdbcff] transition hover:bg-[#372e57]"
+            >
+              <span>Modules</span>
+              <span className="tabular-nums">
+                {state.inventory.length} spare · {state.dust} dust
               </span>
             </button>
           )}

@@ -129,6 +129,16 @@ export function playUpgrade() {
   note(c, 880, t + 0.08, 0.16, 'triangle', 0.17);
 }
 
+/** A loot pickup chime — richer arpeggio for higher rarity tiers. */
+export function playLoot(tier: number) {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  const scale = [523.25, 659.25, 783.99, 987.77, 1174.66, 1318.51];
+  const notes = scale.slice(0, Math.min(scale.length, 2 + tier)); // 2..6 notes by tier
+  notes.forEach((f, i) => note(c, f, t + i * 0.07, 0.28, 'triangle', 0.22));
+}
+
 /** The level-up chime; a fuller fanfare for milestone level-ups. */
 export function playDing(milestone: boolean) {
   const c = audio();
