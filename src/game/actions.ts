@@ -261,6 +261,21 @@ export function rerollModule(
   return done(module);
 }
 
+// ── Breeding pairs + culling (the selection pressure) ─────────────────
+/**
+ * Release a duck from the flock — the selection lever. Removing low-vigor birds
+ * frees housing AND raises the live population mean, which lifts the breeding
+ * target so the flock walks toward the vigor ceiling. Also drops any pair the
+ * duck belonged to.
+ */
+export function cullDuck(state: GameState, duckId: string): ActionResult<unknown> {
+  const idx = state.ducks.findIndex((d) => d.id === duckId);
+  if (idx < 0) return fail('No such duck');
+  state.ducks.splice(idx, 1);
+  state.breedingPairs = state.breedingPairs.filter((p) => p.drakeId !== duckId && p.henId !== duckId);
+  return done(true);
+}
+
 // ── Breeding pairs (active selection) ─────────────────────────────────
 export function createPair(state: GameState, drakeId: string, henId: string): ActionResult<unknown> {
   const drake = state.ducks.find((d) => d.id === drakeId);

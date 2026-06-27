@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
-import { createPair, removePair } from '../src/game/actions';
-import { breedVigor } from '../src/game/genetics';
+import { createPair, cullDuck, removePair } from '../src/game/actions';
+import { breedVigor, populationMeanVigor } from '../src/game/genetics';
 import { runOfflineCatchUp, serialize, deserialize } from '../src/game/save';
 import { phenotype, type Duck, type GameState } from '../src/game/state';
 import { build, run } from './helpers';
@@ -107,6 +107,46 @@ describe('offline breeding', () => {
     expect(s.rank).toBe(3);
     expect(s.xp).toBe(12);
     expect(s.inventory).toHaveLength(0);
+  });
+});
+
+describe('culling = the selection lever (live pop mean)', () => {
+  it('cullDuck removes the duck, drops its pair, and raises the live mean', () => {
+    const s = build({ coop: 2 });
+    s.ducks.forEach((d, i) => (d.vigor = [0.6, 1.4, 1.0][i] ?? 1));
+    const drake = s.ducks.find((d) => d.sex === 'drake')!;
+    const hen = s.ducks.find((d) => d.sex === 'hen')!;
+    createPair(s, drake.id, hen.id);
+    const before = populationMeanVigor(s);
+    const lowest = [...s.ducks].sort((a, b) => a.vigor - b.vigor)[0];
+    cullDuck(s, lowest.id);
+    expect(s.ducks.some((d) => d.id === lowest.id)).toBe(false);
+    expect(populationMeanVigor(s)).toBeGreaterThan(before); // removing the worst lifts the anchor
+    if (lowest.id === drake.id || lowest.id === hen.id) expect(s.breedingPairs).toHaveLength(0);
+  });
+
+  it('live mean + culling walks toward the ceiling; no culling stalls near the seed mean', () => {
+    const B = BALANCE.BREEDING;
+    const hen = (v: number): Duck => ({ id: `x${v}-${Math.random()}`, genotype: ['Bl', 'bl'], vigor: v, sex: 'hen', stage: 'adult', ageTicks: 0 });
+    const mean = (f: Duck[]) => f.reduce((a, d) => a + d.vigor, 0) / f.length;
+    // simulate the player loop: each gen, breed the top pair (live mean anchor),
+    // add a clutch, then optionally cull back to capacity.
+    function sim(cull: boolean): number {
+      let flock = Array.from({ length: 12 }, () => hen(0.8 + Math.random() * 0.4));
+      for (let g = 0; g < 80; g++) {
+        const top = [...flock].sort((a, b) => b.vigor - a.vigor);
+        const pm = mean(flock); // LIVE
+        for (let i = 0; i < 4; i++) flock.push(hen(breedVigor(top[0].vigor, top[1].vigor, pm)));
+        if (cull) flock = flock.sort((a, b) => b.vigor - a.vigor).slice(0, 12);
+      }
+      return mean(flock);
+    }
+    const culled = sim(true);
+    const uncull = sim(false);
+    expect(culled).toBeGreaterThan(1.7); // climbs toward the 2.0 ceiling
+    expect(uncull).toBeLessThan(1.4); // stalls without selection pressure
+    expect(culled).toBeGreaterThan(uncull + 0.4);
+    expect(culled).toBeLessThanOrEqual(B.VIGOR_CEILING); // but bounded
   });
 });
 

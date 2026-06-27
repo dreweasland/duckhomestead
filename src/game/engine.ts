@@ -4,6 +4,7 @@ import {
   collectAll,
   collectStation,
   createPair,
+  cullDuck,
   doseNiacin,
   gainXP,
   removePair,
@@ -267,6 +268,12 @@ export class GameEngine {
   }
   unpair(pairId: string): ActionResult<unknown> {
     const r = removePair(this.state, pairId);
+    this.notify();
+    return r;
+  }
+  /** Cull (release) a duck — the selection lever that raises the live pop mean. */
+  cull(duckId: string): ActionResult<unknown> {
+    const r = cullDuck(this.state, duckId);
     this.notify();
     return r;
   }

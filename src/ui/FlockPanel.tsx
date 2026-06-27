@@ -132,6 +132,7 @@ export function FlockPanel({
   state: GameState;
   onClose: () => void;
 }) {
+  const [armedCull, setArmedCull] = useState<string | null>(null);
   const ducks = [...state.ducks].sort(
     (a, b) =>
       stageRank[a.stage] - stageRank[b.stage] ||
@@ -211,6 +212,25 @@ export function FlockPanel({
                   </span>
                   <span className="ml-auto tabular-nums text-[#ffe9a8]">×{d.vigor.toFixed(2)}</span>
                   <span className="text-[9px] text-[#5a4d3a]">vigor</span>
+                  <button
+                    onClick={() => {
+                      if (armedCull !== d.id) {
+                        setArmedCull(d.id);
+                        window.setTimeout(() => setArmedCull((a) => (a === d.id ? null : a)), 2500);
+                        return;
+                      }
+                      engine.cull(d.id);
+                      setArmedCull(null);
+                    }}
+                    className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                      armedCull === d.id
+                        ? 'bg-[#d95f5f] text-[#fff4d6]'
+                        : 'text-[#7a5a5a] hover:bg-[#33271c] hover:text-[#b06a6a]'
+                    }`}
+                    title="Release this duck (frees housing, raises the flock's vigor mean)"
+                  >
+                    {armedCull === d.id ? 'sure?' : 'release'}
+                  </button>
                 </div>
               );
             })}
