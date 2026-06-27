@@ -1,7 +1,7 @@
 import { BALANCE, STATION_DEFS, type StationType } from '../config/balance';
-import { tendCooldownMult, tendPowerMult } from './loot';
+import { grantModule, tendCooldownMult, tendPowerMult } from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
-import type { GameState, Resource, Station } from './state';
+import type { GameState, Module, Rarity, Resource, Station } from './state';
 import { isPondTile, stationAt } from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
@@ -153,16 +153,20 @@ export interface XpResult {
   newRank: number;
   /** Milestones crossed by this XP gain (e.g. Auto-Haul unlock at rank 5). */
   milestones: Milestone[];
+  /** Loot modules granted by rank milestones crossed (LOOT.MILESTONE_GRANTS). */
+  grantedModules: Module[];
 }
 
 /**
  * Grant rank XP, resolving as many level-ups as the amount covers. This is the
- * ONLY path that raises rank — it is called exclusively from tend(), which is
- * online-only. Offline never reaches here.
+ * ONLY path that raises rank — it is called exclusively from tend()/dose(),
+ * which are online-only. Offline never reaches here, so milestone module grants
+ * (like XP) never happen offline.
  */
 export function gainXP(state: GameState, amount: number): XpResult {
   const startRank = state.rank;
   const milestones: Milestone[] = [];
+  const grantedModules: Module[] = [];
   state.xp += amount;
 
   // Resolve cascading level-ups.
@@ -174,6 +178,8 @@ export function gainXP(state: GameState, amount: number): XpResult {
       milestones.push(m);
       if (state.rank >= BALANCE.MILESTONE_AUTOHAUL_RANK) state.autoHaulUnlocked = true;
     }
+    const grantRarity = BALANCE.LOOT.MILESTONE_GRANTS[state.rank];
+    if (grantRarity) grantedModules.push(grantModule(state, grantRarity as Rarity));
   }
 
   return {
@@ -181,6 +187,7 @@ export function gainXP(state: GameState, amount: number): XpResult {
     levelsGained: state.rank - startRank,
     newRank: state.rank,
     milestones,
+    grantedModules,
   };
 }
 

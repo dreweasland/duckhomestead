@@ -12,10 +12,11 @@ import {
   type ActionResult,
   type XpResult,
 } from './actions';
+import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
-import { initialState, type GameState, type Ingredient, type Resource } from './state';
+import { initialState, type GameState, type Ingredient, type Module, type Resource } from './state';
 
 export interface DingEvent {
   newRank: number;
@@ -27,6 +28,12 @@ export interface DingEvent {
 export interface TendEvent {
   stationId: string;
   xp: number;
+}
+
+/** Emitted when a module enters the inventory — the loot moment. */
+export interface LootEvent {
+  module: Module;
+  source: 'drop' | 'milestone';
 }
 
 type Listener = () => void;
@@ -44,6 +51,7 @@ export class GameEngine {
   private listeners = new Set<Listener>();
   private dingListeners = new Set<(e: DingEvent) => void>();
   private tendListeners = new Set<(e: TendEvent) => void>();
+  private lootListeners = new Set<(e: LootEvent) => void>();
 
   private rafId = 0;
   private lastTime = 0;
@@ -75,6 +83,10 @@ export class GameEngine {
     this.tendListeners.add(fn);
     return () => this.tendListeners.delete(fn);
   }
+  onLoot(fn: (e: LootEvent) => void): () => void {
+    this.lootListeners.add(fn);
+    return () => this.lootListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
@@ -83,6 +95,9 @@ export class GameEngine {
   }
   private emitTend(e: TendEvent) {
     for (const fn of this.tendListeners) fn(e);
+  }
+  private emitLoot(e: LootEvent) {
+    for (const fn of this.lootListeners) fn(e);
   }
 
   // ── Loop ──────────────────────────────────────────────────────────
@@ -178,6 +193,7 @@ export class GameEngine {
         milestones: xp.milestones,
       });
     }
+    for (const module of xp.grantedModules) this.emitLoot({ module, source: 'milestone' });
   }
 
   tend(stationId: string): ActionResult<unknown> {
@@ -185,6 +201,10 @@ export class GameEngine {
     if (r.ok) {
       this.emitTend({ stationId, xp: r.value.xp.xpGained });
       this.fireXp(r.value.xp);
+      // Active-only loot drop — the chance gate + roll live in loot.ts. Passive
+      // and offline production never call this.
+      const dropped = tryTendDrop(this.state);
+      if (dropped) this.emitLoot({ module: dropped, source: 'drop' });
     }
     this.notify();
     return r;
