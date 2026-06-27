@@ -20,9 +20,9 @@ describe('offline catch-up × nutrition', () => {
   });
 
   it('a fed flock out-lays (and out-conditions) a starved one offline', () => {
-    const fed = stockAll(fullSetup());
+    const fed = setHens(stockAll(fullSetup()), 1); // fixed vigor for a fair compare
     fed.lastSeen = -HOUR;
-    const starved = build({ plot: 1, mill: 1, coop: 1 });
+    const starved = setHens(build({ plot: 1, mill: 1, coop: 1 }), 1);
     starved.resources.corn = 1e6;
     starved.lastSeen = -HOUR;
     const aFed = runOfflineCatchUp(fed, 0);
@@ -32,9 +32,9 @@ describe('offline catch-up × nutrition', () => {
   });
 
   it('the away summary reflects the throttle (good ration > bad ration)', () => {
-    const good = stockAll(fullSetup());
+    const good = setHens(stockAll(fullSetup()), 1);
     good.lastSeen = -HOUR;
-    const bad = stockAll(fullSetup());
+    const bad = setHens(stockAll(fullSetup()), 1);
     bad.ration = { corn: 0.1, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 };
     bad.condition = 0;
     bad.lastSeen = -HOUR;

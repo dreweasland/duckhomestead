@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import type { Module, ModuleStat } from '../src/game/state';
 import { eggOutputMult } from '../src/game/loot';
-import { build, fullSetup, stockAll, run } from './helpers';
+import { build, fullSetup, stockAll, run, setHens } from './helpers';
 
 let nextId = 0;
 const mod = (stat: ModuleStat, magnitude: number, rarity: Module['rarity'] = 'epic'): Module => ({
@@ -13,7 +13,7 @@ const mod = (stat: ModuleStat, magnitude: number, rarity: Module['rarity'] = 'ep
 });
 
 function eggsPerMin(withMods: (coop: any) => void): { eggMult: number; perMin: number } {
-  const s = stockAll(fullSetup());
+  const s = setHens(stockAll(fullSetup()), 1); // deterministic flock (fixed vigor)
   withMods(s.stations.find((x) => x.type === 'coop')!);
   run(s, 200); // settle
   const before = s.resources.eggs;

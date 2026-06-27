@@ -1,5 +1,8 @@
+import { useState } from 'react';
+import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { COLORS, coopCapacity, phenotype, type Color, type Duck, type GameState } from '../game/state';
+import { playPlace } from '../audio/sfx';
 import { CloseIcon } from './icons';
 
 export const COLOR_META: Record<Color, { label: string; swatch: string }> = {
@@ -26,6 +29,100 @@ export function ColorSwatch({ color, size = 14 }: { color: Color; size?: number 
   );
 }
 
+/** Pick-a-pair + active-pair status. */
+function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
+  const [drakeId, setDrakeId] = useState('');
+  const [henId, setHenId] = useState('');
+  const B = BALANCE.BREEDING;
+  const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
+  const avail = (sex: Duck['sex']) =>
+    state.ducks.filter((d) => d.sex === sex && d.stage === 'adult' && !paired(d.id));
+  const drakes = avail('drake');
+  const hens = avail('hen');
+  const byId = (id: string) => state.ducks.find((d) => d.id === id);
+
+  return (
+    <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2">
+      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+        Breeding
+      </div>
+      {state.breedingPairs.map((p) => {
+        const dr = byId(p.drakeId);
+        const he = byId(p.henId);
+        if (!dr || !he) return null;
+        const next = Math.max(0, B.CLUTCH_INTERVAL_S - p.clutchProgress);
+        const soonest = p.incubating.length ? Math.max(0, B.INCUBATE_S - Math.max(...p.incubating)) : 0;
+        return (
+          <div key={p.id} className="mb-1 flex items-center gap-1.5 text-[11px]">
+            <ColorSwatch color={phenotype(dr.genotype)} size={11} />
+            <span className="text-[#7a6a4a]">×</span>
+            <ColorSwatch color={phenotype(he.genotype)} size={11} />
+            <span className="text-[#9a8a6a]">
+              clutch {Math.ceil(next)}s
+              {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
+            </span>
+            <button
+              onClick={() => engine.unpair(p.id)}
+              className="ml-auto rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
+            >
+              unpair
+            </button>
+          </div>
+        );
+      })}
+      {drakes.length > 0 && hens.length > 0 ? (
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <select
+            value={drakeId}
+            onChange={(e) => setDrakeId(e.target.value)}
+            className="flex-1 rounded bg-[#2a2018] px-1.5 py-1 text-[11px]"
+          >
+            <option value="">drake…</option>
+            {drakes.map((d) => (
+              <option key={d.id} value={d.id}>
+                {phenotype(d.genotype)} ×{d.vigor.toFixed(2)}
+              </option>
+            ))}
+          </select>
+          <select
+            value={henId}
+            onChange={(e) => setHenId(e.target.value)}
+            className="flex-1 rounded bg-[#2a2018] px-1.5 py-1 text-[11px]"
+          >
+            <option value="">hen…</option>
+            {hens.map((d) => (
+              <option key={d.id} value={d.id}>
+                {phenotype(d.genotype)} ×{d.vigor.toFixed(2)}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => {
+              if (engine.pair(drakeId, henId).ok) {
+                playPlace();
+                setDrakeId('');
+                setHenId('');
+              }
+            }}
+            disabled={!drakeId || !henId}
+            className={`rounded px-2 py-1 text-[11px] font-bold ${
+              drakeId && henId
+                ? 'bg-[#6b4f9e] text-[#fff4d6] hover:bg-[#7a5cae]'
+                : 'cursor-not-allowed bg-[#2a2018] text-[#6a5a3a]'
+            }`}
+          >
+            Pair
+          </button>
+        </div>
+      ) : (
+        <div className="mt-1 text-[10px] text-[#7a6a4a]">
+          Need an unpaired adult drake and hen to start a pair.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FlockPanel({
   engine,
   state,
@@ -35,7 +132,6 @@ export function FlockPanel({
   state: GameState;
   onClose: () => void;
 }) {
-  void engine;
   const ducks = [...state.ducks].sort(
     (a, b) =>
       stageRank[a.stage] - stageRank[b.stage] ||
@@ -80,6 +176,8 @@ export function FlockPanel({
           })}
         </div>
 
+        {state.ducks.length > 0 && <Breeding engine={engine} state={state} />}
+
         {state.ducks.length === 0 ? (
           <div className="py-6 text-center text-sm text-[#9a8a6a]">
             No ducks yet — build a Coop to house your starting flock.
@@ -95,7 +193,22 @@ export function FlockPanel({
                     {COLOR_META[color].label}
                   </span>
                   <span className="w-10 text-[#c9b88f]">{d.sex}</span>
-                  <span className="w-16 text-[#9a8a6a]">{STAGE_LABEL[d.stage]}</span>
+                  <span className="w-20 text-[#9a8a6a]">
+                    {STAGE_LABEL[d.stage]}
+                    {d.stage !== 'adult' && (
+                      <span className="text-[#5a4d3a]">
+                        {' '}
+                        {Math.round(
+                          (d.ageTicks /
+                            (d.stage === 'duckling'
+                              ? BALANCE.BREEDING.MATURE_DUCKLING_S
+                              : BALANCE.BREEDING.MATURE_JUVENILE_S)) *
+                            100,
+                        )}
+                        %
+                      </span>
+                    )}
+                  </span>
                   <span className="ml-auto tabular-nums text-[#ffe9a8]">×{d.vigor.toFixed(2)}</span>
                   <span className="text-[9px] text-[#5a4d3a]">vigor</span>
                 </div>

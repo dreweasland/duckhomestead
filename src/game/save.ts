@@ -41,6 +41,8 @@ export function deserialize(raw: string, now: number): GameState {
       // Phase 4a breeding defaults for older saves.
       ducks: parsed.ducks ?? [],
       nextDuckId: parsed.nextDuckId ?? 1,
+      breedingPairs: parsed.breedingPairs ?? [],
+      nextPairId: parsed.nextPairId ?? 1,
       dexSeen: parsed.dexSeen ?? [],
       stations: (parsed.stations ?? []).map((s) => ({
         ...s,

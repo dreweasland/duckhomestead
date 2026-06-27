@@ -115,6 +115,17 @@ export interface Duck {
   debuffed?: boolean;
 }
 
+/** An active breeding pair: lays fertilized clutches that incubate into ducklings. */
+export interface BreedingPair {
+  id: string;
+  drakeId: string;
+  henId: string;
+  /** Seconds toward the next fertilized clutch. */
+  clutchProgress: number;
+  /** Incubation progress (seconds) per fertilized egg currently incubating. */
+  incubating: number[];
+}
+
 /** Phenotype from genotype: blue-allele count -> color. */
 export function phenotype(g: Genotype): Color {
   const blue = (g[0] === 'Bl' ? 1 : 0) + (g[1] === 'Bl' ? 1 : 0);
@@ -178,8 +189,14 @@ export interface GameState {
   ducks: Duck[];
   /** Monotonic id counter for ducks. */
   nextDuckId: number;
+  /** Active breeding pairs. */
+  breedingPairs: BreedingPair[];
+  /** Monotonic id counter for pairs. */
+  nextPairId: number;
   /** Colors ever produced (the dex) — drives first-of-color DINGs. */
   dexSeen: Color[];
+  /** Transient: colors discovered this tick, drained by the engine for DINGs. */
+  pendingDex?: Color[];
 
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
@@ -208,6 +225,8 @@ export function initialState(now: number): GameState {
     nextModuleId: 1,
     ducks: [],
     nextDuckId: 1,
+    breedingPairs: [],
+    nextPairId: 1,
     dexSeen: [],
     lastSeen: now,
   };
@@ -219,11 +238,11 @@ export function initialState(now: number): GameState {
  */
 export function seedFlock(state: GameState): void {
   const B = BALANCE.BREEDING;
-  const midVigor = (B.VIGOR_SEED_RANGE[0] + B.VIGOR_SEED_RANGE[1]) / 2;
+  const [lo, hi] = B.VIGOR_SEED_RANGE;
   const make = (sex: Sex): Duck => ({
     id: `d${state.nextDuckId++}`,
     genotype: ['Bl', 'bl'],
-    vigor: midVigor,
+    vigor: lo + Math.random() * (hi - lo),
     sex,
     stage: 'adult',
     ageTicks: 0,

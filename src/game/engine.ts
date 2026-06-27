@@ -3,8 +3,10 @@ import {
   assignModule,
   collectAll,
   collectStation,
+  createPair,
   doseNiacin,
   gainXP,
+  removePair,
   moveStation,
   placeStation,
   rerollModule,
@@ -20,7 +22,7 @@ import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
-import { initialState, type GameState, type Ingredient, type Module, type Resource } from './state';
+import { initialState, type Color, type GameState, type Ingredient, type Module, type Resource } from './state';
 
 export interface DingEvent {
   newRank: number;
@@ -40,6 +42,11 @@ export interface LootEvent {
   source: 'drop' | 'milestone';
 }
 
+/** Emitted when a never-before-bred color first hatches — the collection DING. */
+export interface DexEvent {
+  color: Color;
+}
+
 type Listener = () => void;
 
 /**
@@ -56,6 +63,7 @@ export class GameEngine {
   private dingListeners = new Set<(e: DingEvent) => void>();
   private tendListeners = new Set<(e: TendEvent) => void>();
   private lootListeners = new Set<(e: LootEvent) => void>();
+  private dexListeners = new Set<(e: DexEvent) => void>();
 
   private rafId = 0;
   private lastTime = 0;
@@ -91,6 +99,10 @@ export class GameEngine {
     this.lootListeners.add(fn);
     return () => this.lootListeners.delete(fn);
   }
+  onDex(fn: (e: DexEvent) => void): () => void {
+    this.dexListeners.add(fn);
+    return () => this.dexListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
@@ -102,6 +114,16 @@ export class GameEngine {
   }
   private emitLoot(e: LootEvent) {
     for (const fn of this.lootListeners) fn(e);
+  }
+  private emitDex(e: DexEvent) {
+    for (const fn of this.dexListeners) fn(e);
+  }
+  /** Fire DINGs for any first-of-color hatches accrued during ticks. */
+  private drainDex() {
+    const pending = this.state.pendingDex;
+    if (!pending || pending.length === 0) return;
+    for (const color of pending) this.emitDex({ color });
+    this.state.pendingDex = [];
   }
 
   // ── Loop ──────────────────────────────────────────────────────────
@@ -120,6 +142,7 @@ export class GameEngine {
         tick(this.state, this.stepMs / 1000, { mode: 'online', autoHaul });
         this.accumulator -= this.stepMs;
       }
+      this.drainDex(); // fire DINGs for any first-of-color hatches this frame
       if (t - this.lastNotify >= this.notifyIntervalMs) {
         this.lastNotify = t;
         this.notify();
@@ -232,6 +255,18 @@ export class GameEngine {
   }
   rerollModule(moduleId: string): ActionResult<unknown> {
     const r = rerollModule(this.state, moduleId);
+    this.notify();
+    return r;
+  }
+
+  // ── Breeding ───────────────────────────────────────────────────────
+  pair(drakeId: string, henId: string): ActionResult<unknown> {
+    const r = createPair(this.state, drakeId, henId);
+    this.notify();
+    return r;
+  }
+  unpair(pairId: string): ActionResult<unknown> {
+    const r = removePair(this.state, pairId);
     this.notify();
     return r;
   }

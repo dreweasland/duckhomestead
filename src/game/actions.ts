@@ -261,6 +261,31 @@ export function rerollModule(
   return done(module);
 }
 
+// ── Breeding pairs (active selection) ─────────────────────────────────
+export function createPair(state: GameState, drakeId: string, henId: string): ActionResult<unknown> {
+  const drake = state.ducks.find((d) => d.id === drakeId);
+  const hen = state.ducks.find((d) => d.id === henId);
+  if (!drake || drake.sex !== 'drake' || drake.stage !== 'adult') return fail('Need an adult drake');
+  if (!hen || hen.sex !== 'hen' || hen.stage !== 'adult') return fail('Need an adult hen');
+  const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
+  if (paired(drakeId) || paired(henId)) return fail('A bird is already paired');
+  state.breedingPairs.push({
+    id: `p${state.nextPairId++}`,
+    drakeId,
+    henId,
+    clutchProgress: 0,
+    incubating: [],
+  });
+  return done(true);
+}
+
+export function removePair(state: GameState, pairId: string): ActionResult<unknown> {
+  const idx = state.breedingPairs.findIndex((p) => p.id === pairId);
+  if (idx < 0) return fail('No such pair');
+  state.breedingPairs.splice(idx, 1);
+  return done(true);
+}
+
 // ── Dose Brewer's Yeast (active-only intervention; clears a leg debuff) ──
 export interface DoseResult {
   xp: XpResult;

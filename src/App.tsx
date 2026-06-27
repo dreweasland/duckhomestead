@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { playCollect, playDing, playLoot, playPlace, playTend } from './audio/sfx';
 import type { StationType } from './config/balance';
-import type { DingEvent, LootEvent } from './game/engine';
+import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { RARITIES, stationAt } from './game/state';
 import { useGame } from './game/useGame';
 import { GameCanvas } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
 import { BuildBar } from './ui/BuildBar';
 import { DevPanel } from './ui/DevPanel';
+import { DexBanner } from './ui/DexBanner';
 import { DingBanner } from './ui/DingBanner';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { FlockPanel } from './ui/FlockPanel';
@@ -43,6 +44,17 @@ export default function App() {
       engine.onLoot((e) => {
         setLoot(e);
         playLoot(RARITIES.indexOf(e.module.rarity));
+      }),
+    [engine],
+  );
+
+  // The collection DING (a never-before-bred color first hatches).
+  const [dex, setDex] = useState<DexEvent | null>(null);
+  useEffect(
+    () =>
+      engine.onDex((e) => {
+        setDex(e);
+        playDing(true); // milestone fanfare
       }),
     [engine],
   );
@@ -86,6 +98,7 @@ export default function App() {
       )}
       <DingBanner ding={ding} onDone={() => setDing(null)} />
       <LootBanner loot={loot} onDone={() => setLoot(null)} />
+      <DexBanner dex={dex} onDone={() => setDex(null)} />
       {engine.away && awayOpen && (
         <AwayModal
           away={engine.away}
