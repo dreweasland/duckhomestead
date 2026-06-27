@@ -73,6 +73,11 @@ export const tendPowerMult = (s: Station): number => 1 + stationBonus(s, 'tendPo
 export const tendCooldownMult = (s: Station): number => 1 - stationBonus(s, 'tendCooldown');
 /** Global flock-condition regen multiplier. */
 export const conditionRegenMult = (state: GameState): number => 1 + globalBonus(state, 'conditionRegen');
+/** A mill's blend-throughput multiplier (capacity) — both speed and yield help,
+ *  so neither module type is dead on a mill. Boosts capacity (a throughput cap),
+ *  never the nutrition requirement/matrix/satisfaction. */
+export const millThroughputMult = (s: Station): number =>
+  (1 + stationBonus(s, 'stationSpeed')) * (1 + stationBonus(s, 'stationYield'));
 
 // ── Rolls (RNG injectable for deterministic tests) ──────────────────────
 export function rollRarity(rng: Rng = Math.random): Rarity {

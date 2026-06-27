@@ -2,6 +2,7 @@ import { BALANCE, STATION_DEFS } from '../config/balance';
 import type { Resource } from './state';
 import type { GameState, Station } from './state';
 import { UPGRADE_OUTPUT } from './actions';
+import { cycleMult, yieldMult } from './loot';
 import { runNutrition } from './nutrition';
 
 export type SimMode = 'online' | 'offline';
@@ -16,10 +17,10 @@ export interface TickOptions {
   autoHaul: boolean;
 }
 
-/** Effective output of a station per cycle for a given resource. */
+/** Effective output of a station per cycle for a given resource (level + yield modules). */
 function stationOutput(station: Station, resource: Resource): number {
   const base = STATION_DEFS[station.type].outputs[resource] ?? 0;
-  return base * UPGRADE_OUTPUT(station.level);
+  return base * UPGRADE_OUTPUT(station.level) * yieldMult(station);
 }
 
 /** Move everything in a station's buffer into central storage. */
@@ -90,7 +91,8 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     // runNutrition below, not the generic producer path.
     if (station.type === 'mill' || station.type === 'coop') continue;
 
-    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds;
+    // Speed modules shorten the effective cycle (throughput only).
+    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleMult(station);
     station.cycleProgress += dt * rateMult;
 
     // Run as many cycles as progress allows. If inputs are missing, cap

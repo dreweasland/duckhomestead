@@ -1,4 +1,5 @@
 import { BALANCE, STATION_DEFS, type StationType } from '../config/balance';
+import { tendCooldownMult, tendPowerMult } from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { GameState, Resource, Station } from './state';
 import { isPondTile, stationAt } from './state';
@@ -236,6 +237,7 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
     station.type === 'coop'
       ? (state.nutrition?.eggMult ?? 1) * (station.debuffed ? BALANCE.NUTRITION.DEBUFF_COOP_OUTPUT_MULT : 1)
       : 1;
+  const tendPower = tendPowerMult(station); // module-boosted burst size
 
   for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {
     // Affordable inputs?
@@ -251,13 +253,13 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
       state.resources[key] -= (def.inputs[key] ?? 0) * mult;
     }
     for (const key of Object.keys(def.outputs) as Resource[]) {
-      const out = (def.outputs[key] ?? 0) * mult * nutritionMult;
+      const out = (def.outputs[key] ?? 0) * mult * nutritionMult * tendPower;
       station.buffer[key] = (station.buffer[key] ?? 0) + out;
       burst[key] = (burst[key] ?? 0) + out;
     }
   }
 
-  station.tendCooldownRemaining = BALANCE.TEND_COOLDOWN_S;
+  station.tendCooldownRemaining = BALANCE.TEND_COOLDOWN_S * tendCooldownMult(station);
   const xp = gainXP(state, BALANCE.TEND_XP);
   return done({ station, burst, xp });
 }

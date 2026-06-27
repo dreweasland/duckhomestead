@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
+import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
 
 const N = BALANCE.NUTRITION;
@@ -37,7 +38,11 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const step = dt * rateMult;
 
   // Desired ingredient draw (units/sec), capped by total mill capacity.
-  const capacity = mills.reduce((a, m) => a + UPGRADE_OUTPUT(m.level), 0) * N.MILL_CAPACITY;
+  // Mill blend capacity (a throughput cap — NOT a nutrition requirement); speed
+  // and yield modules raise it. The requirement/matrix/satisfaction math below
+  // is untouched by modules.
+  const capacity =
+    mills.reduce((a, m) => a + UPGRADE_OUTPUT(m.level) * millThroughputMult(m), 0) * N.MILL_CAPACITY;
   const wantRate: Record<string, number> = {};
   let totalWant = 0;
   for (const ing of INGREDIENTS) {
@@ -75,7 +80,8 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // don't strobe egg output.
   const minEggSat = Math.min(...EGG_AXES.map((a) => satisfaction[a]));
   if (hasMill && minEggSat >= 1) {
-    state.condition = Math.min(N.CONDITION_MAX, state.condition + N.CONDITION_RISE_PER_S * step);
+    const rise = N.CONDITION_RISE_PER_S * conditionRegenMult(state); // module-boosted regen
+    state.condition = Math.min(N.CONDITION_MAX, state.condition + rise * step);
   } else {
     const severity = clamp01(1 - minEggSat);
     state.condition = Math.max(0, state.condition - N.CONDITION_DRAIN_PER_S * severity * step);
@@ -116,9 +122,11 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
     while (coop.cycleProgress >= coopCycle && guard-- > 0) {
       coop.cycleProgress -= coopCycle;
       const debuff = coop.debuffed ? N.DEBUFF_COOP_OUTPUT_MULT : 1;
+      // eggOutput modules multiply the lay; the nutrition eggMult (f(axis) terms)
+      // is unchanged — modules boost output, never the satisfaction math.
       coop.buffer.eggs =
         (coop.buffer.eggs ?? 0) +
-        BALANCE.COOP.eggPerCycle * UPGRADE_OUTPUT(coop.level) * eggMult * debuff;
+        BALANCE.COOP.eggPerCycle * UPGRADE_OUTPUT(coop.level) * eggMult * debuff * eggOutputMult(coop);
       if (willHaul) {
         state.resources.eggs += coop.buffer.eggs ?? 0;
         coop.buffer = {};
