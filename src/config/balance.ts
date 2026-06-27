@@ -68,10 +68,10 @@ export const BALANCE = {
     plot: 10,
     mill: 25,
     coop: 50,
-    peaPatch: 40,
-    mealwormFarm: 60,
-    yeastVat: 75,
-    oysterSource: 50,
+    peaPatch: 25,
+    mealwormFarm: 35,
+    yeastVat: 45,
+    oysterSource: 30,
   } as Record<StationType, number>,
 
   /** Fraction of a station's PLACEMENT cost refunded when removed (0..1). */
@@ -95,10 +95,10 @@ export const BALANCE = {
       plot: 15,
       mill: 35,
       coop: 70,
-      peaPatch: 55,
-      mealwormFarm: 80,
-      yeastVat: 100,
-      oysterSource: 70,
+      peaPatch: 35,
+      mealwormFarm: 50,
+      yeastVat: 60,
+      oysterSource: 45,
     } as Record<StationType, number>,
     costGrowth: 1.6,
     /** Output multiplier per level. Level N output = base * mult^(N-1). */
@@ -130,11 +130,14 @@ export const BALANCE = {
 
   // ── Phase 2: ingredient producers (raw, like the plot) ──────────────
   /** Each ingredient station produces `perCycle` of its resource every cycle. */
+  // Tuned so one ingredient station roughly feeds one coop at the default
+  // ration (with ~30% headroom so stock grows and axes hold green). Rates/s:
+  // peas 0.50, mealworms 0.33, yeast 0.40, shell 0.40 (+ plot corn 0.67).
   INGREDIENT_PROD: {
     peaPatch: { resource: 'peas', perCycle: 2, cycleSeconds: 4 },
-    mealwormFarm: { resource: 'mealworms', perCycle: 1, cycleSeconds: 8 },
-    yeastVat: { resource: 'brewersYeast', perCycle: 1, cycleSeconds: 6 },
-    oysterSource: { resource: 'oysterShell', perCycle: 1, cycleSeconds: 5 },
+    mealwormFarm: { resource: 'mealworms', perCycle: 1, cycleSeconds: 3 },
+    yeastVat: { resource: 'brewersYeast', perCycle: 1, cycleSeconds: 2.5 },
+    oysterSource: { resource: 'oysterShell', perCycle: 1, cycleSeconds: 2.5 },
   } as const,
 
   // ── Phase 2: the nutrition grid (the homestead's "power grid") ───────
@@ -163,12 +166,20 @@ export const BALANCE = {
      * but is short on the rest (throttled, buffered by flock condition).
      * Satisfaction[axis] (fully stocked) = Σ ration[i]·INGREDIENT[i][axis] / REQUIREMENT[axis].
      */
-    DEFAULT_RATION: { corn: 2.5, peas: 1, mealworms: 1.5, brewersYeast: 1, oysterShell: 1 },
-    /** Feed throughput a single mill can blend per second (level-scaled). Coops
-     * eat ~1.75 feed/s each at the default ration, so ~1 mill per 1–2 coops. */
-    MILL_CAPACITY: 3,
-    /** Output multiplier floor when an axis is fully starved (throttle, not wall). */
+    DEFAULT_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.2, oysterShell: 1.2 },
+    /** Feed throughput a single mill can blend per second (level-scaled). A coop
+     * eats ~1.85 feed/s at the default ration, so ~1 mill per coop. */
+    MILL_CAPACITY: 2,
+    /** Per-axis output factor floor when an axis is fully starved. */
     THROTTLE_FLOOR: 0.2,
+    /**
+     * Global floor on the egg multiplier (before condition). The per-axis
+     * factors multiply, so a multi-axis shortfall would otherwise crater output
+     * toward zero and softlock the build-out (you need eggs to afford the
+     * ingredient stations that fix nutrition). This keeps eggs trickling so a
+     * starved flock can always bootstrap — throttle, never a wall.
+     */
+    MIN_EGG_MULT: 0.3,
     /**
      * Smoothing time constant (s) for displayed/throttle satisfaction. Ingredient
      * production is chunky (a plot drops 2 corn every 3s) while the flock eats
@@ -179,9 +190,13 @@ export const BALANCE = {
     /** Flock condition reserve (the "battery"). */
     CONDITION_MAX: 100,
     CONDITION_RISE_PER_S: 0.5, // when all axes satisfied
-    CONDITION_DRAIN_PER_S: 1.0, // when short
+    CONDITION_DRAIN_PER_S: 0.3, // when short (gentle -> ~5min grace to build lines)
     /** Niacin debuff. */
     NIACIN_DEBUFF_THRESHOLD: 0.6, // satisfaction below this accrues risk
+    /** A healthy flock resists the leg debuff: niacin shortfall only accrues
+     *  once condition has run down below this fraction. Prevents a bootstrap
+     *  catch-22 (debuff needs yeast to cure, which you can't yet afford). */
+    NIACIN_DEBUFF_CONDITION_GATE: 0.4,
     NIACIN_DEBUFF_ONSET_S: 300, // sustained shortfall before a duck is debuffed
     DEBUFF_COOP_OUTPUT_MULT: 0.5, // a debuffed coop's output
     DOSE_COOLDOWN_S: 60,

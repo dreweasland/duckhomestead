@@ -82,9 +82,12 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   }
   const cond = state.condition / N.CONDITION_MAX;
 
-  const eggMultRaw = hasMill
-    ? axisFactor(satisfaction.energy) * axisFactor(satisfaction.protein) * axisFactor(satisfaction.calcium)
-    : N.THROTTLE_FLOOR;
+  const eggMultRaw = Math.max(
+    N.MIN_EGG_MULT,
+    hasMill
+      ? axisFactor(satisfaction.energy) * axisFactor(satisfaction.protein) * axisFactor(satisfaction.calcium)
+      : 0,
+  );
   // Condition buffers: full condition masks the penalty; empty applies it fully.
   const eggMult = eggMultRaw + (1 - eggMultRaw) * cond;
 
@@ -94,7 +97,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // onset threshold, one healthy coop's duck gets a leg debuff (halves output).
   // Accrual happens offline too (idle leaves you exposed); only the Dose
   // intervention that clears it is active-only.
-  if (satisfaction.niacin < N.NIACIN_DEBUFF_THRESHOLD) {
+  if (satisfaction.niacin < N.NIACIN_DEBUFF_THRESHOLD && cond < N.NIACIN_DEBUFF_CONDITION_GATE) {
     state.niacinShortfall += step;
     while (state.niacinShortfall >= N.NIACIN_DEBUFF_ONSET_S) {
       state.niacinShortfall -= N.NIACIN_DEBUFF_ONSET_S;
