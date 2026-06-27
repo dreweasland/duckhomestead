@@ -13,7 +13,11 @@ tending stations while you're present.
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # typecheck + production build
+npm test         # run the Vitest suite (game-logic sim tests, node env)
 ```
+
+Tests live in `tests/` and exercise the pure simulation (actions, rank, the
+nutrition grid, save/offline) headlessly — see `vitest.config.ts`.
 
 ## Loop
 
