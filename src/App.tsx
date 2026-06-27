@@ -10,6 +10,7 @@ import { BuildBar } from './ui/BuildBar';
 import { DevPanel } from './ui/DevPanel';
 import { DingBanner } from './ui/DingBanner';
 import { ErrorBoundary } from './ui/ErrorBoundary';
+import { FlockPanel } from './ui/FlockPanel';
 import { HUD } from './ui/HUD';
 import { LootBanner } from './ui/LootBanner';
 import { ModulesPanel } from './ui/ModulesPanel';
@@ -51,6 +52,7 @@ export default function App() {
   const [awayOpen, setAwayOpen] = useState(true);
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
+  const [flockOpen, setFlockOpen] = useState(false);
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
@@ -100,6 +102,7 @@ export default function App() {
       {modulesOpen && (
         <ModulesPanel engine={engine} state={state} onClose={() => setModulesOpen(false)} />
       )}
+      {flockOpen && <FlockPanel engine={engine} state={state} onClose={() => setFlockOpen(false)} />}
 
       <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas + the station box directly under it (close to the tiles). */}
@@ -158,6 +161,15 @@ export default function App() {
               <span className="tabular-nums">
                 {state.inventory.length} spare · {state.dust} dust
               </span>
+            </button>
+          )}
+          {state.ducks.length > 0 && (
+            <button
+              onClick={() => setFlockOpen(true)}
+              className="flex items-center justify-between rounded-md bg-[#26323a] px-3 py-2 text-sm font-bold text-[#a8d0e8] transition hover:bg-[#2e3c46]"
+            >
+              <span>Flock</span>
+              <span className="tabular-nums">{state.ducks.length} ducks</span>
             </button>
           )}
           {!state.autoHaulUnlocked && state.stations.length > 0 && (
