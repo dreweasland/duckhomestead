@@ -120,6 +120,9 @@ export function StationPanel({ engine, state, station }: Props) {
         <HandIcon size={15} />
         {onCooldown ? `Tending in ${Math.ceil(station.tendCooldownRemaining)}s` : 'Tend (burst + XP)'}
       </button>
+      <div className="-mt-1 text-center text-[10px] text-[#7a6a4a]">
+        or double-click the station on the board
+      </div>
 
       <div className="flex gap-2">
         <button

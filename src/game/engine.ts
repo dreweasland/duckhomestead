@@ -20,6 +20,12 @@ export interface DingEvent {
   milestones: Milestone[];
 }
 
+/** Emitted on a successful tend so the canvas can show feedback at the tile. */
+export interface TendEvent {
+  stationId: string;
+  xp: number;
+}
+
 type Listener = () => void;
 
 /**
@@ -34,6 +40,7 @@ export class GameEngine {
 
   private listeners = new Set<Listener>();
   private dingListeners = new Set<(e: DingEvent) => void>();
+  private tendListeners = new Set<(e: TendEvent) => void>();
 
   private rafId = 0;
   private lastTime = 0;
@@ -61,11 +68,18 @@ export class GameEngine {
     this.dingListeners.add(fn);
     return () => this.dingListeners.delete(fn);
   }
+  onTend(fn: (e: TendEvent) => void): () => void {
+    this.tendListeners.add(fn);
+    return () => this.tendListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
   private emitDing(e: DingEvent) {
     for (const fn of this.dingListeners) fn(e);
+  }
+  private emitTend(e: TendEvent) {
+    for (const fn of this.tendListeners) fn(e);
   }
 
   // ── Loop ──────────────────────────────────────────────────────────
@@ -151,7 +165,10 @@ export class GameEngine {
 
   tend(stationId: string): ActionResult<unknown> {
     const r = tend(this.state, stationId);
-    if (r.ok) this.fireXp(r.value.xp);
+    if (r.ok) {
+      this.emitTend({ stationId, xp: r.value.xp.xpGained });
+      this.fireXp(r.value.xp);
+    }
     this.notify();
     return r;
   }

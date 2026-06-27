@@ -3,7 +3,7 @@ import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import { stationStatus } from '../game/actions';
 import type { GameEngine } from '../game/engine';
-import type { Resource, Station } from '../game/state';
+import { stationAt, type Resource, type Station } from '../game/state';
 import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './assets';
 
 const TILE = 56;
@@ -75,7 +75,8 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         stationLayer.sortableChildren = true;
         const duckLayer = new Container(); // ambient ducks roam above the ground
         const overlay = new Graphics();
-        app.stage.addChild(gridLayer, stationLayer, duckLayer, overlay);
+        const floatLayer = new Container(); // rising +XP feedback, on top
+        app.stage.addChild(gridLayer, stationLayer, duckLayer, overlay, floatLayer);
 
         // Bounds the ducks wander within (inside the grass area).
         const fieldX0 = OX + 6, fieldX1 = OX + BALANCE.GRID.width * TILE - 6;
@@ -102,15 +103,26 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
           }
         }
 
-        // Click -> tile.
+        // Click -> tile. Double-click a station -> tend it (no trip to the
+        // panel button). Single click still selects / places.
         app.stage.eventMode = 'static';
         app.stage.hitArea = { contains: () => true } as never;
+        let lastTapId: string | null = null;
+        let lastTapAt = 0;
         const onPointer = (e: { global: { x: number; y: number } }) => {
           const gx = Math.floor((e.global.x - OX) / TILE);
           const gy = Math.floor((e.global.y - OY) / TILE);
-          if (gx >= 0 && gy >= 0 && gx < BALANCE.GRID.width && gy < BALANCE.GRID.height) {
-            clickRef.current(gx, gy);
+          if (gx < 0 || gy < 0 || gx >= BALANCE.GRID.width || gy >= BALANCE.GRID.height) return;
+          const st = stationAt(engine.state, gx, gy);
+          const now = performance.now();
+          if (st && lastTapId === st.id && now - lastTapAt < 350) {
+            engine.tend(st.id); // double-tap on a station
+            lastTapId = null;
+            return;
           }
+          lastTapId = st ? st.id : null;
+          lastTapAt = now;
+          clickRef.current(gx, gy);
         };
         app.stage.on('pointertap', onPointer);
 
@@ -157,6 +169,28 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         };
 
         let cartT = 0;
+
+        // Floating "+XP" feedback at a tended tile, so the reward reads on the
+        // board (no need to look at the panel). Fired by engine tend events.
+        const floatStyle = new TextStyle({
+          fontSize: 13,
+          fontWeight: 'bold',
+          fill: 0x8fe388,
+          stroke: { color: 0x143010, width: 3 },
+          fontFamily: 'monospace',
+        });
+        interface Float { txt: Text; age: number }
+        const floats: Float[] = [];
+        const unsubTend = engine.onTend((e) => {
+          const s = engine.state.stations.find((st) => st.id === e.stationId);
+          if (!s) return;
+          const txt = new Text({ text: `+${e.xp} XP`, style: floatStyle });
+          txt.anchor.set(0.5, 1);
+          txt.position.set(OX + s.x * TILE + TILE / 2, OY + s.y * TILE + 6);
+          floatLayer.addChild(txt);
+          floats.push({ txt, age: 0 });
+        });
+        cleanups.push(() => unsubTend());
 
         // Ambient ducks: cosmetic only (not game state). A small flock that
         // grows with the number of coops and free-roams the grass.
@@ -300,6 +334,22 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
               d.sp.zIndex = d.y;
             }
             duckLayer.sortableChildren = true;
+          }
+
+          // Advance floating +XP labels: rise and fade, then remove.
+          {
+            const dt = app.ticker.deltaMS / 1000;
+            const LIFE = 0.9;
+            for (let i = floats.length - 1; i >= 0; i--) {
+              const f = floats[i];
+              f.age += dt;
+              f.txt.y -= 24 * dt;
+              f.txt.alpha = Math.max(0, 1 - f.age / LIFE);
+              if (f.age >= LIFE) {
+                f.txt.destroy();
+                floats.splice(i, 1);
+              }
+            }
           }
 
           // Auto-Haul cart: a little cart that loops the placed stations once
