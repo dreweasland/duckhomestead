@@ -10,7 +10,7 @@ import {
 } from '../src/game/actions';
 import { stationBonus, makeModule } from '../src/game/loot';
 import { serialize, deserialize, runOfflineCatchUp } from '../src/game/save';
-import { build, fullSetup, stockAll, run } from './helpers';
+import { build, fullSetup, stockAll, run, setHens } from './helpers';
 
 let id = 0;
 const mod = (stat: ModuleStat, rarity: Module['rarity'] = 'legendary', magnitude = 0.5): Module => ({
@@ -88,13 +88,14 @@ describe('stacked power cannot run away past the soft cap', () => {
         expect(stationBonus(st, stat)).toBeLessThanOrEqual(BALANCE.LOOT.SOFT_CAP[stat]);
       }
     }
-    // and even a fully-juiced coop can't lay more than ~ (1 + cap) of base
-    const base = stockAll(fullSetup());
+    // and even a fully-juiced coop can't lay more than ~ (1 + cap) of base.
+    // Fixed-vigor flock so the comparison isolates the module (not seed-vigor RNG).
+    const base = setHens(stockAll(fullSetup()), 1);
     run(base, 200);
     let e0 = base.resources.eggs;
     run(base, 60);
     const basePerMin = base.resources.eggs - e0;
-    const juiced = stockAll(fullSetup());
+    const juiced = setHens(stockAll(fullSetup()), 1);
     juiced.stations.find((x) => x.type === 'coop')!.modules = [mod('eggOutput', 'legendary', 0.5), mod('eggOutput', 'legendary', 0.5)];
     run(juiced, 200);
     e0 = juiced.resources.eggs;
