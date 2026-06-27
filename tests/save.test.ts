@@ -61,4 +61,27 @@ describe('back-compat + robustness', () => {
     expect(r.ration.corn).toBe(9);
     expect(r.ration.oysterShell).toBe(N.DEFAULT_RATION.oysterShell);
   });
+
+  it('defaults loot fields for a pre-Phase-3 save', () => {
+    const r = deserialize(JSON.stringify({ ration: { corn: 2 }, condition: 50 }), 0);
+    expect(r.inventory).toEqual([]);
+    expect(r.dust).toBe(0);
+    expect(r.nextModuleId).toBe(1);
+    expect(r.stations).toEqual([]);
+  });
+});
+
+describe('loot save round-trip', () => {
+  it('preserves inventory, slotted modules, dust, and the id counter', () => {
+    const s = fullSetup();
+    s.dust = 42;
+    s.nextModuleId = 7;
+    s.inventory = [{ id: 'm1', stat: 'stationYield', rarity: 'epic', magnitude: 0.3 }];
+    s.stations[0].modules = [{ id: 'm2', stat: 'stationSpeed', rarity: 'rare', magnitude: 0.2 }];
+    const r = deserialize(serialize(s), 0);
+    expect(r.dust).toBe(42);
+    expect(r.nextModuleId).toBe(7);
+    expect(r.inventory).toEqual(s.inventory);
+    expect(r.stations[0].modules).toEqual(s.stations[0].modules);
+  });
 });
