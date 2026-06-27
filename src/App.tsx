@@ -9,6 +9,7 @@ import { AwayModal } from './ui/AwayModal';
 import { BuildBar } from './ui/BuildBar';
 import { DevPanel } from './ui/DevPanel';
 import { DingBanner } from './ui/DingBanner';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { HUD } from './ui/HUD';
 import { StationPanel } from './ui/StationPanel';
 
@@ -80,7 +81,16 @@ export default function App() {
         {/* Canvas */}
         <div className="flex flex-col items-center gap-2">
           <div className="rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
-            <GameCanvas engine={engine} selectedId={selectedId} onTileClick={onTileClick} />
+            <ErrorBoundary
+              fallback={
+                <div className="flex h-[480px] w-[480px] max-w-full items-center justify-center p-6 text-center text-xs text-[#9a8a6a]">
+                  The board failed to render, but your homestead is safe and still running. Reload to
+                  bring it back.
+                </div>
+              }
+            >
+              <GameCanvas engine={engine} selectedId={selectedId} onTileClick={onTileClick} />
+            </ErrorBoundary>
           </div>
           {state.stations.length === 0 && (
             <div className="max-w-[460px] text-center text-xs text-[#9a8a6a]">
