@@ -6,6 +6,7 @@ import { useGame } from './game/useGame';
 import { GameCanvas } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
 import { BuildBar } from './ui/BuildBar';
+import { DevPanel } from './ui/DevPanel';
 import { DingBanner, playDing } from './ui/DingBanner';
 import { HUD } from './ui/HUD';
 import { StationPanel } from './ui/StationPanel';
@@ -96,6 +97,7 @@ export default function App() {
           )}
           <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
           <StationPanel engine={engine} state={state} station={selected} />
+          {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
           <button
             onClick={() => {
               if (window.confirm('Wipe this homestead and start over?')) {

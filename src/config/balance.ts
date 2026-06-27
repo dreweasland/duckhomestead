@@ -20,22 +20,29 @@ export const BALANCE = {
   // Each station runs cycles. A cycle takes `cycleSeconds` and, if its
   // inputs are available, consumes inputs and emits outputs.
 
+  // Chain is tuned so each stage OVER-supplies the next: a lone plot+mill+coop
+  // never starves itself, and the growing upstream surplus (corn, then pellets)
+  // is the signal to expand ("lots of corn -> build another mill"). Coop output
+  // is the throughput cap. Rates (per second):
+  //   plot 0.67 corn  >  mill demand 0.33 corn  ->  mill 0.33 pellet
+  //   mill 0.33 pellet > coop demand 0.25 pellet -> coop 0.25 egg = 15 eggs/min
+
   /** Feed Plot: produces corn from nothing. The chain's root. */
   PLOT: {
-    cornPerCycle: 1,
+    cornPerCycle: 2,
     cycleSeconds: 3,
   },
   /** Feed Mill: consumes corn, produces pellets. */
   MILL: {
-    cornPerPellet: 2, // corn consumed per pellet produced
+    cornPerPellet: 1, // corn consumed per pellet produced
     pelletPerCycle: 1,
-    cycleSeconds: 4,
+    cycleSeconds: 3,
   },
   /** Coop: consumes pellets, produces eggs (the primary currency). */
   COOP: {
     pelletPerEgg: 1, // pellets consumed per egg produced
     eggPerCycle: 1,
-    cycleSeconds: 5,
+    cycleSeconds: 4,
   },
 
   /** Cost in EGGS to place each station type. */

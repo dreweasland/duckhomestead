@@ -2,15 +2,17 @@ import { BALANCE, type StationType } from '../config/balance';
 import {
   collectAll,
   collectStation,
+  gainXP,
   placeStation,
   tend,
   upgradeStation,
   type ActionResult,
+  type XpResult,
 } from './actions';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
-import { initialState, type GameState } from './state';
+import { initialState, type GameState, type Resource } from './state';
 
 export interface DingEvent {
   newRank: number;
@@ -137,18 +139,19 @@ export class GameEngine {
     this.notify();
   }
 
+  private fireXp(xp: XpResult) {
+    if (xp.levelsGained > 0) {
+      this.emitDing({
+        newRank: xp.newRank,
+        levelsGained: xp.levelsGained,
+        milestones: xp.milestones,
+      });
+    }
+  }
+
   tend(stationId: string): ActionResult<unknown> {
     const r = tend(this.state, stationId);
-    if (r.ok) {
-      const xp = r.value.xp;
-      if (xp.levelsGained > 0) {
-        this.emitDing({
-          newRank: xp.newRank,
-          levelsGained: xp.levelsGained,
-          milestones: xp.milestones,
-        });
-      }
-    }
+    if (r.ok) this.fireXp(r.value.xp);
     this.notify();
     return r;
   }
@@ -165,6 +168,21 @@ export class GameEngine {
     this.state = initialState(Date.now());
     this.away = null;
     this.saveNow();
+    this.notify();
+  }
+
+  // ── Dev/testing helpers (used only by the dev-mode panel) ──────────
+  devAddResource(res: Resource, n: number) {
+    this.state.resources[res] += n;
+    this.notify();
+  }
+  /** Grant XP and fire DINGs, just like tending would (for testing payoff). */
+  devGainXP(n: number) {
+    this.fireXp(gainXP(this.state, n));
+    this.notify();
+  }
+  devClearCooldowns() {
+    for (const s of this.state.stations) s.tendCooldownRemaining = 0;
     this.notify();
   }
 }
