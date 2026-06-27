@@ -70,6 +70,7 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // and consumed downstream within the same step when hauling is active.
   const order: Record<string, number> = {
     plot: 0,
+    peaPatch: 0,
     mealwormFarm: 0,
     yeastVat: 0,
     oysterSource: 0,

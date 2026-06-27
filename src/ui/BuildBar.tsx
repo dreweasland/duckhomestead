@@ -31,6 +31,7 @@ const CHAIN_HINT: Record<StationType, React.ReactNode> = {
       <PelletIcon size={12} /> → <EggIcon size={12} /> eggs
     </span>
   ),
+  peaPatch: swatch('#7fae54', 'peas · energy+protein'),
   mealwormFarm: swatch('#d9a07a', 'mealworms · protein'),
   yeastVat: swatch('#e8d9a0', 'yeast · niacin'),
   oysterSource: swatch('#c9cdd2', 'shell · calcium'),

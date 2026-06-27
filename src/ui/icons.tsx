@@ -176,6 +176,14 @@ export const LockIcon = (p: PixProps) => (
   />
 );
 
+export const PeaIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ g: '#7fae54', d: '#5a8f3a', h: '#a6d27a' }}
+    rows={['.ggg.', 'ghgdg', 'ggggg', '.ggg.']}
+  />
+);
+
 export const MealwormIcon = (p: PixProps) => (
   <Pix
     {...p}
@@ -235,6 +243,7 @@ export const MuteIcon = (p: PixProps) => (
 /** Map a resource key to its icon for inline use. */
 export const RESOURCE_ICON = {
   corn: CornIcon,
+  peas: PeaIcon,
   mealworms: MealwormIcon,
   brewersYeast: YeastIcon,
   oysterShell: ShellIcon,

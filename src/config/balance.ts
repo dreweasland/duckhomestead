@@ -14,12 +14,18 @@ export type StationType =
   | 'plot'
   | 'mill'
   | 'coop'
+  | 'peaPatch'
   | 'mealwormFarm'
   | 'yeastVat'
   | 'oysterSource';
 
 /** Phase 2 ingredient-producing stations (raw producers, like the plot). */
-export const INGREDIENT_STATIONS: StationType[] = ['mealwormFarm', 'yeastVat', 'oysterSource'];
+export const INGREDIENT_STATIONS: StationType[] = [
+  'peaPatch',
+  'mealwormFarm',
+  'yeastVat',
+  'oysterSource',
+];
 
 export const BALANCE = {
   /** Bounded play area. Stations occupy one tile each. */
@@ -62,6 +68,7 @@ export const BALANCE = {
     plot: 10,
     mill: 25,
     coop: 50,
+    peaPatch: 40,
     mealwormFarm: 60,
     yeastVat: 75,
     oysterSource: 50,
@@ -88,6 +95,7 @@ export const BALANCE = {
       plot: 15,
       mill: 35,
       coop: 70,
+      peaPatch: 55,
       mealwormFarm: 80,
       yeastVat: 100,
       oysterSource: 70,
@@ -123,6 +131,7 @@ export const BALANCE = {
   // ── Phase 2: ingredient producers (raw, like the plot) ──────────────
   /** Each ingredient station produces `perCycle` of its resource every cycle. */
   INGREDIENT_PROD: {
+    peaPatch: { resource: 'peas', perCycle: 2, cycleSeconds: 4 },
     mealwormFarm: { resource: 'mealworms', perCycle: 1, cycleSeconds: 8 },
     yeastVat: { resource: 'brewersYeast', perCycle: 1, cycleSeconds: 6 },
     oysterSource: { resource: 'oysterShell', perCycle: 1, cycleSeconds: 5 },
@@ -135,12 +144,17 @@ export const BALANCE = {
   NUTRITION: {
     /** Per-coop per-cycle requirement on each axis. */
     REQUIREMENT: { energy: 3, protein: 2, niacin: 1, calcium: 1 },
-    /** Nutritional value contributed per unit of each ingredient. */
+    /**
+     * Overlapping ingredient -> axis matrix (NOT diagonal): hitting one axis
+     * nudges others, so formulating the ration is a real tradeoff. Calcium is
+     * single-source (minerals). Nutritional value contributed per unit.
+     */
     INGREDIENT: {
-      corn: { energy: 1, protein: 0, niacin: 0, calcium: 0 },
-      mealworms: { energy: 0, protein: 1, niacin: 0, calcium: 0 },
-      brewersYeast: { energy: 0, protein: 0, niacin: 1, calcium: 0 },
-      oysterShell: { energy: 0, protein: 0, niacin: 0, calcium: 1 },
+      corn: { energy: 1.0, protein: 0.1, niacin: 0, calcium: 0 },
+      peas: { energy: 0.4, protein: 0.6, niacin: 0, calcium: 0 },
+      mealworms: { energy: 0.2, protein: 1.0, niacin: 0, calcium: 0 },
+      brewersYeast: { energy: 0, protein: 0.3, niacin: 1.0, calcium: 0 },
+      oysterShell: { energy: 0, protein: 0, niacin: 0, calcium: 1.0 },
     },
     /** Output multiplier floor when an axis is fully starved (throttle, not wall). */
     THROTTLE_FLOOR: 0.2,
@@ -168,7 +182,14 @@ export const BALANCE = {
   AUTOSAVE_DEBOUNCE_MS: 1500,
 } as const;
 
-type ResourceKey = 'corn' | 'mealworms' | 'brewersYeast' | 'oysterShell' | 'pellets' | 'eggs';
+type ResourceKey =
+  | 'corn'
+  | 'peas'
+  | 'mealworms'
+  | 'brewersYeast'
+  | 'oysterShell'
+  | 'pellets'
+  | 'eggs';
 
 /** Per-type static config, keyed for convenience in the sim. */
 export const STATION_DEFS: Record<
@@ -206,6 +227,13 @@ export const STATION_DEFS: Record<
     outputs: { eggs: BALANCE.COOP.eggPerCycle },
   },
   // Phase 2 ingredient producers — raw, no inputs (like the plot).
+  peaPatch: {
+    label: 'Pea Patch',
+    color: 0x7fae54,
+    cycleSeconds: BALANCE.INGREDIENT_PROD.peaPatch.cycleSeconds,
+    inputs: {},
+    outputs: { peas: BALANCE.INGREDIENT_PROD.peaPatch.perCycle },
+  },
   mealwormFarm: {
     label: 'Mealworm Bed',
     color: 0x9a6a3f,
@@ -233,6 +261,7 @@ export const STATION_ORDER: StationType[] = [
   'plot',
   'mill',
   'coop',
+  'peaPatch',
   'mealwormFarm',
   'yeastVat',
   'oysterSource',

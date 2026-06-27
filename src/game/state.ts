@@ -8,6 +8,7 @@ import { BALANCE, type StationType } from '../config/balance';
  */
 export type Resource =
   | 'corn'
+  | 'peas'
   | 'mealworms'
   | 'brewersYeast'
   | 'oysterShell'
@@ -16,8 +17,8 @@ export type Resource =
 
 export type Resources = Record<Resource, number>;
 
-/** The four nutrition ingredients, in axis order (energy/protein/niacin/calcium). */
-export const INGREDIENTS = ['corn', 'mealworms', 'brewersYeast', 'oysterShell'] as const;
+/** The five nutrition ingredients (overlapping axis matrix lives in balance.ts). */
+export const INGREDIENTS = ['corn', 'peas', 'mealworms', 'brewersYeast', 'oysterShell'] as const;
 export type Ingredient = (typeof INGREDIENTS)[number];
 
 /**
@@ -63,7 +64,7 @@ export interface GameState {
 }
 
 export function initialResources(): Resources {
-  return { corn: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, pellets: 0, eggs: 0 };
+  return { corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, pellets: 0, eggs: 0 };
 }
 
 export function initialState(now: number): GameState {

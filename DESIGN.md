@@ -68,12 +68,24 @@ This is what turns the game from a linear chain into a balancing act — the hom
   - **Calcium** (oyster shell) — eggshell quality; short on it → soft eggs get discarded → egg output drops.
 - **It's a real grid, not a slider:** each ingredient costs **grid space + throughput** to produce (mealworms slow, corn fast, brewer's yeast its own line). So balancing nutrition is a *layout & throughput* problem — the optimization itch in duck form.
 - **Feed-formulation dashboard:** set the ration proportions; live per-axis readout (supply vs requirement, green/yellow/red); shows resulting output modifiers. `balance.ts` made visible and playable.
+- **Ingredients are multi-axis (overlapping), not one-per-axis.** A diagonal matrix makes formulation trivial — proportions are forced. Overlap is what makes the dashboard a real tradeoff: hitting one axis nudges another. Starting matrix (tunable):
+  ```
+  corn           energy 1.0   protein 0.1
+  peas           energy 0.4   protein 0.6
+  mealworms      energy 0.2   protein 1.0
+  brewers yeast  protein 0.3  niacin  1.0
+  oyster shell   calcium 1.0
+  ```
+  Calcium stays single-source (realistic for a mineral). The puzzle isn't *in* the system until the matrix overlaps.
+- **Supply = current storage stock, read each tick** (not production rate). `satisfaction = stock-for-axis / requirement`. While ingredient lines keep up, stock stays positive → satisfaction holds; it only dips when a line can't keep pace, which is exactly when the throttle should show. Flock condition buffers brief stock-outs so output reads stable, not strobing.
 - **Throttle, not wall:** a deficiency reduces the *specific* output tied to that axis, scaled by severity (20% short = gentle penalty, not a stop). Never hard-blocked — just suboptimal, with the dashboard pointing at the fix.
 - **Flock condition = the battery:** a slow-moving reserve well-fed ducks build up. It carries the flock through brief shortfalls (like an accumulator through a power dip) and governs offline: while you sleep, the flock coasts on the reserve at the ration you left set. Balanced → wake up fine; marginal → wake to a throttled, degraded homestead (another nudge toward active play).
 - **Interventions are active-only:** dosing a niacin-deficient duck with brewer's yeast to clear its leg debuff is something *you* do — idle never resolves problems for you.
 - **Keep it from becoming chore-y:** a good mix *holds* once set (only revisit on new axis / scale-up); the condition reserve smooths small imbalances; the throttle is fully legible so every fix is a clear decision, not guesswork.
 
 Later stages deepen it: different life stages want different profiles (ducklings = high niacin + protein, laying hens = calcium), so once breeding lands you can't run one universal ration.
+
+**Architecture (locked, Phase 2):** Nutrition *replaces* the pellet step — it isn't layered on top. Egg output = base × f(energy)·f(protein)·f(calcium). `pellets` is retired: kept as a dead field in `GameState`/saves for back-compat, but nothing produces or consumes it. (Considered and deferred: a *stored feed intermediate* where the Mill produces a feed buffer the coop draws down — preserves an extra throughput layer + smoother offline accounting, but buffered feed bakes in its composition at mill-time. Clean, isolated upgrade for later if the Mill ever feels hollow; not worth the cost during the feel-test.)
 
 **Loot / modules (machine-centric):**
 - Stations have N slots; modules give stacking % boosts, rarity-scaled.
@@ -146,4 +158,4 @@ Later stages deepen it: different life stages want different profiles (ducklings
 
 ---
 
-*v2 — economy philosophy is now the spine. Tighten Phase 1 ruthlessly; prove the active/idle feel before adding systems.*
+*v4 — nutrition refinements locked: pellets replaced (not layered), overlapping ingredient matrix, supply = storage stock read each tick. Phase 2 prompt matches.*

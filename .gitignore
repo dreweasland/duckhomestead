@@ -2,6 +2,7 @@ node_modules
 dist
 *.local
 .DS_Store
+docs/
 
 # Asset working dir (raw Kenney pack + bake scripts); baked sprites live in public/
 .asset-src/
