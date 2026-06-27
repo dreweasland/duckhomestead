@@ -79,12 +79,16 @@ export const BALANCE = {
   OFFLINE_CAP_HOURS: 8,
 
   // ── Tending (the active engine + the ONLY XP source) ────────────────
+  // Cooldown is set long enough that tending the whole homestead leaves a
+  // breather before the first station is ready again. XP-per-tend is scaled
+  // together with the cooldown so rank pacing stays put (chunkier rank gains,
+  // fewer total tends) — keep their ratio if you retune one.
   /** Per-station cooldown between tends, in seconds. */
-  TEND_COOLDOWN_S: 30,
+  TEND_COOLDOWN_S: 45,
   /** A tend instantly grants this many cycles' worth of output. */
   TEND_BURST_MULT: 5,
   /** Rank XP granted per tend. Online-only — offline never grants XP. */
-  TEND_XP: 10,
+  TEND_XP: 15,
 
   // ── Homestead Rank + the DING ───────────────────────────────────────
   /** XP needed for level n = BASE * GROWTH^(n-1). */
