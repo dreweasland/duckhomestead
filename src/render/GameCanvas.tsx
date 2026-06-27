@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js';
+import { playPlace } from '../audio/sfx';
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import { stationStatus } from '../game/actions';
 import type { GameEngine } from '../game/engine';
@@ -126,20 +127,84 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
           gridLayer.addChild(shore);
         }
 
-        // Click -> tile. Double-click a station -> tend it (no trip to the
-        // panel button). Single click still selects / places.
+        // Input: tap = select/place, double-tap a station = tend, drag a
+        // station = move it. All derived from pointer down/move/up so the
+        // gestures don't conflict (a drag is movement, taps are not).
         app.stage.eventMode = 'static';
         app.stage.hitArea = { contains: () => true } as never;
+        const toTile = (g: { x: number; y: number }) => ({
+          gx: Math.floor((g.x - OX) / TILE),
+          gy: Math.floor((g.y - OY) / TILE),
+        });
+        const inBounds = (gx: number, gy: number) =>
+          gx >= 0 && gy >= 0 && gx < BALANCE.GRID.width && gy < BALANCE.GRID.height;
+
         let lastTapId: string | null = null;
         let lastTapAt = 0;
-        const onPointer = (e: { global: { x: number; y: number } }) => {
-          const gx = Math.floor((e.global.x - OX) / TILE);
-          const gy = Math.floor((e.global.y - OY) / TILE);
-          if (gx < 0 || gy < 0 || gx >= BALANCE.GRID.width || gy >= BALANCE.GRID.height) return;
+        const DRAG_THRESH = 6;
+        // Pointer-down state for the whole grid (so empty-tile taps still work).
+        // `id` is set only when pressing a station; `dragging` only a station
+        // can become true. Read by the render loop to follow the cursor and
+        // show the drop target.
+        let down: {
+          id: string | null;
+          sx: number;
+          sy: number;
+          px: number;
+          py: number;
+          dragging: boolean;
+          gx: number;
+          gy: number;
+          valid: boolean;
+        } | null = null;
+
+        app.stage.on('pointerdown', (e) => {
+          const { gx, gy } = toTile(e.global);
+          if (!inBounds(gx, gy)) {
+            down = null;
+            return;
+          }
+          const st = stationAt(engine.state, gx, gy);
+          down = { id: st?.id ?? null, sx: e.global.x, sy: e.global.y, px: e.global.x, py: e.global.y, dragging: false, gx, gy, valid: true };
+        });
+
+        app.stage.on('pointermove', (e) => {
+          if (!down) return;
+          down.px = e.global.x;
+          down.py = e.global.y;
+          // Only a press that started on a station turns into a drag.
+          if (!down.dragging && down.id && Math.hypot(e.global.x - down.sx, e.global.y - down.sy) > DRAG_THRESH) {
+            down.dragging = true;
+          }
+          if (down.dragging) {
+            const { gx, gy } = toTile(e.global);
+            down.gx = gx;
+            down.gy = gy;
+            const occ = inBounds(gx, gy) ? stationAt(engine.state, gx, gy) : undefined;
+            down.valid = inBounds(gx, gy) && !isPondTile(gx, gy) && (!occ || occ.id === down.id);
+          }
+        });
+
+        const endPointer = (e: { global: { x: number; y: number } }) => {
+          const d = down;
+          down = null;
+          if (!d) return;
+          if (d.dragging && d.id) {
+            // Drop: relocate if the target tile is valid, else snap back.
+            if (d.valid) {
+              const r = engine.move(d.id, d.gx, d.gy);
+              if (r.ok) playPlace();
+            }
+            return;
+          }
+          // A tap (no real movement): select / place, or tend on a quick second
+          // tap of the same station.
+          const { gx, gy } = toTile(e.global);
+          if (!inBounds(gx, gy)) return;
           const st = stationAt(engine.state, gx, gy);
           const now = performance.now();
           if (st && lastTapId === st.id && now - lastTapAt < 350) {
-            engine.tend(st.id); // double-tap on a station
+            engine.tend(st.id);
             lastTapId = null;
             return;
           }
@@ -147,7 +212,8 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
           lastTapAt = now;
           clickRef.current(gx, gy);
         };
-        app.stage.on('pointertap', onPointer);
+        app.stage.on('pointerup', endPointer);
+        app.stage.on('pointerupoutside', endPointer);
 
         // Reusable per-station display objects keyed by id.
         const labelStyle = new TextStyle({ fontSize: 11, fill: 0xfff4d6, fontFamily: 'monospace' });
@@ -259,15 +325,20 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
             present.add(s.id);
             const def = STATION_DEFS[s.type];
             const entry = sprites.get(s.id) ?? makeSprite(s);
-            const px = OX + s.x * TILE;
-            const py = OY + s.y * TILE;
-            entry.c.position.set(px, py);
-            entry.c.zIndex = s.y; // lower rows paint over the buildings above them
+            const beingDragged = down?.dragging && down.id === s.id;
+            if (beingDragged) {
+              // Follow the cursor (tile-centered) and float above everything.
+              entry.c.position.set(down!.px - TILE / 2, down!.py - TILE / 2);
+              entry.c.zIndex = 10000;
+            } else {
+              entry.c.position.set(OX + s.x * TILE, OY + s.y * TILE);
+              entry.c.zIndex = s.y; // lower rows paint over the buildings above
+            }
 
             // Starved stations (missing inputs in central storage) are dimmed
             // so it's obvious why they aren't producing.
             const starved = !stationStatus(state, s).producing;
-            entry.c.alpha = starved ? 0.55 : 1;
+            entry.c.alpha = beingDragged ? 0.85 : starved ? 0.55 : 1;
             // Mill sails spin (slowly when starved) for a touch of life.
             if (entry.sails) entry.sails.rotation += (app.ticker.deltaMS / 1000) * (starved ? 0.3 : 1.4);
 
@@ -417,6 +488,16 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
           // Auto-Haul cart: a little cart that loops the placed stations once
           // unlocked — the visible sign the milestone changed how hauling works.
           overlay.clear();
+
+          // Drop-target highlight while dragging a station (green ok / red no).
+          if (down?.dragging && inBounds(down.gx, down.gy)) {
+            const tx = OX + down.gx * TILE;
+            const ty = OY + down.gy * TILE;
+            const col = down.valid ? 0x8fe388 : 0xd95f5f;
+            overlay.roundRect(tx + 2, ty + 2, TILE - 4, TILE - 4, 6).fill({ color: col, alpha: 0.22 });
+            overlay.roundRect(tx + 2, ty + 2, TILE - 4, TILE - 4, 6).stroke({ width: 2, color: col });
+          }
+
           if (state.autoHaulUnlocked && !prevAutoHaul) arrivalT = 0; // just unlocked
           prevAutoHaul = state.autoHaulUnlocked;
 

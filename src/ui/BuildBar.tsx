@@ -65,7 +65,7 @@ export function BuildBar({ state, buildType, onPick }: Props) {
       <div className="text-[10px] text-[#7a6a4a]">
         {buildType
           ? `Click an empty tile to place a ${STATION_DEFS[buildType].label}. Click again to cancel.`
-          : 'Pick a station, then click a tile to build. Click a station to select it; double-click to tend.'}
+          : 'Click a tile to build. Click a station to select, double-click to tend, drag to move.'}
       </div>
     </div>
   );

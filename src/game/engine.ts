@@ -3,6 +3,7 @@ import {
   collectAll,
   collectStation,
   gainXP,
+  moveStation,
   placeStation,
   tend,
   upgradeStation,
@@ -138,6 +139,13 @@ export class GameEngine {
 
   upgrade(stationId: string): ActionResult<unknown> {
     const r = upgradeStation(this.state, stationId);
+    this.notify();
+    return r;
+  }
+
+  /** Relocate a station to an empty tile (free). */
+  move(stationId: string, x: number, y: number): ActionResult<unknown> {
+    const r = moveStation(this.state, stationId, x, y);
     this.notify();
     return r;
   }

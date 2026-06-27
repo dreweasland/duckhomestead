@@ -72,6 +72,26 @@ export function placeStation(
   return done(station);
 }
 
+// ── Move (relocate, free) ─────────────────────────────────────────────
+export function moveStation(
+  state: GameState,
+  stationId: string,
+  x: number,
+  y: number,
+): ActionResult<Station> {
+  const station = state.stations.find((s) => s.id === stationId);
+  if (!station) return fail('No such station');
+  if (x < 0 || y < 0 || x >= BALANCE.GRID.width || y >= BALANCE.GRID.height) {
+    return fail('Out of bounds');
+  }
+  if (isPondTile(x, y)) return fail('That’s the pond');
+  const occupant = stationAt(state, x, y);
+  if (occupant && occupant.id !== stationId) return fail('Tile occupied');
+  station.x = x;
+  station.y = y;
+  return done(station);
+}
+
 // ── Upgrade ───────────────────────────────────────────────────────────
 export function upgradeStation(state: GameState, stationId: string): ActionResult<Station> {
   const station = state.stations.find((s) => s.id === stationId);
