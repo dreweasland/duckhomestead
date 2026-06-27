@@ -57,12 +57,17 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
     for (const axis of AXES) supply[axis] += rate * (vals[axis] ?? 0);
   }
 
-  // Requirement (rate) + satisfaction.
+  // Requirement (rate) + satisfaction. The instantaneous ratio is noisy (chunky
+  // production vs continuous eating), so smooth it with an EMA — the bars and
+  // throttle then read steady and only move when a line genuinely can't keep up.
   const requirement = zeroAxes();
   const satisfaction = zeroAxes();
+  const prior = state.nutrition?.satisfaction;
+  const alpha = N.SMOOTH_TAU_S > 0 ? Math.min(1, step / N.SMOOTH_TAU_S) : 1;
   for (const axis of AXES) {
     requirement[axis] = (N.REQUIREMENT[axis] * effCoops) / coopCycle;
-    satisfaction[axis] = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
+    const instant = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
+    satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
   }
 
   // Flock condition (battery): rises when the egg axes are all satisfied,

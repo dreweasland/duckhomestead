@@ -169,6 +169,13 @@ export const BALANCE = {
     MILL_CAPACITY: 3,
     /** Output multiplier floor when an axis is fully starved (throttle, not wall). */
     THROTTLE_FLOOR: 0.2,
+    /**
+     * Smoothing time constant (s) for displayed/throttle satisfaction. Ingredient
+     * production is chunky (a plot drops 2 corn every 3s) while the flock eats
+     * continuously, so the raw per-tick ratio strobes for any line near its
+     * margin. An EMA over ~this many seconds keeps the bars (and egg rate) steady.
+     */
+    SMOOTH_TAU_S: 1.5,
     /** Flock condition reserve (the "battery"). */
     CONDITION_MAX: 100,
     CONDITION_RISE_PER_S: 0.5, // when all axes satisfied
