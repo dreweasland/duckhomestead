@@ -25,11 +25,12 @@ export function DingBanner({ ding, onDone }: Props) {
   const milestone = ding.milestones[0];
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-10 z-50 flex justify-center">
-      <button
-        type="button"
-        onClick={onDone}
-        className={`ding-pop pointer-events-auto cursor-pointer rounded-xl px-6 py-4 text-center shadow-2xl ${
+    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+      <div className="flex w-full max-w-4xl justify-end">
+        <button
+          type="button"
+          onClick={onDone}
+          className={`ding-pop pointer-events-auto cursor-pointer rounded-xl px-6 py-4 text-center shadow-2xl ${
           milestone
             ? 'bg-gradient-to-br from-[#6b4f9e] to-[#3a2e64] ring-2 ring-[#cdbcff]'
             : 'bg-gradient-to-br from-[#e2b94f] to-[#b87333] ring-2 ring-[#fff4d6]'
@@ -48,8 +49,9 @@ export function DingBanner({ ding, onDone }: Props) {
             <div className="mt-0.5 max-w-xs text-xs text-white/90">{milestone.description}</div>
           </div>
         )}
-        <div className="mt-2 text-[10px] uppercase tracking-wider text-white/60">tap to dismiss</div>
-      </button>
+          <div className="mt-2 text-[10px] uppercase tracking-wider text-white/60">tap to dismiss</div>
+        </button>
+      </div>
     </div>
   );
 }
