@@ -56,9 +56,9 @@ export function StationPanel({ engine, state, station }: Props) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img
-            src={`/assets/tiny-town/${station.type}.png`}
+            src={`/assets/farm/${station.type}.png`}
             alt=""
-            className="h-8 w-6 object-contain"
+            className="h-7 w-7 object-contain"
             style={{ imageRendering: 'pixelated' }}
           />
           <span className="font-bold">{def.label}</span>

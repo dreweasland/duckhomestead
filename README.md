@@ -46,6 +46,11 @@ npm run build    # typecheck + production build
 - `src/ui/` — HUD, BuildBar, StationPanel, DING banner, away modal, and the
   hand-drawn pixel icon set (`icons.tsx`). No emojis — every glyph is drawn.
 
+Art: stations and ducks are hand-drawn pixel sprites (`public/assets/farm/`,
+baked from `.asset-src/farm.cjs`); ground tiles are Kenney "Tiny Town" (CC0).
+The renderer loads them through `src/render/assets.ts` and falls back to flat
+placeholders if any asset is missing.
+
 Simulation is decoupled from rendering: an accumulator advances the sim in
 fixed ~10Hz steps; `requestAnimationFrame` paces rendering. The canvas and UI
 render from the single `GameState`.

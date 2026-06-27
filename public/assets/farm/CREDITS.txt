@@ -1,0 +1,10 @@
+Hand-drawn pixel-art farm sprites for Duck Homestead.
+Authored programmatically as pixel shapes (see .asset-src/farm.cjs in history).
+Original work — free to use. Ground tiles are Kenney "Tiny Town" (CC0); see
+../tiny-town/CREDITS.txt.
+
+  plot.png        cornfield (tilled soil + corn)
+  mill.png        windmill tower
+  mill_sails.png  spinning sails (rotated in-engine over the mill hub)
+  coop.png        duck coop (peaked roof + round entry)
+  duck_a/b.png    2-frame waddle; engine mirrors for left movement

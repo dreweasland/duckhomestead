@@ -8,9 +8,9 @@ import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './a
 
 const TILE = 56;
 const PAD = 16;
-// Buildings are bottom-anchored and rise up to one tile above their cell, so
-// reserve a tile of headroom at the top to keep top-row roofs from clipping.
-const TOP_EXTRA = TILE;
+// Station sprites fit within their tile; a little headroom keeps spinning mill
+// sails from clipping on the top row.
+const TOP_EXTRA = 14;
 const OX = PAD;
 const OY = PAD + TOP_EXTRA;
 const W = BALANCE.GRID.width * TILE + PAD * 2;
@@ -57,7 +57,7 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
       .init({ width: W, height: H, background: 0x2a2018, antialias: false })
       .then(async () => {
         if (disposed) return; // unmounted mid-init; cleanup will destroy.
-        let textures: GameTextures = { stations: {}, ground: [] };
+        let textures: GameTextures = { stations: {}, millSails: null, ducks: [], ground: [] };
         try {
           textures = await loadTextures();
         } catch {
@@ -72,9 +72,14 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         const SCALE = TILE / 16; // all art is 16px; scale uniformly, no smoothing
         const gridLayer = new Container();
         const stationLayer = new Container();
-        stationLayer.sortableChildren = true; // taller buildings sort by row
+        stationLayer.sortableChildren = true;
+        const duckLayer = new Container(); // ambient ducks roam above the ground
         const overlay = new Graphics();
-        app.stage.addChild(gridLayer, stationLayer, overlay);
+        app.stage.addChild(gridLayer, stationLayer, duckLayer, overlay);
+
+        // Bounds the ducks wander within (inside the grass area).
+        const fieldX0 = OX + 6, fieldX1 = OX + BALANCE.GRID.width * TILE - 6;
+        const fieldY0 = OY + 6, fieldY1 = OY + BALANCE.GRID.height * TILE - 6;
 
         // Ground: real grass tiles when available, else a flat checker.
         const haveGround = textures.ground.some(Boolean);
@@ -115,13 +120,13 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
 
         const sprites = new Map<
           string,
-          { c: Container; art: Sprite | null; body: Graphics; ring: Graphics; lvl: Text; buf: Text }
+          { c: Container; art: Sprite | null; sails: Sprite | null; body: Graphics; ring: Graphics; lvl: Text; buf: Text }
         >();
 
         const makeSprite = (s: Station) => {
           const c = new Container();
-          // Real station art, bottom-anchored so buildings rise above their
-          // tile (classic tile-RPG look). Falls back to a drawn block.
+          // Real station art, bottom-anchored within the tile. Falls back to a
+          // drawn block if the texture is missing.
           const tex = textures.stations[s.type];
           let art: Sprite | null = null;
           if (tex) {
@@ -131,18 +136,42 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
             art.position.set(TILE / 2, TILE);
             c.addChild(art);
           }
+          // Mill gets spinning sails mounted over the tower's hub (~6px down).
+          let sails: Sprite | null = null;
+          if (s.type === 'mill' && textures.millSails) {
+            sails = new Sprite(textures.millSails);
+            sails.anchor.set(0.5);
+            sails.scale.set(SCALE);
+            sails.position.set(TILE / 2, 6 * SCALE);
+            c.addChild(sails);
+          }
           const body = new Graphics();
           const ring = new Graphics();
           const lvl = new Text({ text: '', style: smallStyle });
           const buf = new Text({ text: '', style: labelStyle });
           c.addChild(body, ring, lvl, buf);
           stationLayer.addChild(c);
-          const entry = { c, art, body, ring, lvl, buf };
+          const entry = { c, art, sails, body, ring, lvl, buf };
           sprites.set(s.id, entry);
           return entry;
         };
 
         let cartT = 0;
+
+        // Ambient ducks: cosmetic only (not game state). A small flock that
+        // grows with the number of coops and free-roams the grass.
+        interface Duck { sp: Sprite; x: number; y: number; tx: number; ty: number; facing: number; frame: number; frameT: number; pause: number }
+        const ducks: Duck[] = [];
+        const rand = (a: number, b: number) => a + Math.random() * (b - a);
+        const haveDucks = textures.ducks.some(Boolean);
+        const spawnDuck = (): Duck => {
+          const sp = new Sprite(textures.ducks[0]);
+          sp.anchor.set(0.5, 1);
+          sp.scale.set(SCALE);
+          duckLayer.addChild(sp);
+          const x = rand(fieldX0, fieldX1), y = rand(fieldY0, fieldY1);
+          return { sp, x, y, tx: rand(fieldX0, fieldX1), ty: rand(fieldY0, fieldY1), facing: 1, frame: 0, frameT: 0, pause: 0 };
+        };
 
         const render = () => {
           const state = engine.state;
@@ -160,38 +189,52 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
             // Starved stations (missing inputs in central storage) are dimmed
             // so it's obvious why they aren't producing.
             const starved = !stationStatus(state, s).producing;
-            entry.c.alpha = starved ? 0.5 : 1;
+            entry.c.alpha = starved ? 0.55 : 1;
+            // Mill sails spin (slowly when starved) for a touch of life.
+            if (entry.sails) entry.sails.rotation += (app.ticker.deltaMS / 1000) * (starved ? 0.3 : 1.4);
 
+            // All HUD-ish overlays are drawn on dark backings so they stay
+            // legible on top of the textured sprites.
+            const DARK = { color: 0x16110b, alpha: 0.72 };
             entry.body.clear();
-            // No texture? Draw the flat-color placeholder block.
             if (!entry.art) {
               entry.body.roundRect(6, 6, TILE - 12, TILE - 12, 6).fill(def.color);
             }
-            // Cycle progress bar along the bottom of the tile.
-            const cyc = def.cycleSeconds;
-            const prog = Math.min(1, s.cycleProgress / cyc);
-            entry.body.rect(6, TILE - 5, (TILE - 12) * prog, 3).fill(0xfff4d6);
-            // Amber "needs input" pip on starved stations.
-            if (starved) entry.body.circle(TILE - 10, 10, 3).fill(0xe8a35a);
 
-            // Selection / tend-cooldown ring.
+            // Production progress bar along the bottom.
+            const prog = Math.min(1, s.cycleProgress / def.cycleSeconds);
+            entry.body.rect(5, TILE - 5, TILE - 10, 3).fill(DARK);
+            entry.body.rect(5, TILE - 5, (TILE - 10) * prog, 3).fill(0xfff4d6);
+
+            // Tend status, top-right: green dot when ready, recharge ring while
+            // cooling down. Outlined for contrast.
+            if (s.tendCooldownRemaining > 0) {
+              const frac = 1 - s.tendCooldownRemaining / BALANCE.TEND_COOLDOWN_S;
+              entry.body.rect(5, 4, TILE - 10, 4).fill(DARK);
+              entry.body.rect(5, 4, (TILE - 10) * frac, 4).fill(0x6fb86a);
+            } else {
+              entry.body.circle(TILE - 9, 10, 5.5).fill(DARK);
+              entry.body.circle(TILE - 9, 10, 3.5).fill(0x8fe388);
+            }
+
+            // Starved indicator, bottom-right amber dot.
+            if (starved) {
+              entry.body.circle(TILE - 9, TILE - 12, 5.5).fill(DARK);
+              entry.body.circle(TILE - 9, TILE - 12, 3.5).fill(0xe8a35a);
+            }
+
+            // Level badge, bottom-left.
+            entry.body.roundRect(4, TILE - 25, 21, 14, 3).fill(DARK);
+            entry.lvl.text = `L${s.level}`;
+            entry.lvl.position.set(8, TILE - 23);
+
+            // Selection outline.
             entry.ring.clear();
             if (selRef.current === s.id) {
               entry.ring.roundRect(2, 2, TILE - 4, TILE - 4, 8).stroke({ width: 2, color: 0xfff4d6 });
             }
-            if (s.tendCooldownRemaining > 0) {
-              const frac = 1 - s.tendCooldownRemaining / BALANCE.TEND_COOLDOWN_S;
-              entry.ring.rect(6, 4, (TILE - 12) * frac, 2).fill(0x8fe388);
-            } else {
-              // Ready-to-tend pip.
-              entry.ring.circle(TILE - 10, 10, 3).fill(0x8fe388);
-            }
 
-            entry.lvl.text = `L${s.level}`;
-            entry.lvl.position.set(8, TILE - 24);
-
-            // Buffer indicator: a small colored chip + count (no emoji). Each
-            // station only ever buffers its own single output resource.
+            // Buffer indicator, top-left: a colored chip + count on a dark badge.
             let buffered = 0;
             let bufRes: Resource | null = null;
             for (const k of Object.keys(s.buffer) as Resource[]) {
@@ -202,9 +245,10 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
               }
             }
             if (bufRes) {
-              entry.body.rect(9, 9, 6, 6).fill(RES_COLOR[bufRes]).stroke({ width: 1, color: 0x1a1410 });
+              entry.body.roundRect(4, 4, 24, 13, 3).fill(DARK);
+              entry.body.rect(7, 7, 7, 7).fill(RES_COLOR[bufRes]).stroke({ width: 1, color: 0x1a1410 });
               entry.buf.text = `${Math.floor(buffered)}`;
-              entry.buf.position.set(18, 7);
+              entry.buf.position.set(16, 5);
             } else {
               entry.buf.text = '';
             }
@@ -216,6 +260,45 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
               entry.c.destroy({ children: true });
               sprites.delete(id);
             }
+          }
+
+          // Ducks: keep the flock sized to the homestead, then waddle them.
+          if (haveDucks) {
+            const coops = state.stations.filter((s) => s.type === 'coop').length;
+            const want = Math.min(8, 2 + coops);
+            while (ducks.length < want) ducks.push(spawnDuck());
+            while (ducks.length > want) duckLayer.removeChild(ducks.pop()!.sp);
+
+            const dt = Math.min(0.05, app.ticker.deltaMS / 1000);
+            const SPEED = 16;
+            for (const d of ducks) {
+              if (d.pause > 0) {
+                d.pause -= dt;
+              } else {
+                const dx = d.tx - d.x, dy = d.ty - d.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < 3) {
+                  // Reached target: idle a beat, then pick a new spot.
+                  d.pause = rand(0.4, 2.2);
+                  d.tx = rand(fieldX0, fieldX1);
+                  d.ty = rand(fieldY0, fieldY1);
+                } else {
+                  d.x += (dx / dist) * SPEED * dt;
+                  d.y += (dy / dist) * SPEED * dt;
+                  if (Math.abs(dx) > 0.5) d.facing = dx < 0 ? -1 : 1;
+                  d.frameT += dt;
+                  if (d.frameT > 0.18) {
+                    d.frameT = 0;
+                    d.frame ^= 1;
+                    d.sp.texture = textures.ducks[d.frame] ?? textures.ducks[0];
+                  }
+                }
+              }
+              d.sp.position.set(d.x, d.y);
+              d.sp.scale.x = d.facing * SCALE; // mirror to face travel direction
+              d.sp.zIndex = d.y;
+            }
+            duckLayer.sortableChildren = true;
           }
 
           // Auto-Haul cart: a little cart that loops the placed stations once

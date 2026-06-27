@@ -1,17 +1,12 @@
-Art: Kenney "Tiny Town" (v1.1) — Created/distributed by Kenney (www.kenney.nl)
+Ground tiles: Kenney "Tiny Town" (v1.1) — Created/distributed by Kenney (www.kenney.nl)
 License: Creative Commons Zero, CC0 — http://creativecommons.org/publicdomain/zero/1.0/
 Source: https://kenney.nl/assets/tiny-town
 Support Kenney: https://support.kenney.nl
 
-These station/ground sprites are composited from the pack's 16x16 tiles
-(tilemap_packed.png, 12 cols, index = row*12 + col):
+Only the grass ground tiles are used (composited from the pack's 16x16 tiles,
+tilemap_packed.png, 12 cols, index = row*12 + col):
 
   ground_grass.png         tile 0   (plain grass)
   ground_grass_flowers.png tile 2   (grass + flowers, variety)
-  ground_dirt.png          tile 24  (dirt)
-  plot.png   16x16  tile 24 (dirt) + tile 17 (sprout)
-  mill.png   16x32  tile 49 (blue roof) over tile 89 (stone wall + door)
-  coop.png   16x32  tile 53 (red roof)  over tile 85 (wood wall + door)
 
-Re-bake: download the pack from the Source URL, then run the bake script
-against Tilemap/tilemap_packed.png (see git history / .asset-src bake.cjs).
+Station and duck sprites are hand-drawn — see ../farm/CREDITS.txt.

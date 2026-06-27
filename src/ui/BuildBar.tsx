@@ -47,9 +47,9 @@ export function BuildBar({ state, buildType, onPick }: Props) {
             >
               <div className="flex w-full items-center gap-1.5">
                 <img
-                  src={`/assets/tiny-town/${t}.png`}
+                  src={`/assets/farm/${t}.png`}
                   alt=""
-                  className="h-7 w-5 object-contain"
+                  className="h-6 w-6 object-contain"
                   style={{ imageRendering: 'pixelated' }}
                 />
                 <span className="text-sm font-bold">{STATION_DEFS[t].label}</span>
