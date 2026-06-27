@@ -42,10 +42,41 @@ export interface Station {
   tendCooldownRemaining: number;
   /** Coops only: a leg debuff from sustained niacin shortfall (halves output). */
   debuffed?: boolean;
+  /** Slotted modules (length <= LOOT.SLOTS_PER_STATION). Throughput boosts only. */
+  modules?: Module[];
 }
 
 export type Axis = 'energy' | 'protein' | 'niacin' | 'calcium';
 export const AXES: Axis[] = ['energy', 'protein', 'niacin', 'calcium'];
+
+// ── Phase 3: loot / modules ──
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+export const RARITIES: Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+
+/** Throughput levers a module can boost. NEVER nutrition requirements/matrix. */
+export type ModuleStat =
+  | 'stationSpeed'
+  | 'stationYield'
+  | 'eggOutput'
+  | 'conditionRegen'
+  | 'tendPower'
+  | 'tendCooldown';
+export const MODULE_STATS: ModuleStat[] = [
+  'stationSpeed',
+  'stationYield',
+  'eggOutput',
+  'conditionRegen',
+  'tendPower',
+  'tendCooldown',
+];
+
+export interface Module {
+  id: string;
+  stat: ModuleStat;
+  rarity: Rarity;
+  /** Rolled magnitude (fraction) within the rarity's band. */
+  magnitude: number;
+}
 
 /** Derived nutrition snapshot, recomputed every tick (for the dashboard + tend). */
 export interface NutritionState {
@@ -91,6 +122,14 @@ export interface GameState {
   /** Derived nutrition snapshot (recomputed each tick; not authoritative). */
   nutrition?: NutritionState;
 
+  // ── Phase 3: loot ──
+  /** Unassigned modules held in stock. */
+  inventory: Module[];
+  /** Reroll currency from salvaging modules. */
+  dust: number;
+  /** Monotonic id counter for modules. */
+  nextModuleId: number;
+
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
 }
@@ -113,6 +152,9 @@ export function initialState(now: number): GameState {
     condition: BALANCE.NUTRITION.CONDITION_MAX,
     niacinShortfall: 0,
     doseCooldownRemaining: 0,
+    inventory: [],
+    dust: 0,
+    nextModuleId: 1,
     lastSeen: now,
   };
 }

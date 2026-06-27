@@ -87,10 +87,14 @@ Later stages deepen it: different life stages want different profiles (ducklings
 
 **Architecture (locked, Phase 2):** Nutrition *replaces* the pellet step — it isn't layered on top. Egg output = base × f(energy)·f(protein)·f(calcium). `pellets` is retired: kept as a dead field in `GameState`/saves for back-compat, but nothing produces or consumes it. (Considered and deferred: a *stored feed intermediate* where the Mill produces a feed buffer the coop draws down — preserves an extra throughput layer + smoother offline accounting, but buffered feed bakes in its composition at mill-time. Clean, isolated upgrade for later if the Mill ever feels hollow; not worth the cost during the feel-test.)
 
-**Loot / modules (machine-centric):**
-- Stations have N slots; modules give stacking % boosts, rarity-scaled.
-- Drop from production (loot-table dopamine) + craftable for deterministic progress.
-- Salvage/reroll so dupes aren't dead.
+**Loot / modules (machine-centric) — locked design:**
+- **Throughput only.** Modules boost station speed/yield, egg output, condition regen, tend levers — they **never touch nutrition requirements or the axis/satisfaction math.** A speed/yield module *re-tilts* the formulation optimum (shifts where peas-vs-mealworms crosses); it can't delete a constraint. This is the primary guardrail protecting the validated nutrition puzzle.
+- **Rarity tiers** Common → Uncommon → Rare → Epic → Legendary, each with a **rolled magnitude range** (a Rare rolls within a band, not a fixed value) — so a drop is a "good roll?" moment and reroll has purpose.
+- **Two sources:** guaranteed module grants at **rank milestones** (predictable, ties to the DING) + **random drops from active play** (loot-table thrill). **Modules never drop offline/passively** — they're "the good stuff," and idle never hands you that.
+- **Additive + diminishing returns** stacking, per-stat soft cap (`applied = cap·(1−e^(−rawSum/cap))`): early modules feel full-value, later ones taper, power can't run away.
+- **Limited slots** per station (start ~2) force which-boost-where choices — the fourth guardrail.
+- **Salvage → dust → reroll** so dupes aren't dead.
+- *The four guardrails together (throughput-only · diminishing returns · limited slots · active-only drops) are what keep a lucky Legendary from trivializing the economy.*
 
 **Breeding & genetics:**
 - Swedish color genetics (incomplete-dominance Bl locus) gate breed unlocks → Blue / Splash / Black outcomes as collectible milestones.
@@ -158,4 +162,4 @@ Later stages deepen it: different life stages want different profiles (ducklings
 
 ---
 
-*v4 — nutrition refinements locked: pellets replaced (not layered), overlapping ingredient matrix, supply = storage stock read each tick. Phase 2 prompt matches.*
+*v5 — loot/modules locked: throughput-only, rolled rarity, milestone + active-drop sources, additive-diminishing stacking, limited slots. Phase 1 & 2 built and validated. Phase 3 prompt written from this section.*

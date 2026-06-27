@@ -208,6 +208,39 @@ export const BALANCE = {
   /** Rank at which the Auto-Haul Cart unlocks (auto-collect output). */
   MILESTONE_AUTOHAUL_RANK: 5,
 
+  // ── Phase 3: loot / modules (throughput boosts ONLY) ────────────────
+  // Hard guardrail: modules NEVER touch nutrition requirements, the ingredient
+  // matrix, or the satisfaction/throttle math — only production throughput,
+  // egg output, condition regen, and tend levers. See game/loot.ts.
+  LOOT: {
+    SLOTS_PER_STATION: 2,
+    /** Per-stat soft cap for diminishing returns: applied = cap*(1 - e^(-rawSum/cap)). */
+    SOFT_CAP: {
+      stationSpeed: 0.6,
+      stationYield: 0.6,
+      eggOutput: 0.5,
+      conditionRegen: 1.0,
+      tendPower: 1.0,
+      tendCooldown: 0.5,
+    } as Record<string, number>,
+    /** Rolled magnitude band [min,max] (fraction) per rarity. Higher = stronger. */
+    RARITY_BAND: {
+      common: [0.05, 0.1],
+      uncommon: [0.1, 0.16],
+      rare: [0.16, 0.24],
+      epic: [0.24, 0.34],
+      legendary: [0.34, 0.5],
+    } as Record<string, [number, number]>,
+    /** Active-drop: chance per tend, then a weighted rarity roll. */
+    TEND_DROP_CHANCE: 0.08,
+    DROP_RARITY_WEIGHTS: { common: 60, uncommon: 25, rare: 11, epic: 3.5, legendary: 0.5 } as Record<string, number>,
+    /** Guaranteed module of a fixed rarity at these ranks. */
+    MILESTONE_GRANTS: { 3: 'uncommon', 7: 'rare', 12: 'epic', 18: 'legendary' } as Record<number, string>,
+    /** Salvage yields dust by rarity; reroll spends dust. */
+    SALVAGE_DUST: { common: 1, uncommon: 3, rare: 8, epic: 20, legendary: 50 } as Record<string, number>,
+    REROLL_DUST_COST: 10,
+  },
+
   // ── Simulation ──────────────────────────────────────────────────────
   /** Fixed-timestep rate for the sim loop. Render is decoupled (rAF). */
   TICKS_PER_SECOND: 10,

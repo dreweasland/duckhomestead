@@ -34,12 +34,17 @@ export function deserialize(raw: string, now: number): GameState {
       condition: parsed.condition ?? base.condition,
       niacinShortfall: parsed.niacinShortfall ?? 0,
       doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,
+      // Phase 3 loot defaults for older saves.
+      inventory: parsed.inventory ?? [],
+      dust: parsed.dust ?? 0,
+      nextModuleId: parsed.nextModuleId ?? 1,
       stations: (parsed.stations ?? []).map((s) => ({
         ...s,
         level: s.level ?? 1,
         cycleProgress: s.cycleProgress ?? 0,
         buffer: s.buffer ?? {},
         tendCooldownRemaining: s.tendCooldownRemaining ?? 0,
+        modules: s.modules ?? [],
       })),
     };
   } catch {
