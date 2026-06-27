@@ -91,6 +91,8 @@ export function removeStation(
   const station = state.stations[idx];
   const refund = Math.floor(BALANCE.COSTS[station.type] * BALANCE.REFUND_FRACTION);
   state.resources.eggs += refund;
+  // Return any slotted modules to inventory — don't destroy the player's loot.
+  if (station.modules?.length) state.inventory.push(...station.modules);
   state.stations.splice(idx, 1);
   return done({ refund });
 }
