@@ -1,8 +1,10 @@
+import { useState } from 'react';
+import { isMuted, setMuted } from '../audio/sfx';
 import { BALANCE } from '../config/balance';
 import type { GameState, Resource } from '../game/state';
 import { rankProgress, xpForLevel } from '../game/rank';
 import { fmt } from './format';
-import { CartIcon, DuckIcon, LockIcon, RESOURCE_ICON } from './icons';
+import { CartIcon, DuckIcon, LockIcon, MuteIcon, RESOURCE_ICON, SpeakerIcon } from './icons';
 
 const RES: { key: Resource; label: string }[] = [
   { key: 'corn', label: 'Corn' },
@@ -13,12 +15,25 @@ const RES: { key: Resource; label: string }[] = [
 export function HUD({ state }: { state: GameState }) {
   const prog = rankProgress(state.rank, state.xp);
   const need = xpForLevel(state.rank);
+  const [muted, setMutedState] = useState(isMuted());
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <DuckIcon size={28} title="Duck Homestead" />
         <h1 className="text-lg font-bold tracking-wide">Duck Homestead</h1>
+        <button
+          onClick={() => {
+            const v = !muted;
+            setMuted(v);
+            setMutedState(v);
+          }}
+          className="ml-auto rounded p-1 text-[#9a8a6a] hover:bg-[#2a2018] hover:text-[#f5ecd8]"
+          title={muted ? 'Unmute' : 'Mute'}
+          aria-label={muted ? 'Unmute' : 'Mute'}
+        >
+          {muted ? <MuteIcon size={18} /> : <SpeakerIcon size={18} />}
+        </button>
       </div>
 
       {/* Resources */}

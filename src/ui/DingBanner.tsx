@@ -2,32 +2,6 @@ import { useEffect, useRef } from 'react';
 import type { DingEvent } from '../game/engine';
 import { CartIcon } from './icons';
 
-/** Tiny WebAudio "DING" — a two-note chime. Best-effort; silent on failure. */
-export function playDing(milestone: boolean) {
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    const now = ctx.currentTime;
-    const notes = milestone ? [523.25, 659.25, 783.99, 1046.5] : [659.25, 987.77];
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      const t = now + i * 0.09;
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + 0.34);
-    });
-    window.setTimeout(() => ctx.close(), 1500);
-  } catch {
-    /* audio not available — fine */
-  }
-}
-
 interface Props {
   ding: DingEvent | null;
   onDone: () => void;

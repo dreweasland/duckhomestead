@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { playCollect, playDing, playPlace, playTend } from './audio/sfx';
 import type { StationType } from './config/balance';
 import type { DingEvent } from './game/engine';
 import { stationAt } from './game/state';
@@ -7,21 +8,28 @@ import { GameCanvas } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
 import { BuildBar } from './ui/BuildBar';
 import { DevPanel } from './ui/DevPanel';
-import { DingBanner, playDing } from './ui/DingBanner';
+import { DingBanner } from './ui/DingBanner';
 import { HUD } from './ui/HUD';
 import { StationPanel } from './ui/StationPanel';
 
 export default function App() {
   const [ding, setDing] = useState<DingEvent | null>(null);
+  // Brief screen flash when a milestone (Auto-Haul) is unlocked.
+  const [milestoneFlash, setMilestoneFlash] = useState(0);
 
   const onDing = useCallback((e: DingEvent) => {
     setDing(e);
-    playDing(e.milestones.length > 0);
+    const milestone = e.milestones.length > 0;
+    playDing(milestone);
+    if (milestone) setMilestoneFlash((n) => n + 1);
   }, []);
 
   const { engine, version } = useGame(onDing);
   // version is read so the component re-renders on each engine notify.
   void version;
+
+  // Tend SFX for both entry points (board double-click and panel button).
+  useEffect(() => engine.onTend(() => playTend()), [engine]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
@@ -41,6 +49,7 @@ export default function App() {
       if (buildType) {
         const r = engine.place(buildType, x, y);
         if (r.ok) {
+          playPlace();
           const placed = stationAt(engine.state, x, y);
           setSelectedId(placed?.id ?? null);
         }
@@ -53,6 +62,9 @@ export default function App() {
 
   return (
     <div className="min-h-full w-full p-4">
+      {milestoneFlash > 0 && (
+        <div key={milestoneFlash} className="milestone-flash pointer-events-none fixed inset-0 z-40" />
+      )}
       <DingBanner ding={ding} onDone={() => setDing(null)} />
       {engine.away && awayOpen && (
         <AwayModal
@@ -84,7 +96,10 @@ export default function App() {
           <HUD state={state} />
           {!state.autoHaulUnlocked && state.stations.length > 0 && (
             <button
-              onClick={() => engine.collectEverything()}
+              onClick={() => {
+                engine.collectEverything();
+                playCollect();
+              }}
               disabled={!anyBuffer}
               className={`rounded-md px-3 py-2 text-sm font-bold transition ${
                 anyBuffer

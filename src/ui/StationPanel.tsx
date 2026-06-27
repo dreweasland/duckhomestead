@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { playCollect, playUpgrade } from '../audio/sfx';
 import { STATION_DEFS } from '../config/balance';
 import { stationStatus, UPGRADE_OUTPUT, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
@@ -128,6 +129,7 @@ export function StationPanel({ engine, state, station }: Props) {
         <button
           onClick={() => {
             const r = engine.upgrade(station.id);
+            if (r.ok) playUpgrade();
             flash(r.ok ? 'Upgraded!' : r.reason);
           }}
           disabled={!canUpgrade}
@@ -146,6 +148,7 @@ export function StationPanel({ engine, state, station }: Props) {
           <button
             onClick={() => {
               engine.collect(station.id);
+              playCollect();
               flash('Collected.');
             }}
             disabled={!hasBuffer}

@@ -38,3 +38,21 @@ body {
 .ding-pop {
   animation: ding-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
 }
+
+/* Milestone (Auto-Haul) unlock: a warm full-screen flash. */
+@keyframes screen-flash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.milestone-flash {
+  background: radial-gradient(ellipse at center, rgba(255, 240, 200, 0.9), rgba(207, 188, 255, 0.5) 60%, transparent 80%);
+  animation: screen-flash 0.8s ease-out both;
+}

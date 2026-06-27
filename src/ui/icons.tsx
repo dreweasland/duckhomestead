@@ -176,6 +176,38 @@ export const LockIcon = (p: PixProps) => (
   />
 );
 
+export const SpeakerIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor' }}
+    rows={[
+      '...x..x',
+      '..xx.x.',
+      'xxxx..x',
+      'xxxx.x.',
+      'xxxx..x',
+      '..xx.x.',
+      '...x..x',
+    ]}
+  />
+);
+
+export const MuteIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor' }}
+    rows={[
+      '...x...',
+      '..xx.x.',
+      'xxxx.x.',
+      'xxxxx..',
+      'xxxx.x.',
+      '..xx.x.',
+      '...x...',
+    ]}
+  />
+);
+
 /** Map a resource key to its icon for inline use. */
 export const RESOURCE_ICON = {
   corn: CornIcon,
