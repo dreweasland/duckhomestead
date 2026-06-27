@@ -11,6 +11,7 @@ import { DevPanel } from './ui/DevPanel';
 import { DingBanner } from './ui/DingBanner';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { HUD } from './ui/HUD';
+import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
 import { StationPanel } from './ui/StationPanel';
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [awayOpen, setAwayOpen] = useState(true);
+  const [nutritionOpen, setNutritionOpen] = useState(false);
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
@@ -77,6 +79,10 @@ export default function App() {
         />
       )}
 
+      {nutritionOpen && (
+        <NutritionPanel engine={engine} state={state} onClose={() => setNutritionOpen(false)} />
+      )}
+
       <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas */}
         <div className="flex flex-col items-center gap-2">
@@ -104,6 +110,21 @@ export default function App() {
         {/* Side panel */}
         <div className="flex w-full flex-col gap-4 md:w-[300px]">
           <HUD state={state} />
+          {state.stations.some((s) => s.type === 'coop') && (
+            <button
+              onClick={() => setNutritionOpen(true)}
+              className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${
+                nutritionNeedsAttention(state)
+                  ? 'bg-[#5a3a2a] text-[#ffd9a8] ring-1 ring-[#e8835a] hover:bg-[#6a4632]'
+                  : 'bg-[#2e3a26] text-[#bfe8a8] hover:bg-[#36422c]'
+              }`}
+            >
+              <span>Nutrition</span>
+              <span className="tabular-nums">
+                eggs {Math.round((state.nutrition?.eggMult ?? 1) * 100)}%
+              </span>
+            </button>
+          )}
           {!state.autoHaulUnlocked && state.stations.length > 0 && (
             <button
               onClick={() => {

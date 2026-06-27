@@ -208,6 +208,14 @@ export const ShellIcon = (p: PixProps) => (
   />
 );
 
+export const CloseIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor' }}
+    rows={['x...x', 'xx.xx', '.xxx.', 'xx.xx', 'x...x']}
+  />
+);
+
 export const SpeakerIcon = (p: PixProps) => (
   <Pix
     {...p}

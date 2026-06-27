@@ -15,7 +15,7 @@ import {
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
-import { initialState, type GameState, type Resource } from './state';
+import { initialState, type GameState, type Ingredient, type Resource } from './state';
 
 export interface DingEvent {
   newRank: number;
@@ -188,6 +188,12 @@ export class GameEngine {
     }
     this.notify();
     return r;
+  }
+
+  /** Set how many units of an ingredient the flock is fed per coop per cycle. */
+  setRation(ingredient: Ingredient, value: number) {
+    this.state.ration[ingredient] = Math.max(0, value);
+    this.notify();
   }
 
   /** Active-only intervention: clear a coop's niacin leg debuff. */
