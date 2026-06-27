@@ -96,8 +96,14 @@ Later stages deepen it: different life stages want different profiles (ducklings
 - **Salvage → dust → reroll** so dupes aren't dead.
 - *The four guardrails together (throughput-only · diminishing returns · limited slots · active-only drops) are what keep a lucky Legendary from trivializing the economy.*
 
-**Breeding & genetics:**
-- Swedish color genetics (incomplete-dominance Bl locus) gate breed unlocks → Blue / Splash / Black outcomes as collectible milestones.
+**Breeding & genetics — locked design (Phase 4a):**
+- **Two orthogonal axes.** *Color* = the Bl locus (Mendelian, incomplete dominance: 0 blue alleles = Black, 1 = Blue, 2 = Splash; Blue×Blue → 1:2:1 Black:Blue:Splash; Black×Splash → all Blue) — the **collection** grind, popping a rare Splash is a DING. *Vigor* = a continuous heritable production stat — the **power** grind. Independent: a pretty Splash can be a poor layer → the breeder's real dilemma (breed for the dex or for production).
+- **Vigor is throughput-only.** It boosts egg output, never reduces a duck's nutrition requirement (same guardrail as loot).
+- **Vigor inheritance = regression toward the mean.** `offspring ≈ midparent + h²·(midparent − popMean) + noise`, clamped to a ceiling. Real quantitative genetics; self-limiting → steady, *bounded* selective-breeding progress, never runaway.
+- **Population is the scaling lever.** Adult layers are the output unit (total eggs = Σ per-duck base × vigor × nutrition throttle × module boosts). Nutrition re-points from **per-coop → per-duck** (the validated layer puzzle math is untouched — just driven by adult count). Coops become **housing/capacity** (cap on ducks).
+- **Eggs are dual-purpose** — currency *or* future duck. A breeding pair (drake + hen) throws a clutch of fertilized eggs; incubate (consuming the **separate duckling ration**) → hatch with genotype + vigor rolled from parents. Surplus eggs stay currency. Every clutch is a spend-vs-grow choice.
+- **Separate duckling ration** (high niacin + protein profile) gates maturation rate/health → the throughput pipe for flock growth. Maturation timer runs online & offline (biological time, not "free good stuff"), but only as well as the ration left set.
+- Build order puts the duckling ration **last** (clean cut-point if the session runs long).
 
 **Predators (Dane County owls):**
 - Threat events that active play defends against; pure idle leaves you slightly exposed — another reason active > idle.
@@ -137,19 +143,14 @@ Later stages deepen it: different life stages want different profiles (ducklings
 
 ## 8. Phased Build Plan (Claude Code milestones)
 
-**Phase 1 — Prove the loop + the DING (MVP):**
-- Bounded tile grid render, place 2–3 station types
-- One chain: feed plot → feed mill → coop (produces eggs)
-- Tick loop with **online vs offline rate split**
-- **Minimal Homestead Rank bar + one milestone unlock** (so the grind→DING feel is testable)
-- Save/load to localStorage with capped offline catch-up
-- *Goal: earn → away → return → play → DING works end to end, and the active/idle balance* feels *right.*
+**Phase 1 — Core loop + the DING ✅ BUILT & VALIDATED**
+**Phase 2 — Nutrition grid ✅ BUILT & VALIDATED** (peas-vs-mealworms confirmed a real throughput-vs-density puzzle)
+**Phase 3 — Loot / modules ✅ BUILT & VALIDATED** (throughput-only; power cap holds at ~+41-45%/station; tail weights nudged for in-session high-end drops)
 
-**Phase 2 — Nutrition grid:** feed balance, deficiency throttling, storage/reserve caps.
-
-**Phase 3 — Loot:** module system, rarity, drop tables, slotting/salvage/reroll UI.
-
-**Phase 4 — Depth & scale:** breeding/genetics, predators, zone expansion, prestige.
+**Phase 4 — Depth & scale (split into sub-phases; do NOT build as one):**
+- **4a — Breeding & genetics** (keystone): two-axis selective breeding (color collection × heritable vigor), population scales output, separate duckling ration. ← *current*
+- **4b / 4c — Zones & predators** (scale pressure + risk pressure), order TBD. Predators threaten the duckling pipeline → why breeding goes first.
+- **4d — Prestige** (last): legacy-flock reset for a permanent multiplier — only meaningful once the full game exists.
 
 **Phase 5 — Juice:** pixel-art pass, number-pops, DING sound/banner, save export/import, Supabase sync.
 
@@ -162,4 +163,4 @@ Later stages deepen it: different life stages want different profiles (ducklings
 
 ---
 
-*v5 — loot/modules locked: throughput-only, rolled rarity, milestone + active-drop sources, additive-diminishing stacking, limited slots. Phase 1 & 2 built and validated. Phase 3 prompt written from this section.*
+*v6 — Phases 1-3 built & validated. Phase 4 split into 4a-4d. Breeding (4a) locked: two-axis selective breeding (color × vigor), population scales output, separate duckling ration, vigor throughput-only with regression-to-mean. Phase 4a prompt written from this section.*

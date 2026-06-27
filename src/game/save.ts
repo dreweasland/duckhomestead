@@ -1,6 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { collectAll } from './actions';
-import { initialState, type GameState, type Resource } from './state';
+import { initialState, seedFlock, type GameState, type Resource } from './state';
 import { tick } from './tick';
 
 const SAVE_KEY = 'duck-homestead-save-v1';
@@ -24,7 +24,7 @@ export function deserialize(raw: string, now: number): GameState {
   const base = initialState(now);
   try {
     const parsed = JSON.parse(raw) as Partial<GameState>;
-    return {
+    const result: GameState = {
       ...base,
       ...parsed,
       resources: { ...base.resources, ...(parsed.resources ?? {}) },
@@ -38,6 +38,10 @@ export function deserialize(raw: string, now: number): GameState {
       inventory: parsed.inventory ?? [],
       dust: parsed.dust ?? 0,
       nextModuleId: parsed.nextModuleId ?? 1,
+      // Phase 4a breeding defaults for older saves.
+      ducks: parsed.ducks ?? [],
+      nextDuckId: parsed.nextDuckId ?? 1,
+      dexSeen: parsed.dexSeen ?? [],
       stations: (parsed.stations ?? []).map((s) => ({
         ...s,
         level: s.level ?? 1,
@@ -47,6 +51,11 @@ export function deserialize(raw: string, now: number): GameState {
         modules: s.modules ?? [],
       })),
     };
+    // Migrate a pre-breeding save that has coops but no flock yet.
+    if (result.ducks.length === 0 && result.stations.some((s) => s.type === 'coop')) {
+      seedFlock(result);
+    }
+    return result;
   } catch {
     return base;
   }

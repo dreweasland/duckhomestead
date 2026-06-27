@@ -92,6 +92,49 @@ export interface NutritionState {
   hasMill: boolean;
 }
 
+// ── Phase 4a: breeding & genetics ──
+/** Blue-dilution locus alleles. `Bl` = blue allele, `bl` = wild-type. */
+export type Allele = 'Bl' | 'bl';
+export type Genotype = [Allele, Allele];
+/** Phenotype by blue-allele count: 0 = black, 1 = blue, 2 = splash. */
+export type Color = 'black' | 'blue' | 'splash';
+export const COLORS: Color[] = ['black', 'blue', 'splash'];
+export type Sex = 'drake' | 'hen';
+export type Stage = 'duckling' | 'juvenile' | 'adult';
+
+export interface Duck {
+  id: string;
+  genotype: Genotype;
+  /** Heritable egg-output multiplier (throughput only). */
+  vigor: number;
+  sex: Sex;
+  stage: Stage;
+  /** Seconds accrued in the current life stage (drives maturation). */
+  ageTicks: number;
+  /** Niacin leg debuff (halves this duck's lay until dosed). */
+  debuffed?: boolean;
+}
+
+/** Phenotype from genotype: blue-allele count -> color. */
+export function phenotype(g: Genotype): Color {
+  const blue = (g[0] === 'Bl' ? 1 : 0) + (g[1] === 'Bl' ? 1 : 0);
+  return blue === 0 ? 'black' : blue === 1 ? 'blue' : 'splash';
+}
+
+/** Total housing across all coops (capacity scales with coop level). */
+export function coopCapacity(state: GameState): number {
+  return state.stations
+    .filter((s) => s.type === 'coop')
+    .reduce((a, c) => a + BALANCE.BREEDING.COOP_CAPACITY * c.level, 0);
+}
+
+export const isAdult = (d: Duck): boolean => d.stage === 'adult';
+/** Adult hens — the laying population that drives egg output. */
+export const adultLayers = (state: GameState): Duck[] =>
+  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'hen');
+/** All adult ducks — what the layer ration must feed. */
+export const adultDucks = (state: GameState): Duck[] => state.ducks.filter(isAdult);
+
 export interface GameState {
   /** Schema version for save migration. */
   version: number;
@@ -130,6 +173,14 @@ export interface GameState {
   /** Monotonic id counter for modules. */
   nextModuleId: number;
 
+  // ── Phase 4a: breeding ──
+  /** The flock — individual ducks (housed up to coopCapacity). */
+  ducks: Duck[];
+  /** Monotonic id counter for ducks. */
+  nextDuckId: number;
+  /** Colors ever produced (the dex) — drives first-of-color DINGs. */
+  dexSeen: Color[];
+
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
 }
@@ -155,8 +206,33 @@ export function initialState(now: number): GameState {
     inventory: [],
     dust: 0,
     nextModuleId: 1,
+    ducks: [],
+    nextDuckId: 1,
+    dexSeen: [],
     lastSeen: now,
   };
+}
+
+/**
+ * Seed the starting flock into the first coop: a few Blue carriers (Bl/bl) so
+ * the player can breed out all three colors, mid vigor. Mutates state.
+ */
+export function seedFlock(state: GameState): void {
+  const B = BALANCE.BREEDING;
+  const midVigor = (B.VIGOR_SEED_RANGE[0] + B.VIGOR_SEED_RANGE[1]) / 2;
+  const make = (sex: Sex): Duck => ({
+    id: `d${state.nextDuckId++}`,
+    genotype: ['Bl', 'bl'],
+    vigor: midVigor,
+    sex,
+    stage: 'adult',
+    ageTicks: 0,
+  });
+  for (let i = 0; i < B.SEED_DRAKES; i++) state.ducks.push(make('drake'));
+  for (let i = 0; i < B.SEED_HENS; i++) state.ducks.push(make('hen'));
+  for (const c of state.ducks.map((d) => phenotype(d.genotype))) {
+    if (!state.dexSeen.includes(c)) state.dexSeen.push(c);
+  }
 }
 
 /** True if tile (x,y) is occupied by a station. */

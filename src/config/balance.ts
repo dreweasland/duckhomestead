@@ -240,6 +240,32 @@ export const BALANCE = {
     REROLL_DUST_COST: 10,
   },
 
+  // ── Phase 4a: breeding & genetics ───────────────────────────────────
+  // Two orthogonal axes: COLOR (Bl locus, Mendelian — the collection grind) and
+  // VIGOR (continuous heritable egg-output multiplier — the power grind). Vigor
+  // is throughput-only and NEVER touches nutrition requirements/matrix/throttle.
+  BREEDING: {
+    COOP_CAPACITY: 4, // adult-equivalent ducks housed per coop level
+    /** Vigor is a duck's egg-output multiplier. Bounded so breeding can't run away. */
+    VIGOR_FLOOR: 0.5,
+    VIGOR_CEILING: 2.0,
+    VIGOR_SEED_RANGE: [0.8, 1.2] as [number, number],
+    H2: 0.4, // heritability — offspring regress toward the population mean
+    VIGOR_NOISE: 0.1, // env variance per offspring
+    /** Breeding loop timers (seconds). */
+    CLUTCH_INTERVAL_S: 120, // a pair lays a fertilized clutch this often
+    CLUTCH_SIZE: 4, // fertilized eggs per clutch
+    INCUBATE_S: 60, // fertilized egg -> duckling
+    MATURE_DUCKLING_S: 180, // duckling -> juvenile (gated by duckling ration)
+    MATURE_JUVENILE_S: 180, // juvenile -> adult
+    /** Duckling ration profile (Step 5) — high protein/niacin. */
+    DUCKLING_REQUIREMENT: { energy: 1, protein: 3, niacin: 2, calcium: 0 },
+    DUCKLING_RATION_MATURE_PENALTY_FLOOR: 0.3, // worst-case maturation speed mult
+    /** Starting flock seeded into the first coop (Blue carriers, mid vigor). */
+    SEED_DRAKES: 1,
+    SEED_HENS: 2,
+  },
+
   // ── Simulation ──────────────────────────────────────────────────────
   /** Fixed-timestep rate for the sim loop. Render is decoupled (rAF). */
   TICKS_PER_SECOND: 10,

@@ -10,7 +10,7 @@ import {
 } from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { GameState, Module, Rarity, Resource, Station } from './state';
-import { isPondTile, stationAt } from './state';
+import { isPondTile, seedFlock, stationAt } from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
 export function UPGRADE_OUTPUT(level: number): number {
@@ -78,6 +78,8 @@ export function placeStation(
     tendCooldownRemaining: 0,
   };
   state.stations.push(station);
+  // First coop seeds the starting flock (housing now exists for it).
+  if (type === 'coop' && state.ducks.length === 0) seedFlock(state);
   return done(station);
 }
 
