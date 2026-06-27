@@ -4,7 +4,7 @@ import { BALANCE, STATION_DEFS } from '../config/balance';
 import { stationStatus, UPGRADE_OUTPUT, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import { moduleFits, slotCount } from '../game/loot';
-import type { GameState, Resource, Station } from '../game/state';
+import { coopCapacity, type GameState, type Resource, type Station } from '../game/state';
 import { fmt } from './format';
 import { CollectIcon, EggIcon, HandIcon, RESOURCE_ICON, UpgradeIcon } from './icons';
 import { ModuleChip, STAT_META, fmtMagnitude } from './lootUi';
@@ -90,33 +90,39 @@ function StationSlots({ engine, state, station }: { engine: GameEngine; state: G
   );
 }
 
-/** Coop-specific status: current lay % and the niacin leg-debuff + Dose action. */
+/** Coop-specific status: housed flock, current lay %, and the flock dose action. */
 function CoopStatus({
   engine,
   state,
-  station,
   flash,
 }: {
   engine: GameEngine;
   state: GameState;
-  station: Station;
   flash: (m: string) => void;
 }) {
   const layPct = Math.round((state.nutrition?.eggMult ?? 1) * 100);
   const doseCost = BALANCE.NUTRITION.DOSE_COST_YEAST;
   const doseReady = state.doseCooldownRemaining <= 0 && state.resources.brewersYeast >= doseCost;
   const layColor = layPct >= 90 ? '#8fe388' : layPct >= 50 ? '#e8c45a' : '#e8835a';
+  const adults = state.ducks.filter((d) => d.stage === 'adult');
+  const layers = adults.filter((d) => d.sex === 'hen').length;
+  const debuffed = state.ducks.filter((d) => d.debuffed).length;
+  const cap = coopCapacity(state);
 
   return (
     <div className="flex flex-col gap-1.5">
+      <div className="text-[11px] text-[#c9b88f]">
+        Flock: {state.ducks.length}/{cap} housed · {layers} laying hen{layers === 1 ? '' : 's'}
+      </div>
       <div className="flex items-center gap-1.5 text-[11px]" style={{ color: layColor }}>
         <span className="inline-block h-2 w-2 rounded-full" style={{ background: layColor }} />
-        Laying at {layPct}% {station.debuffed && <span className="text-[#d95f5f]">· leg debuff</span>}
+        Laying at {layPct}%{' '}
+        {debuffed > 0 && <span className="text-[#d95f5f]">· {debuffed} limping</span>}
       </div>
-      {station.debuffed && (
+      {debuffed > 0 && (
         <button
           onClick={() => {
-            const r = engine.dose(station.id);
+            const r = engine.dose();
             if (r.ok) playUpgrade();
             flash(r.ok ? 'Dosed — duck recovering!' : r.reason);
           }}
@@ -198,7 +204,7 @@ export function StationPanel({ engine, state, station }: Props) {
 
       {/* Production status — station-specific. */}
       {station.type === 'coop' ? (
-        <CoopStatus engine={engine} state={state} station={station} flash={flash} />
+        <CoopStatus engine={engine} state={state} flash={flash} />
       ) : station.type === 'mill' ? (
         <div className="text-[11px] text-[#c9b88f]">
           Blends the active ration. Open the Nutrition panel to formulate feed.

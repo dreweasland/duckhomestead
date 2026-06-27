@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { runOfflineCatchUp } from '../src/game/save';
-import { build, fullSetup, stockAll, INGREDIENTS } from './helpers';
+import { build, fullSetup, stockAll, setHens, INGREDIENTS } from './helpers';
 
 const N = BALANCE.NUTRITION;
 const HOUR = 3600 * 1000;
@@ -58,19 +58,20 @@ describe('offline catch-up × nutrition', () => {
     expect(Object.keys(a2.produced)).toHaveLength(0);
   });
 
-  it('idle exposes you: long offline with no niacin leaves the flock limping', () => {
+  it('idle exposes you: long offline with no niacin leaves a duck limping', () => {
     const s = build({ plot: 1, mill: 1, coop: 1 });
     s.resources.corn = 1e6;
     s.lastSeen = -8 * HOUR;
     runOfflineCatchUp(s, 0);
-    expect(s.stations.find((x) => x.type === 'coop')!.debuffed).toBe(true);
+    expect(s.ducks.some((d) => d.debuffed)).toBe(true);
   });
 
   it('but a well-conditioned flock resists the debuff offline', () => {
     const s = stockAll(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, oysterSource: 1, mill: 1, coop: 1 }));
+    setHens(s, 1);
     s.resources.brewersYeast = 0; // niacin 0, but E/P/Ca fed -> condition holds
     s.lastSeen = -8 * HOUR;
     runOfflineCatchUp(s, 0);
-    expect(s.stations.find((x) => x.type === 'coop')!.debuffed).toBeFalsy();
+    expect(s.ducks.some((d) => d.debuffed)).toBe(false);
   });
 });

@@ -44,3 +44,20 @@ export function run(s: GameState, seconds: number, autoHaul = true): GameState {
   for (let i = 0; i < steps; i++) tick(s, 0.1, { mode: 'online', autoHaul });
   return s;
 }
+
+/**
+ * Replace the seeded flock with a controlled set of adult hens (vigor 1.0).
+ * A 1-hen flock makes the layer nutrition match Phase 2's single coop exactly
+ * (adultCount = 1), so the green-bar / 15-eggs-min assertions still hold.
+ */
+export function setHens(s: GameState, count: number, vigor = 1): GameState {
+  s.ducks = Array.from({ length: count }, (_, i) => ({
+    id: `h${i}`,
+    genotype: ['Bl', 'bl'] as ['Bl', 'bl'],
+    vigor,
+    sex: 'hen' as const,
+    stage: 'adult' as const,
+    ageTicks: 0,
+  }));
+  return s;
+}

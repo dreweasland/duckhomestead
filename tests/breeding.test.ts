@@ -9,9 +9,10 @@ import {
   initialState,
   type Genotype,
 } from '../src/game/state';
+import { AXES } from '../src/game/state';
 import { placeStation } from '../src/game/actions';
 import { serialize, deserialize } from '../src/game/save';
-import { build } from './helpers';
+import { build, fullSetup, stockAll, run, setHens } from './helpers';
 
 describe('Bl-locus phenotype', () => {
   it('maps blue-allele count to color', () => {
@@ -62,6 +63,40 @@ describe('adult selectors', () => {
     expect(adultLayers(s).length).toBe(2);
     s.ducks.push({ id: 'x', genotype: ['bl', 'bl'] as Genotype, vigor: 1, sex: 'hen', stage: 'duckling', ageTicks: 0 });
     expect(adultLayers(s).length).toBe(2); // ducklings don't lay
+  });
+});
+
+describe('GUARDRAIL: vigor & flock drive output/demand, never the nutrition math', () => {
+  it('vigor scales egg output but leaves requirement + throttle identical', () => {
+    const lo = setHens(stockAll(fullSetup()), 2, 1.0);
+    const hi = setHens(stockAll(fullSetup()), 2, 2.0);
+    run(lo, 200);
+    run(hi, 200);
+    expect(hi.nutrition!.requirement).toEqual(lo.nutrition!.requirement); // same demand
+    expect(hi.nutrition!.eggMult).toBeCloseTo(lo.nutrition!.eggMult, 5); // same throttle
+    const lo0 = lo.resources.eggs;
+    const hi0 = hi.resources.eggs;
+    run(lo, 60);
+    run(hi, 60);
+    expect((hi.resources.eggs - hi0) / (lo.resources.eggs - lo0)).toBeCloseTo(2, 1); // ~2x lay
+  });
+
+  it('layer requirement scales with adult-duck count (not coops)', () => {
+    const one = setHens(stockAll(fullSetup()), 1);
+    const two = setHens(stockAll(fullSetup()), 2);
+    run(one, 5);
+    run(two, 5);
+    for (const a of AXES) {
+      expect(two.nutrition!.requirement[a]).toBeCloseTo(one.nutrition!.requirement[a] * 2, 5);
+    }
+  });
+
+  it('never mutates the nutrition matrix / requirement constants', () => {
+    const matrix = JSON.stringify(BALANCE.NUTRITION.INGREDIENT);
+    const req = JSON.stringify(BALANCE.NUTRITION.REQUIREMENT);
+    run(setHens(stockAll(fullSetup()), 4, 2.0), 120);
+    expect(JSON.stringify(BALANCE.NUTRITION.INGREDIENT)).toBe(matrix);
+    expect(JSON.stringify(BALANCE.NUTRITION.REQUIREMENT)).toBe(req);
   });
 });
 

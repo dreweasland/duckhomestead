@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { initialState } from '../src/game/state';
 import { doseNiacin } from '../src/game/actions';
-import { build, fullSetup, stockAll, run } from './helpers';
+import { build, fullSetup, stockAll, run, setHens } from './helpers';
 
 const N = BALANCE.NUTRITION;
 
 describe('satisfaction + throttle', () => {
   it('a stocked, balanced ration satisfies every axis and lays at full rate', () => {
-    const s = stockAll(fullSetup());
+    const s = setHens(stockAll(fullSetup()), 1); // 1 adult layer == Phase 2's 1 coop
     run(s, 120);
     for (const a of ['energy', 'protein', 'niacin', 'calcium'] as const) {
       expect(s.nutrition!.satisfaction[a]).toBeGreaterThanOrEqual(1);
@@ -17,8 +17,8 @@ describe('satisfaction + throttle', () => {
     expect(s.resources.pellets).toBe(0); // pellets retired
   });
 
-  it('full nutrition lays ~15 eggs/min for one coop (matches Phase 1)', () => {
-    const s = stockAll(fullSetup());
+  it('one adult layer at full nutrition lays ~15 eggs/min (Phase 2 equivalence)', () => {
+    const s = setHens(stockAll(fullSetup()), 1);
     run(s, 120);
     const before = s.resources.eggs;
     run(s, 60);
@@ -59,7 +59,7 @@ describe('flock condition battery', () => {
     // converging from both 100 and 0 (the old hard threshold could freeze a
     // near-fed flock mid-range and never recover).
     const settle = (start: number) => {
-      const s = stockAll(fullSetup());
+      const s = setHens(stockAll(fullSetup()), 1);
       s.ration = { ...s.ration, oysterShell: 0.5 };
       s.condition = start;
       run(s, 600);
@@ -98,44 +98,42 @@ describe('satisfaction is smoothed (no strobe)', () => {
 });
 
 describe('niacin leg debuff + dose', () => {
-  it('applies after sustained shortfall once the flock is run down', () => {
+  it('applies to a duck after sustained shortfall once the flock is run down', () => {
     const s = build({ plot: 1, mill: 1, coop: 1 });
     s.resources.corn = 1e6; // energy ok, niacin 0 forever, condition will drain
-    const coop = s.stations.find((x) => x.type === 'coop')!;
     run(s, N.NIACIN_DEBUFF_ONSET_S + 400);
-    expect(coop.debuffed).toBe(true);
+    expect(s.ducks.some((d) => d.debuffed)).toBe(true);
   });
 
   it('a well-conditioned flock resists the debuff (bootstrap guard)', () => {
     // E/P/Ca fed (condition stays high) but no yeast -> niacin 0.
     const s = stockAll(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, oysterSource: 1, mill: 1, coop: 1 }));
+    setHens(s, 1);
     s.resources.brewersYeast = 0;
     run(s, N.NIACIN_DEBUFF_ONSET_S + 400);
-    expect(s.stations.find((x) => x.type === 'coop')!.debuffed).toBeFalsy();
+    expect(s.ducks.some((d) => d.debuffed)).toBe(false);
   });
 
-  it('dose clears a debuff: costs yeast, sets a cooldown, needs a debuffed coop', () => {
-    const s = build({ mill: 1, coop: 1 });
-    const coop = s.stations.find((x) => x.type === 'coop')!;
-    coop.debuffed = true;
-    expect(doseNiacin(s, coop.id).ok).toBe(false); // no yeast
+  it('dose clears a duck debuff: costs yeast, sets a cooldown, needs a debuffed duck', () => {
+    const s = setHens(build({ mill: 1, coop: 1 }), 1);
+    s.ducks[0].debuffed = true;
+    expect(doseNiacin(s).ok).toBe(false); // no yeast
     s.resources.brewersYeast = 10;
-    const r = doseNiacin(s, coop.id);
+    const r = doseNiacin(s);
     expect(r.ok).toBe(true);
-    expect(coop.debuffed).toBe(false);
+    expect(s.ducks[0].debuffed).toBe(false);
     expect(s.resources.brewersYeast).toBe(10 - N.DOSE_COST_YEAST);
     expect(s.doseCooldownRemaining).toBeGreaterThan(0);
-    expect(doseNiacin(s, coop.id).ok).toBe(false); // healthy now
+    expect(doseNiacin(s).ok).toBe(false); // none left to dose
   });
 
-  it('halves a debuffed coop output', () => {
-    const s = stockAll(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, yeastVat: 1, oysterSource: 1, mill: 1, coop: 1 }), 1e9);
+  it('halves a debuffed duck output', () => {
+    const s = setHens(stockAll(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, yeastVat: 1, oysterSource: 1, mill: 1, coop: 1 }), 1e9), 1);
     run(s, 30);
-    const coop = s.stations.find((x) => x.type === 'coop')!;
     let e0 = s.resources.eggs;
     run(s, 600);
     const healthy = s.resources.eggs - e0;
-    coop.debuffed = true;
+    s.ducks[0].debuffed = true;
     e0 = s.resources.eggs;
     run(s, 600);
     const limp = s.resources.eggs - e0;

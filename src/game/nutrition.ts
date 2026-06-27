@@ -1,7 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
-import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
-import { AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
+import { conditionRegenMult, globalBonus, millThroughputMult } from './loot';
+import { adultDucks, adultLayers, AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
 
 const N = BALANCE.NUTRITION;
 /** Axes that multiply egg output. Niacin is excluded — it drives the debuff. */
@@ -28,8 +28,12 @@ function zeroAxes(): Record<Axis, number> {
 export function runNutrition(state: GameState, dt: number, rateMult: number, willHaul: boolean): void {
   const coops = state.stations.filter((s) => s.type === 'coop');
   const mills = state.stations.filter((s) => s.type === 'mill');
-  const effCoops = coops.reduce((a, c) => a + UPGRADE_OUTPUT(c.level), 0);
-  if (effCoops === 0) {
+  // Phase 4a: the layer ration now feeds ADULT DUCKS (requirement driver) and
+  // ADULT HENS lay (output). The throttle / satisfaction / condition math below
+  // is byte-for-byte Phase 2 — only the driver changed from coop count to heads.
+  const layers = adultLayers(state);
+  const adultCount = adultDucks(state).length;
+  if (adultCount === 0) {
     state.nutrition = undefined;
     return;
   }
@@ -46,7 +50,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const wantRate: Record<string, number> = {};
   let totalWant = 0;
   for (const ing of INGREDIENTS) {
-    wantRate[ing] = ((state.ration[ing] ?? 0) * effCoops) / coopCycle;
+    wantRate[ing] = ((state.ration[ing] ?? 0) * adultCount) / coopCycle;
     totalWant += wantRate[ing];
   }
   const feedScale = hasMill ? (totalWant > 0 ? Math.min(1, capacity / totalWant) : 1) : 0;
@@ -70,7 +74,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const prior = state.nutrition?.satisfaction;
   const alpha = N.SMOOTH_TAU_S > 0 ? Math.min(1, step / N.SMOOTH_TAU_S) : 1;
   for (const axis of AXES) {
-    requirement[axis] = (N.REQUIREMENT[axis] * effCoops) / coopCycle;
+    requirement[axis] = (N.REQUIREMENT[axis] * adultCount) / coopCycle;
     const instant = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
     satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
   }
@@ -111,26 +115,31 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
     state.niacinShortfall += step;
     while (state.niacinShortfall >= N.NIACIN_DEBUFF_ONSET_S) {
       state.niacinShortfall -= N.NIACIN_DEBUFF_ONSET_S;
-      const healthy = coops.find((c) => !c.debuffed);
+      const healthy = layers.find((d) => !d.debuffed); // a leg debuff hits a laying hen
       if (healthy) healthy.debuffed = true;
-      else break; // whole flock already debuffed
+      else break; // whole laying flock already debuffed
     }
   } else {
     state.niacinShortfall = Math.max(0, state.niacinShortfall - step);
   }
 
-  // Lay eggs per coop at base × eggMult (× debuff penalty for limping ducks).
-  for (const coop of coops) {
-    coop.cycleProgress += step;
-    let guard = 100000;
-    while (coop.cycleProgress >= coopCycle && guard-- > 0) {
-      coop.cycleProgress -= coopCycle;
-      const debuff = coop.debuffed ? N.DEBUFF_COOP_OUTPUT_MULT : 1;
-      // eggOutput modules multiply the lay; the nutrition eggMult (f(axis) terms)
-      // is unchanged — modules boost output, never the satisfaction math.
-      coop.buffer.eggs =
-        (coop.buffer.eggs ?? 0) +
-        BALANCE.COOP.eggPerCycle * UPGRADE_OUTPUT(coop.level) * eggMult * debuff * eggOutputMult(coop);
+  // Lay eggs: sum over adult hens of base × VIGOR × nutrition throttle × leg
+  // debuff, then × the flock-wide eggOutput module bonus. Vigor and modules
+  // multiply OUTPUT only — never the f(axis)/requirement math above.
+  let flockRate = 0; // eggs per second from the whole laying flock
+  for (const hen of layers) {
+    const debuff = hen.debuffed ? N.DEBUFF_COOP_OUTPUT_MULT : 1;
+    flockRate += (BALANCE.COOP.eggPerCycle / coopCycle) * hen.vigor * debuff;
+  }
+  const eggModuleMult = 1 + globalBonus(state, 'eggOutput'); // coop modules buff the flock
+  const eggsThisStep = flockRate * eggMult * eggModuleMult * step;
+  // Deposit into coop buffers (split evenly) so Collect / Auto-Haul / the buffer
+  // chips keep working unchanged. Coops are the flock's collection points.
+  if (coops.length > 0 && eggsThisStep > 0) {
+    const share = eggsThisStep / coops.length;
+    for (const coop of coops) {
+      coop.cycleProgress = (coop.cycleProgress + step) % coopCycle; // cosmetic lay bar
+      coop.buffer.eggs = (coop.buffer.eggs ?? 0) + share;
       if (willHaul) {
         state.resources.eggs += coop.buffer.eggs ?? 0;
         coop.buffer = {};

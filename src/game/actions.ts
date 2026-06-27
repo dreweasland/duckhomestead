@@ -263,14 +263,13 @@ export function rerollModule(
 
 // ── Dose Brewer's Yeast (active-only intervention; clears a leg debuff) ──
 export interface DoseResult {
-  station: Station;
   xp: XpResult;
 }
 
-export function doseNiacin(state: GameState, stationId: string): ActionResult<DoseResult> {
-  const station = state.stations.find((s) => s.id === stationId);
-  if (!station) return fail('No such station');
-  if (!station.debuffed) return fail('No duck to dose here');
+/** Clear one leg-debuffed duck (flock-level). Costed + on a global cooldown. */
+export function doseNiacin(state: GameState): ActionResult<DoseResult> {
+  const duck = state.ducks.find((d) => d.debuffed);
+  if (!duck) return fail('No duck needs dosing');
   if (state.doseCooldownRemaining > 0) {
     return fail(`Dosing in ${Math.ceil(state.doseCooldownRemaining)}s`);
   }
@@ -278,10 +277,10 @@ export function doseNiacin(state: GameState, stationId: string): ActionResult<Do
   if (state.resources.brewersYeast < cost) return fail(`Need ${cost} brewer's yeast`);
 
   state.resources.brewersYeast -= cost;
-  station.debuffed = false;
+  duck.debuffed = false;
   state.doseCooldownRemaining = BALANCE.NUTRITION.DOSE_COOLDOWN_S;
   const xp = gainXP(state, BALANCE.NUTRITION.DOSE_XP);
-  return done({ station, xp });
+  return done({ xp });
 }
 
 // ── Tend (the active engine; ONLY source of XP) ───────────────────────
@@ -308,12 +307,9 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   const def = STATION_DEFS[station.type];
   const mult = UPGRADE_OUTPUT(station.level);
   const burst: Partial<Record<Resource, number>> = {};
-  // A coop's burst is throttled by current nutrition + any leg debuff, same as
-  // its passive lay.
-  const nutritionMult =
-    station.type === 'coop'
-      ? (state.nutrition?.eggMult ?? 1) * (station.debuffed ? BALANCE.NUTRITION.DEBUFF_COOP_OUTPUT_MULT : 1)
-      : 1;
+  // A coop's tend burst (tending the flock) is throttled by current nutrition,
+  // same as the flock's passive lay. (Leg debuffs are per-duck now.)
+  const nutritionMult = station.type === 'coop' ? (state.nutrition?.eggMult ?? 1) : 1;
   const tendPower = tendPowerMult(station); // module-boosted burst size
 
   for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {

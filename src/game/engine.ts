@@ -242,13 +242,10 @@ export class GameEngine {
     this.notify();
   }
 
-  /** Active-only intervention: clear a coop's niacin leg debuff. */
-  dose(stationId: string): ActionResult<unknown> {
-    const r = doseNiacin(this.state, stationId);
-    if (r.ok) {
-      this.emitTend({ stationId, xp: r.value.xp.xpGained });
-      this.fireXp(r.value.xp);
-    }
+  /** Active-only intervention: clear one duck's niacin leg debuff. */
+  dose(): ActionResult<unknown> {
+    const r = doseNiacin(this.state);
+    if (r.ok) this.fireXp(r.value.xp);
     this.notify();
     return r;
   }
