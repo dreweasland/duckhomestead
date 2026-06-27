@@ -8,6 +8,13 @@ interface Props {
   onPick: (t: StationType | null) => void;
 }
 
+const swatch = (color: string, label: string) => (
+  <span className="inline-flex items-center gap-1">
+    <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
+    {label}
+  </span>
+);
+
 const CHAIN_HINT: Record<StationType, React.ReactNode> = {
   plot: (
     <span className="inline-flex items-center gap-1">
@@ -24,13 +31,16 @@ const CHAIN_HINT: Record<StationType, React.ReactNode> = {
       <PelletIcon size={12} /> → <EggIcon size={12} /> eggs
     </span>
   ),
+  mealwormFarm: swatch('#d9a07a', 'mealworms · protein'),
+  yeastVat: swatch('#e8d9a0', 'yeast · niacin'),
+  oysterSource: swatch('#c9cdd2', 'shell · calcium'),
 };
 
 export function BuildBar({ state, buildType, onPick }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <div className="text-xs font-bold uppercase tracking-wider text-[#9a8a6a]">Build</div>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {STATION_ORDER.map((t) => {
           const cost = BALANCE.COSTS[t];
           const affordable = state.resources.eggs >= cost;
@@ -39,7 +49,7 @@ export function BuildBar({ state, buildType, onPick }: Props) {
             <button
               key={t}
               onClick={() => onPick(selected ? null : t)}
-              className={`flex flex-1 flex-col items-start gap-1 rounded-md border px-2.5 py-2 text-left transition ${
+              className={`flex flex-col items-start gap-1 rounded-md border px-2.5 py-2 text-left transition ${
                 selected
                   ? 'border-[#fff4d6] bg-[#3a2e22]'
                   : 'border-transparent bg-[#2a2018] hover:bg-[#33271c]'

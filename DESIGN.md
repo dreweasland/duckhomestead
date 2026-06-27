@@ -57,10 +57,23 @@ Loop: **tend → throughput climbs → funds modules/upgrades → climbs higher 
 - T3 components: balanced rations, bedding, **eggs** (coop)
 - T4 advanced: **ducklings**, breeding stock, premium genetics
 
-**Nutrition = the "power grid" (first-class constraint):**
-- Balanced feed (energy + niacin/riboflavin) keeps ducks at full lay.
-- Deficiency throttles output / causes "off" ducks → an optimization puzzle, not a hard wall.
-- "Batteries" = feed storage + the flock's condition reserve (the offline buffer).
+**Nutrition Grid = the "power grid" (first-class constraint):**
+
+This is what turns the game from a linear chain into a balancing act — the homestead's electricity. The key move is making nutrition **multi-dimensional**: you don't stockpile one feed number, you *compose a ration* that must hit several targets at once.
+
+- **Four nutritional axes** (all grounded in real duck nutrition):
+  - **Energy** (corn, scratch) — cheap, fast; general activity / baseline output multiplier. Corn-heavy = empty calories.
+  - **Protein** (mealworms, peas) — drives lay rate (and duckling growth once breeding exists); slower/costlier to produce.
+  - **Niacin** (brewer's yeast) — the duck one. Sustained deficiency builds a leg/joint debuff on individual ducks (Potato's real issue, as a mechanic).
+  - **Calcium** (oyster shell) — eggshell quality; short on it → soft eggs get discarded → egg output drops.
+- **It's a real grid, not a slider:** each ingredient costs **grid space + throughput** to produce (mealworms slow, corn fast, brewer's yeast its own line). So balancing nutrition is a *layout & throughput* problem — the optimization itch in duck form.
+- **Feed-formulation dashboard:** set the ration proportions; live per-axis readout (supply vs requirement, green/yellow/red); shows resulting output modifiers. `balance.ts` made visible and playable.
+- **Throttle, not wall:** a deficiency reduces the *specific* output tied to that axis, scaled by severity (20% short = gentle penalty, not a stop). Never hard-blocked — just suboptimal, with the dashboard pointing at the fix.
+- **Flock condition = the battery:** a slow-moving reserve well-fed ducks build up. It carries the flock through brief shortfalls (like an accumulator through a power dip) and governs offline: while you sleep, the flock coasts on the reserve at the ration you left set. Balanced → wake up fine; marginal → wake to a throttled, degraded homestead (another nudge toward active play).
+- **Interventions are active-only:** dosing a niacin-deficient duck with brewer's yeast to clear its leg debuff is something *you* do — idle never resolves problems for you.
+- **Keep it from becoming chore-y:** a good mix *holds* once set (only revisit on new axis / scale-up); the condition reserve smooths small imbalances; the throttle is fully legible so every fix is a clear decision, not guesswork.
+
+Later stages deepen it: different life stages want different profiles (ducklings = high niacin + protein, laying hens = calcium), so once breeding lands you can't run one universal ration.
 
 **Loot / modules (machine-centric):**
 - Stations have N slots; modules give stacking % boosts, rarity-scaled.

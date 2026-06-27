@@ -26,6 +26,9 @@ interface Props {
 /** Resource fill colors for drawn (non-emoji) buffer chips. */
 const RES_COLOR: Record<Resource, number> = {
   corn: 0xe2b94f,
+  mealworms: 0xd9a07a,
+  brewersYeast: 0xe8d9a0,
+  oysterShell: 0xc9cdd2,
   pellets: 0xb87333,
   eggs: 0xf5ecd8,
 };

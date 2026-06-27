@@ -176,6 +176,30 @@ export const LockIcon = (p: PixProps) => (
   />
 );
 
+export const MealwormIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ w: '#d9a07a', d: '#b87a55' }}
+    rows={['.wdwd.', 'wdwdww', '.wdwd.']}
+  />
+);
+
+export const YeastIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ c: '#e8d9a0', h: '#fff4d6', d: '#c9b884' }}
+    rows={['.cc.', 'chcc', 'cdcc', '.cc.']}
+  />
+);
+
+export const ShellIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ s: '#c9cdd2', d: '#9aa0a8', h: '#eef0f2' }}
+    rows={['.shs.', 'sssss', 'sdsds', '.ddd.']}
+  />
+);
+
 export const SpeakerIcon = (p: PixProps) => (
   <Pix
     {...p}
@@ -211,6 +235,9 @@ export const MuteIcon = (p: PixProps) => (
 /** Map a resource key to its icon for inline use. */
 export const RESOURCE_ICON = {
   corn: CornIcon,
+  mealworms: MealwormIcon,
+  brewersYeast: YeastIcon,
+  oysterShell: ShellIcon,
   pellets: PelletIcon,
   eggs: EggIcon,
 } as const;

@@ -66,9 +66,16 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   const rateMult = opts.mode === 'offline' ? BALANCE.OFFLINE_RATE_MULT : 1;
   const willHaul = opts.autoHaul || opts.mode === 'offline';
 
-  // Process plot -> mill -> coop so corn made this step can be hauled and
-  // consumed downstream within the same step when hauling is active.
-  const order: Record<string, number> = { plot: 0, mill: 1, coop: 2 };
+  // Process producers -> mill -> coop so resources made this step can be hauled
+  // and consumed downstream within the same step when hauling is active.
+  const order: Record<string, number> = {
+    plot: 0,
+    mealwormFarm: 0,
+    yeastVat: 0,
+    oysterSource: 0,
+    mill: 1,
+    coop: 2,
+  };
   const stations = [...state.stations].sort((a, b) => order[a.type] - order[b.type]);
 
   for (const station of stations) {

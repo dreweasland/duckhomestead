@@ -10,7 +10,16 @@
  *   - Active play is the engine: rank XP comes ONLY from tending, which is online-only.
  */
 
-export type StationType = 'plot' | 'mill' | 'coop';
+export type StationType =
+  | 'plot'
+  | 'mill'
+  | 'coop'
+  | 'mealwormFarm'
+  | 'yeastVat'
+  | 'oysterSource';
+
+/** Phase 2 ingredient-producing stations (raw producers, like the plot). */
+export const INGREDIENT_STATIONS: StationType[] = ['mealwormFarm', 'yeastVat', 'oysterSource'];
 
 export const BALANCE = {
   /** Bounded play area. Stations occupy one tile each. */
@@ -53,6 +62,9 @@ export const BALANCE = {
     plot: 10,
     mill: 25,
     coop: 50,
+    mealwormFarm: 60,
+    yeastVat: 75,
+    oysterSource: 50,
   } as Record<StationType, number>,
 
   /** Fraction of a station's PLACEMENT cost refunded when removed (0..1). */
@@ -72,7 +84,14 @@ export const BALANCE = {
    * station's output by UPGRADE_OUTPUT_MULT per level above 1.
    */
   UPGRADE: {
-    baseCost: { plot: 15, mill: 35, coop: 70 } as Record<StationType, number>,
+    baseCost: {
+      plot: 15,
+      mill: 35,
+      coop: 70,
+      mealwormFarm: 80,
+      yeastVat: 100,
+      oysterSource: 70,
+    } as Record<StationType, number>,
     costGrowth: 1.6,
     /** Output multiplier per level. Level N output = base * mult^(N-1). */
     outputMultPerLevel: 1.5,
@@ -101,6 +120,42 @@ export const BALANCE = {
   RANK_BASE_XP: 50,
   RANK_GROWTH: 1.5,
 
+  // ── Phase 2: ingredient producers (raw, like the plot) ──────────────
+  /** Each ingredient station produces `perCycle` of its resource every cycle. */
+  INGREDIENT_PROD: {
+    mealwormFarm: { resource: 'mealworms', perCycle: 1, cycleSeconds: 8 },
+    yeastVat: { resource: 'brewersYeast', perCycle: 1, cycleSeconds: 6 },
+    oysterSource: { resource: 'oysterShell', perCycle: 1, cycleSeconds: 5 },
+  } as const,
+
+  // ── Phase 2: the nutrition grid (the homestead's "power grid") ───────
+  // A coop's lay rate is throttled by how well the active ration meets the
+  // flock's per-axis nutritional requirement. Deficiency throttles (never a
+  // hard wall); flock condition buffers small imbalances and powers offline.
+  NUTRITION: {
+    /** Per-coop per-cycle requirement on each axis. */
+    REQUIREMENT: { energy: 3, protein: 2, niacin: 1, calcium: 1 },
+    /** Nutritional value contributed per unit of each ingredient. */
+    INGREDIENT: {
+      corn: { energy: 1, protein: 0, niacin: 0, calcium: 0 },
+      mealworms: { energy: 0, protein: 1, niacin: 0, calcium: 0 },
+      brewersYeast: { energy: 0, protein: 0, niacin: 1, calcium: 0 },
+      oysterShell: { energy: 0, protein: 0, niacin: 0, calcium: 1 },
+    },
+    /** Output multiplier floor when an axis is fully starved (throttle, not wall). */
+    THROTTLE_FLOOR: 0.2,
+    /** Flock condition reserve (the "battery"). */
+    CONDITION_MAX: 100,
+    CONDITION_RISE_PER_S: 0.5, // when all axes satisfied
+    CONDITION_DRAIN_PER_S: 1.0, // when short
+    /** Niacin debuff. */
+    NIACIN_DEBUFF_THRESHOLD: 0.6, // satisfaction below this accrues risk
+    NIACIN_DEBUFF_ONSET_S: 300, // sustained shortfall before a duck is debuffed
+    DEBUFF_COOP_OUTPUT_MULT: 0.5, // a debuffed coop's output
+    DOSE_COOLDOWN_S: 60,
+    DOSE_XP: 8,
+  },
+
   // ── Milestones ──────────────────────────────────────────────────────
   /** Rank at which the Auto-Haul Cart unlocks (auto-collect output). */
   MILESTONE_AUTOHAUL_RANK: 5,
@@ -113,6 +168,8 @@ export const BALANCE = {
   AUTOSAVE_DEBOUNCE_MS: 1500,
 } as const;
 
+type ResourceKey = 'corn' | 'mealworms' | 'brewersYeast' | 'oysterShell' | 'pellets' | 'eggs';
+
 /** Per-type static config, keyed for convenience in the sim. */
 export const STATION_DEFS: Record<
   StationType,
@@ -122,9 +179,9 @@ export const STATION_DEFS: Record<
     color: number;
     cycleSeconds: number;
     /** Inputs consumed per cycle (resource -> amount). */
-    inputs: Partial<Record<'corn' | 'pellets' | 'eggs', number>>;
+    inputs: Partial<Record<ResourceKey, number>>;
     /** Outputs produced per cycle (resource -> amount). */
-    outputs: Partial<Record<'corn' | 'pellets' | 'eggs', number>>;
+    outputs: Partial<Record<ResourceKey, number>>;
   }
 > = {
   plot: {
@@ -148,6 +205,35 @@ export const STATION_DEFS: Record<
     inputs: { pellets: BALANCE.COOP.pelletPerEgg * BALANCE.COOP.eggPerCycle },
     outputs: { eggs: BALANCE.COOP.eggPerCycle },
   },
+  // Phase 2 ingredient producers — raw, no inputs (like the plot).
+  mealwormFarm: {
+    label: 'Mealworm Bed',
+    color: 0x9a6a3f,
+    cycleSeconds: BALANCE.INGREDIENT_PROD.mealwormFarm.cycleSeconds,
+    inputs: {},
+    outputs: { mealworms: BALANCE.INGREDIENT_PROD.mealwormFarm.perCycle },
+  },
+  yeastVat: {
+    label: 'Yeast Vat',
+    color: 0xcaa24a,
+    cycleSeconds: BALANCE.INGREDIENT_PROD.yeastVat.cycleSeconds,
+    inputs: {},
+    outputs: { brewersYeast: BALANCE.INGREDIENT_PROD.yeastVat.perCycle },
+  },
+  oysterSource: {
+    label: 'Shell Bin',
+    color: 0xaeb4ba,
+    cycleSeconds: BALANCE.INGREDIENT_PROD.oysterSource.cycleSeconds,
+    inputs: {},
+    outputs: { oysterShell: BALANCE.INGREDIENT_PROD.oysterSource.perCycle },
+  },
 };
 
-export const STATION_ORDER: StationType[] = ['plot', 'mill', 'coop'];
+export const STATION_ORDER: StationType[] = [
+  'plot',
+  'mill',
+  'coop',
+  'mealwormFarm',
+  'yeastVat',
+  'oysterSource',
+];

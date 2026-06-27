@@ -1,9 +1,24 @@
 import { BALANCE, type StationType } from '../config/balance';
 
-/** The three chain resources. `eggs` is the primary spendable currency. */
-export type Resource = 'corn' | 'pellets' | 'eggs';
+/**
+ * Storage resources. `eggs` is the primary spendable currency. `corn`,
+ * `mealworms`, `brewersYeast`, and `oysterShell` are the Phase 2 nutrition
+ * ingredients (energy / protein / niacin / calcium). `pellets` is the legacy
+ * Phase 1 intermediate, kept for save back-compat.
+ */
+export type Resource =
+  | 'corn'
+  | 'mealworms'
+  | 'brewersYeast'
+  | 'oysterShell'
+  | 'pellets'
+  | 'eggs';
 
 export type Resources = Record<Resource, number>;
+
+/** The four nutrition ingredients, in axis order (energy/protein/niacin/calcium). */
+export const INGREDIENTS = ['corn', 'mealworms', 'brewersYeast', 'oysterShell'] as const;
+export type Ingredient = (typeof INGREDIENTS)[number];
 
 /**
  * A placed station. Production deposits outputs into `buffer`; "hauling"
@@ -48,14 +63,14 @@ export interface GameState {
 }
 
 export function initialResources(): Resources {
-  return { corn: 0, pellets: 0, eggs: 0 };
+  return { corn: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, pellets: 0, eggs: 0 };
 }
 
 export function initialState(now: number): GameState {
   return {
     version: 1,
     // Seed enough eggs to build the full starter chain (see STARTING_EGGS).
-    resources: { corn: 0, pellets: 0, eggs: BALANCE.STARTING_EGGS },
+    resources: { ...initialResources(), eggs: BALANCE.STARTING_EGGS },
     stations: [],
     nextStationId: 1,
     rank: 1,

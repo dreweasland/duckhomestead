@@ -16,6 +16,9 @@ export const STATION_TEXTURE_URL: Record<StationType, string> = {
   plot: `${FARM}/plot.png`,
   mill: `${FARM}/mill.png`,
   coop: `${FARM}/coop.png`,
+  mealwormFarm: `${FARM}/mealwormFarm.png`,
+  yeastVat: `${FARM}/yeastVat.png`,
+  oysterSource: `${FARM}/oysterSource.png`,
 };
 
 export const MILL_SAILS_URL = `${FARM}/mill_sails.png`;
