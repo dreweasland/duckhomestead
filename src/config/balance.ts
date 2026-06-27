@@ -233,7 +233,7 @@ export const BALANCE = {
     } as Record<string, [number, number]>,
     /** Active-drop: chance per tend, then a weighted rarity roll. */
     TEND_DROP_CHANCE: 0.08,
-    DROP_RARITY_WEIGHTS: { common: 60, uncommon: 25, rare: 11, epic: 3.5, legendary: 0.5 } as Record<string, number>,
+    DROP_RARITY_WEIGHTS: { common: 60, uncommon: 25, rare: 11, epic: 6, legendary: 1.5 } as Record<string, number>,
     /** Guaranteed module of a fixed rarity at these ranks. */
     MILESTONE_GRANTS: { 3: 'uncommon', 7: 'rare', 12: 'epic', 18: 'legendary' } as Record<number, string>,
     /** Salvage yields dust by rarity; reroll spends dust. */
