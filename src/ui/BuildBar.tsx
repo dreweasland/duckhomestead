@@ -1,6 +1,6 @@
 import { BALANCE, STATION_DEFS, STATION_ORDER, type StationType } from '../config/balance';
 import type { GameState } from '../game/state';
-import { CornIcon, EggIcon, PelletIcon } from './icons';
+import { CornIcon, EggIcon } from './icons';
 
 interface Props {
   state: GameState;
@@ -21,14 +21,10 @@ const CHAIN_HINT: Record<StationType, React.ReactNode> = {
       makes <CornIcon size={12} /> corn
     </span>
   ),
-  mill: (
-    <span className="inline-flex items-center gap-1">
-      <CornIcon size={12} /> → <PelletIcon size={12} /> pellets
-    </span>
-  ),
+  mill: <span className="inline-flex items-center gap-1">blends the feed ration</span>,
   coop: (
     <span className="inline-flex items-center gap-1">
-      <PelletIcon size={12} /> → <EggIcon size={12} /> eggs
+      lays <EggIcon size={12} /> eggs (fed)
     </span>
   ),
   peaPatch: swatch('#7fae54', 'peas · energy+protein'),

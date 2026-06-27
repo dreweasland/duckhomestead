@@ -6,10 +6,15 @@ import { rankProgress, xpForLevel } from '../game/rank';
 import { fmt } from './format';
 import { CartIcon, DuckIcon, LockIcon, MuteIcon, RESOURCE_ICON, SpeakerIcon } from './icons';
 
+// Eggs (currency) + the five nutrition ingredients. `pellets` is a retired
+// Phase 1 field and is intentionally not shown.
 const RES: { key: Resource; label: string }[] = [
-  { key: 'corn', label: 'Corn' },
-  { key: 'pellets', label: 'Pellets' },
   { key: 'eggs', label: 'Eggs' },
+  { key: 'corn', label: 'Corn' },
+  { key: 'peas', label: 'Peas' },
+  { key: 'mealworms', label: 'Mealworms' },
+  { key: 'brewersYeast', label: "Brewer's Yeast" },
+  { key: 'oysterShell', label: 'Oyster Shell' },
 ];
 
 export function HUD({ state }: { state: GameState }) {
@@ -36,18 +41,20 @@ export function HUD({ state }: { state: GameState }) {
         </button>
       </div>
 
-      {/* Resources */}
-      <div className="flex gap-2">
+      {/* Resources: eggs (currency) + the five nutrition ingredients. */}
+      <div className="grid grid-cols-3 gap-1.5">
         {RES.map((r) => {
           const Icon = RESOURCE_ICON[r.key];
           return (
             <div
               key={r.key}
-              className="flex flex-1 items-center gap-1.5 rounded-md bg-[#2a2018] px-2.5 py-1.5"
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 ${
+                r.key === 'eggs' ? 'bg-[#3a2e22] ring-1 ring-[#5a4a32]' : 'bg-[#2a2018]'
+              }`}
               title={r.label}
             >
-              <Icon size={16} title={r.label} />
-              <span className="font-bold tabular-nums">{fmt(state.resources[r.key])}</span>
+              <Icon size={15} title={r.label} />
+              <span className="text-sm font-bold tabular-nums">{fmt(state.resources[r.key])}</span>
             </div>
           );
         })}

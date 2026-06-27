@@ -38,27 +38,26 @@ export const BALANCE = {
   // Each station runs cycles. A cycle takes `cycleSeconds` and, if its
   // inputs are available, consumes inputs and emits outputs.
 
-  // Chain is tuned so each stage OVER-supplies the next: a lone plot+mill+coop
-  // never starves itself, and the growing upstream surplus (corn, then pellets)
-  // is the signal to expand ("lots of corn -> build another mill"). Coop output
-  // is the throughput cap. Rates (per second):
-  //   plot 0.67 corn  >  mill demand 0.33 corn  ->  mill 0.33 pellet
-  //   mill 0.33 pellet > coop demand 0.25 pellet -> coop 0.25 egg = 15 eggs/min
+  // The plot (and the Phase 2 ingredient stations) make raw ingredients via the
+  // generic timed-cycle path. The mill and coop are driven by the NUTRITION grid
+  // (see game/nutrition.ts): the mill blends the ration / provides feed capacity,
+  // and the coop lays eggs throttled by per-axis satisfaction. The legacy
+  // pellet constants below are unused (kept only so cycleSeconds stays here).
 
   /** Feed Plot: produces corn from nothing. The chain's root. */
   PLOT: {
     cornPerCycle: 2,
     cycleSeconds: 3,
   },
-  /** Feed Mill: consumes corn, produces pellets. */
+  /** Feed Mill: blends the ration (formulation + feed capacity), not pellets. */
   MILL: {
-    cornPerPellet: 1, // corn consumed per pellet produced
-    pelletPerCycle: 1,
+    cornPerPellet: 1, // legacy / unused
+    pelletPerCycle: 1, // legacy / unused
     cycleSeconds: 3,
   },
-  /** Coop: consumes pellets, produces eggs (the primary currency). */
+  /** Coop: lays eggs, throttled by nutrition (see NUTRITION + nutrition.ts). */
   COOP: {
-    pelletPerEgg: 1, // pellets consumed per egg produced
+    pelletPerEgg: 1, // legacy / unused
     eggPerCycle: 1,
     cycleSeconds: 4,
   },

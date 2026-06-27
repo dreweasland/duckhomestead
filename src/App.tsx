@@ -102,8 +102,8 @@ export default function App() {
       )}
 
       <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
-        {/* Canvas */}
-        <div className="flex flex-col items-center gap-2">
+        {/* Canvas + the station box directly under it (close to the tiles). */}
+        <div className="flex flex-col items-center gap-3">
           <div className="rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
             <ErrorBoundary
               fallback={
@@ -118,9 +118,15 @@ export default function App() {
           </div>
           {state.stations.length === 0 && (
             <div className="max-w-[460px] text-center text-xs text-[#9a8a6a]">
-              You start with {state.resources.eggs} eggs — enough to build the whole chain. Place a
-              Feed Plot (corn), a Feed Mill (corn → pellets), and a Coop (pellets → eggs). Eggs only
-              come from the Coop, so build all three, then Collect corn so the Mill can run.
+              You start with {state.resources.eggs} eggs. Place a Feed Plot (grows corn), a Feed Mill
+              (blends the ration), and a Coop (lays eggs). The Coop's lay rate depends on its
+              feed — once it's running, open Nutrition to balance the ration and add ingredient
+              stations (peas, mealworms, yeast, shell).
+            </div>
+          )}
+          {selected && (
+            <div className="w-full max-w-[496px] md:w-[496px]">
+              <StationPanel engine={engine} state={state} station={selected} />
             </div>
           )}
         </div>
@@ -171,7 +177,6 @@ export default function App() {
             </button>
           )}
           <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
-          <StationPanel engine={engine} state={state} station={selected} />
           {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
           <button
             onClick={() => {
