@@ -84,11 +84,11 @@ export const BALANCE = {
   // together with the cooldown so rank pacing stays put (chunkier rank gains,
   // fewer total tends) — keep their ratio if you retune one.
   /** Per-station cooldown between tends, in seconds. */
-  TEND_COOLDOWN_S: 45,
+  TEND_COOLDOWN_S: 60,
   /** A tend instantly grants this many cycles' worth of output. */
   TEND_BURST_MULT: 5,
   /** Rank XP granted per tend. Online-only — offline never grants XP. */
-  TEND_XP: 15,
+  TEND_XP: 20,
 
   // ── Homestead Rank + the DING ───────────────────────────────────────
   /** XP needed for level n = BASE * GROWTH^(n-1). */
