@@ -169,6 +169,22 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         };
 
         let cartT = 0;
+        // Cart entrance: play a one-time "arrival" when Auto-Haul unlocks this
+        // session (not on load for a player who already has it).
+        let prevAutoHaul = engine.state.autoHaulUnlocked;
+        let arrivalT = -1;
+        const ARRIVAL_DUR = 1.7;
+        const drawCart = (cx: number, cy: number, scale: number) => {
+          const w = 8 * scale, h = 6 * scale, r = 1.6 * scale;
+          overlay.roundRect(cx - w, cy - h, w * 2, h * 2, 2 * scale).fill(0x6b4f9e);
+          overlay.roundRect(cx - w + 1, cy - h + 1, w * 2 - 2, h, 1).fill(0x8a6fc0);
+          // eggs riding along
+          overlay.circle(cx - 2 * scale, cy - 1, 1.6 * scale).fill(0xf5ecd8);
+          overlay.circle(cx + 2 * scale, cy - 1, 1.6 * scale).fill(0xf5ecd8);
+          // wheels
+          overlay.circle(cx - 4 * scale, cy + h, r).fill(0x2a2018);
+          overlay.circle(cx + 4 * scale, cy + h, r).fill(0x2a2018);
+        };
 
         // Floating "+XP" feedback at a tended tile, so the reward reads on the
         // board (no need to look at the panel). Fired by engine tend events.
@@ -355,24 +371,42 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
           // Auto-Haul cart: a little cart that loops the placed stations once
           // unlocked — the visible sign the milestone changed how hauling works.
           overlay.clear();
+          if (state.autoHaulUnlocked && !prevAutoHaul) arrivalT = 0; // just unlocked
+          prevAutoHaul = state.autoHaulUnlocked;
+
           if (state.autoHaulUnlocked && state.stations.length > 0) {
-            cartT += app.ticker.deltaMS / 1000;
+            const dt = app.ticker.deltaMS / 1000;
             const stops = state.stations;
-            const period = 1.1; // seconds per hop
-            const idx = Math.floor(cartT / period) % stops.length;
-            const next = (idx + 1) % stops.length;
-            const f = (cartT % period) / period;
-            const a = stops[idx];
-            const b = stops[next];
-            const ax = OX + a.x * TILE + TILE / 2;
-            const ay = OY + a.y * TILE + TILE / 2;
-            const bx = OX + b.x * TILE + TILE / 2;
-            const by = OY + b.y * TILE + TILE / 2;
-            const cx = ax + (bx - ax) * f;
-            const cy = ay + (by - ay) * f;
-            overlay.roundRect(cx - 7, cy - 5, 14, 10, 2).fill(0x6b4f9e);
-            overlay.circle(cx - 4, cy + 5, 2.5).fill(0x2a2018);
-            overlay.circle(cx + 4, cy + 5, 2.5).fill(0x2a2018);
+
+            if (arrivalT >= 0 && arrivalT < ARRIVAL_DUR) {
+              // Entrance: roll in from offscreen-left to the first station.
+              arrivalT += dt;
+              const f = Math.min(1, arrivalT / ARRIVAL_DUR);
+              const e = 1 - (1 - f) * (1 - f); // ease-out
+              const tx = OX + stops[0].x * TILE + TILE / 2;
+              const ty = OY + stops[0].y * TILE + TILE / 2;
+              const cx = OX - 40 + (tx - (OX - 40)) * e;
+              const cy = ty - Math.abs(Math.sin(f * Math.PI * 3)) * 4; // little hops
+              // dust puffs trailing behind
+              for (let p = 1; p <= 3; p++) {
+                overlay.circle(cx - 10 * p, cy + 6, (4 - p) * (1 - f)).fill({ color: 0xc9b88f, alpha: 0.5 * (1 - f) });
+              }
+              drawCart(cx, cy, 1.25);
+            } else {
+              // Normal loop between stations.
+              cartT += dt;
+              const period = 1.1; // seconds per hop
+              const idx = Math.floor(cartT / period) % stops.length;
+              const next = (idx + 1) % stops.length;
+              const f = (cartT % period) / period;
+              const a = stops[idx];
+              const b = stops[next];
+              const ax = OX + a.x * TILE + TILE / 2;
+              const ay = OY + a.y * TILE + TILE / 2;
+              const bx = OX + b.x * TILE + TILE / 2;
+              const by = OY + b.y * TILE + TILE / 2;
+              drawCart(ax + (bx - ax) * f, ay + (by - ay) * f, 1);
+            }
           }
         };
 
