@@ -8,8 +8,13 @@ import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './a
 
 const TILE = 56;
 const PAD = 16;
+// Buildings are bottom-anchored and rise up to one tile above their cell, so
+// reserve a tile of headroom at the top to keep top-row roofs from clipping.
+const TOP_EXTRA = TILE;
+const OX = PAD;
+const OY = PAD + TOP_EXTRA;
 const W = BALANCE.GRID.width * TILE + PAD * 2;
-const H = BALANCE.GRID.height * TILE + PAD * 2;
+const H = BALANCE.GRID.height * TILE + PAD * 2 + TOP_EXTRA;
 
 interface Props {
   engine: GameEngine;
@@ -75,8 +80,8 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         const haveGround = textures.ground.some(Boolean);
         for (let gy = 0; gy < BALANCE.GRID.height; gy++) {
           for (let gx = 0; gx < BALANCE.GRID.width; gx++) {
-            const px = PAD + gx * TILE;
-            const py = PAD + gy * TILE;
+            const px = OX + gx * TILE;
+            const py = OY + gy * TILE;
             if (haveGround) {
               const v = groundVariant(gx, gy, GROUND_URLS.length);
               const tex = textures.ground[v] ?? textures.ground.find(Boolean)!;
@@ -96,8 +101,8 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         app.stage.eventMode = 'static';
         app.stage.hitArea = { contains: () => true } as never;
         const onPointer = (e: { global: { x: number; y: number } }) => {
-          const gx = Math.floor((e.global.x - PAD) / TILE);
-          const gy = Math.floor((e.global.y - PAD) / TILE);
+          const gx = Math.floor((e.global.x - OX) / TILE);
+          const gy = Math.floor((e.global.y - OY) / TILE);
           if (gx >= 0 && gy >= 0 && gx < BALANCE.GRID.width && gy < BALANCE.GRID.height) {
             clickRef.current(gx, gy);
           }
@@ -147,8 +152,8 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
             present.add(s.id);
             const def = STATION_DEFS[s.type];
             const entry = sprites.get(s.id) ?? makeSprite(s);
-            const px = PAD + s.x * TILE;
-            const py = PAD + s.y * TILE;
+            const px = OX + s.x * TILE;
+            const py = OY + s.y * TILE;
             entry.c.position.set(px, py);
             entry.c.zIndex = s.y; // lower rows paint over the buildings above them
 
@@ -225,10 +230,10 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
             const f = (cartT % period) / period;
             const a = stops[idx];
             const b = stops[next];
-            const ax = PAD + a.x * TILE + TILE / 2;
-            const ay = PAD + a.y * TILE + TILE / 2;
-            const bx = PAD + b.x * TILE + TILE / 2;
-            const by = PAD + b.y * TILE + TILE / 2;
+            const ax = OX + a.x * TILE + TILE / 2;
+            const ay = OY + a.y * TILE + TILE / 2;
+            const bx = OX + b.x * TILE + TILE / 2;
+            const by = OY + b.y * TILE + TILE / 2;
             const cx = ax + (bx - ax) * f;
             const cy = ay + (by - ay) * f;
             overlay.roundRect(cx - 7, cy - 5, 14, 10, 2).fill(0x6b4f9e);
