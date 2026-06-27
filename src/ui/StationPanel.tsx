@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { playCollect, playUpgrade } from '../audio/sfx';
-import { STATION_DEFS } from '../config/balance';
+import { playCollect, playRemove, playUpgrade } from '../audio/sfx';
+import { BALANCE, STATION_DEFS } from '../config/balance';
 import { stationStatus, UPGRADE_OUTPUT, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import type { GameState, Resource, Station } from '../game/state';
@@ -25,6 +25,8 @@ function ResAmount({ res, amount }: { res: Resource; amount: number }) {
 
 export function StationPanel({ engine, state, station }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
+  // Two-click confirm: armed only for the station whose id this matches.
+  const [armedId, setArmedId] = useState<string | null>(null);
 
   if (!station) {
     return (
@@ -162,6 +164,32 @@ export function StationPanel({ engine, state, station }: Props) {
           </button>
         )}
       </div>
+
+      {/* Remove (demolish) — two-click confirm; refunds part of the cost. */}
+      <button
+        onClick={() => {
+          if (armedId !== station.id) {
+            setArmedId(station.id);
+            window.setTimeout(() => setArmedId((a) => (a === station.id ? null : a)), 3000);
+            return;
+          }
+          const r = engine.remove(station.id);
+          setArmedId(null);
+          if (r.ok) {
+            playRemove();
+            flash(`Removed (+${r.value.refund} eggs)`);
+          }
+        }}
+        className={`rounded-md px-2 py-1.5 text-xs font-bold transition ${
+          armedId === station.id
+            ? 'bg-[#d95f5f] text-[#fff4d6] hover:bg-[#e57070]'
+            : 'bg-[#2a2018] text-[#b06a6a] hover:bg-[#33271c]'
+        }`}
+      >
+        {armedId === station.id
+          ? 'Confirm remove?'
+          : `Remove · refund ${Math.floor(BALANCE.COSTS[station.type] * BALANCE.REFUND_FRACTION)} eggs`}
+      </button>
 
       {msg && <div className="text-center text-[11px] text-[#ffe9a8]">{msg}</div>}
     </div>

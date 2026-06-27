@@ -72,6 +72,20 @@ export function placeStation(
   return done(station);
 }
 
+// ── Remove (demolish, partial egg refund) ─────────────────────────────
+export function removeStation(
+  state: GameState,
+  stationId: string,
+): ActionResult<{ refund: number }> {
+  const idx = state.stations.findIndex((s) => s.id === stationId);
+  if (idx < 0) return fail('No such station');
+  const station = state.stations[idx];
+  const refund = Math.floor(BALANCE.COSTS[station.type] * BALANCE.REFUND_FRACTION);
+  state.resources.eggs += refund;
+  state.stations.splice(idx, 1);
+  return done({ refund });
+}
+
 // ── Move (relocate, free) ─────────────────────────────────────────────
 export function moveStation(
   state: GameState,

@@ -55,6 +55,9 @@ export const BALANCE = {
     coop: 50,
   } as Record<StationType, number>,
 
+  /** Fraction of a station's PLACEMENT cost refunded when removed (0..1). */
+  REFUND_FRACTION: 0.5,
+
   /**
    * Eggs the player starts with. MUST cover the full starter chain
    * (plot 10 + mill 25 + coop 50 = 85) or the economy softlocks: eggs only

@@ -103,6 +103,23 @@ export function playCollect() {
   [659, 880, 1046].forEach((f, i) => note(c, f, t + i * 0.045, 0.1, 'sine', 0.13));
 }
 
+/** A short descending tone — removing a station. */
+export function playRemove() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(330, t);
+  osc.frequency.exponentialRampToValueAtTime(98, t + 0.18);
+  gain.gain.setValueAtTime(0.16, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.22);
+}
+
 /** A bright ascending pair — upgrading. */
 export function playUpgrade() {
   const c = audio();

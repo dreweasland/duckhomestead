@@ -5,6 +5,7 @@ import {
   gainXP,
   moveStation,
   placeStation,
+  removeStation,
   tend,
   upgradeStation,
   type ActionResult,
@@ -146,6 +147,13 @@ export class GameEngine {
   /** Relocate a station to an empty tile (free). */
   move(stationId: string, x: number, y: number): ActionResult<unknown> {
     const r = moveStation(this.state, stationId, x, y);
+    this.notify();
+    return r;
+  }
+
+  /** Demolish a station, refunding part of its placement cost. */
+  remove(stationId: string): ActionResult<{ refund: number }> {
+    const r = removeStation(this.state, stationId);
     this.notify();
     return r;
   }
