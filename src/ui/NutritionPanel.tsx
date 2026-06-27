@@ -20,9 +20,15 @@ const ING_LABEL: Record<Ingredient, string> = {
 };
 const RATION_MAX = 6;
 
+/**
+ * Color by the SAME rounded percentage the label shows, so a bar reading
+ * "100%" is green (a strict sat>=1 check left a sustained 99.6% — which
+ * displays as 100% — stuck yellow until you overshot and slid back).
+ */
 function barColor(sat: number): string {
-  if (sat >= 1) return '#8fe388';
-  if (sat >= N.NIACIN_DEBUFF_THRESHOLD) return '#e8c45a';
+  const pct = Math.round(sat * 100);
+  if (pct >= 100) return '#8fe388';
+  if (pct >= N.NIACIN_DEBUFF_THRESHOLD * 100) return '#e8c45a';
   return '#e8835a';
 }
 
