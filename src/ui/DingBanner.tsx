@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { DingEvent } from '../game/engine';
 import { CartIcon } from './icons';
+import { NotifyRail } from './NotifyRail';
 
 interface Props {
   ding: DingEvent | null;
@@ -25,8 +26,7 @@ export function DingBanner({ ding, onDone }: Props) {
   const milestone = ding.milestones[0];
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-      <div className="flex w-full max-w-4xl justify-end">
+    <NotifyRail top="top-4">
         <button
           type="button"
           onClick={onDone}
@@ -51,7 +51,6 @@ export function DingBanner({ ding, onDone }: Props) {
         )}
           <div className="mt-2 text-[10px] uppercase tracking-wider text-white/60">tap to dismiss</div>
         </button>
-      </div>
-    </div>
+    </NotifyRail>
   );
 }

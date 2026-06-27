@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { DexEvent } from '../game/engine';
 import { COLOR_META } from './FlockPanel';
+import { NotifyRail } from './NotifyRail';
 
 interface Props {
   dex: DexEvent | null;
@@ -21,23 +22,19 @@ export function DexBanner({ dex, onDone }: Props) {
   const meta = COLOR_META[dex.color];
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-44 z-50 flex justify-center px-4">
-      <div className="flex w-full max-w-4xl justify-end">
-        <button
-          type="button"
-          onClick={onDone}
-          className="ding-pop pointer-events-auto cursor-pointer rounded-xl px-5 py-3 text-center shadow-2xl ring-2"
-          style={{ background: `linear-gradient(160deg, ${meta.swatch}, #1f1812 85%)`, borderColor: meta.swatch }}
-        >
-          <div className="text-[10px] font-bold uppercase tracking-widest text-white/80">
-            New breed bred!
-          </div>
-          <div className="text-2xl font-black uppercase tracking-wider text-white drop-shadow">
-            {meta.label}
-          </div>
-          <div className="text-[10px] text-white/70">added to the dex</div>
-        </button>
-      </div>
-    </div>
+    <NotifyRail top="top-44">
+      <button
+        type="button"
+        onClick={onDone}
+        className="ding-pop pointer-events-auto cursor-pointer rounded-xl px-5 py-3 text-center shadow-2xl ring-2"
+        style={{ background: `linear-gradient(160deg, ${meta.swatch}, #1f1812 85%)`, borderColor: meta.swatch }}
+      >
+        <div className="text-[10px] font-bold uppercase tracking-widest text-white/80">New breed bred!</div>
+        <div className="text-2xl font-black uppercase tracking-wider text-white drop-shadow">
+          {meta.label}
+        </div>
+        <div className="text-[10px] text-white/70">added to the dex</div>
+      </button>
+    </NotifyRail>
   );
 }

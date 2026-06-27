@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { playCollect, playDing, playLoot, playPlace, playTend } from './audio/sfx';
+import { playCollect, playDing, playLoot, playPlace, playTend, playUpgrade } from './audio/sfx';
 import type { StationType } from './config/balance';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { RARITIES, stationAt } from './game/state';
@@ -73,20 +73,24 @@ export default function App() {
   const onTileClick = useCallback(
     (x: number, y: number) => {
       const existing = stationAt(engine.state, x, y);
-      if (existing) {
-        setSelectedId(existing.id);
-        return;
-      }
       if (buildType) {
+        if (existing) {
+          // Build mode doubles as upgrade: clicking a MATCHING station upgrades
+          // it in place (no round-trip to the panel); a different type just selects.
+          if (existing.type === buildType) {
+            if (engine.upgrade(existing.id).ok) playUpgrade();
+          }
+          setSelectedId(existing.id);
+          return;
+        }
         const r = engine.place(buildType, x, y);
         if (r.ok) {
           playPlace();
-          const placed = stationAt(engine.state, x, y);
-          setSelectedId(placed?.id ?? null);
+          setSelectedId(stationAt(engine.state, x, y)?.id ?? null);
         }
         return;
       }
-      setSelectedId(null);
+      setSelectedId(existing ? existing.id : null);
     },
     [engine, buildType],
   );

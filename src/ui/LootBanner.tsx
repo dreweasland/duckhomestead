@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { LootEvent } from '../game/engine';
 import { RARITIES } from '../game/state';
 import { fmtMagnitude, RARITY_COLOR, STAT_META } from './lootUi';
+import { NotifyRail } from './NotifyRail';
 
 interface Props {
   loot: LootEvent | null;
@@ -29,8 +30,7 @@ export function LootBanner({ loot, onDone }: Props) {
   const big = tier >= 3; // epic / legendary
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-28 z-50 flex justify-center px-4">
-      <div className="flex w-full max-w-4xl justify-end">
+    <NotifyRail top="top-28">
         <button
           type="button"
           onClick={onDone}
@@ -55,7 +55,6 @@ export function LootBanner({ loot, onDone }: Props) {
           </div>
           <div className="text-[10px] text-white/70">{meta.blurb}</div>
         </button>
-      </div>
-    </div>
+    </NotifyRail>
   );
 }
