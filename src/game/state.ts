@@ -69,3 +69,9 @@ export function initialState(now: number): GameState {
 export function stationAt(state: GameState, x: number, y: number): Station | undefined {
   return state.stations.find((s) => s.x === x && s.y === y);
 }
+
+/** True if (x,y) is part of the decorative pond (not buildable). */
+export function isPondTile(x: number, y: number): boolean {
+  const p = BALANCE.POND;
+  return x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h;
+}

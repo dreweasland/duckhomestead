@@ -1,7 +1,7 @@
 import { BALANCE, STATION_DEFS, type StationType } from '../config/balance';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { GameState, Resource, Station } from './state';
-import { stationAt } from './state';
+import { isPondTile, stationAt } from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
 export function UPGRADE_OUTPUT(level: number): number {
@@ -52,6 +52,7 @@ export function placeStation(
   if (x < 0 || y < 0 || x >= BALANCE.GRID.width || y >= BALANCE.GRID.height) {
     return fail('Out of bounds');
   }
+  if (isPondTile(x, y)) return fail('That’s the pond');
   if (stationAt(state, x, y)) return fail('Tile occupied');
   const cost = BALANCE.COSTS[type];
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);

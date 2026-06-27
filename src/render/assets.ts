@@ -20,6 +20,7 @@ export const STATION_TEXTURE_URL: Record<StationType, string> = {
 
 export const MILL_SAILS_URL = `${FARM}/mill_sails.png`;
 export const DUCK_URLS = [`${FARM}/duck_a.png`, `${FARM}/duck_b.png`];
+export const WATER_URLS = [`${FARM}/water_a.png`, `${FARM}/water_b.png`];
 
 // Mostly grass, with the occasional flower tile for subtle variety (~1 in 6).
 export const GROUND_URLS = [
@@ -36,6 +37,7 @@ export interface GameTextures {
   millSails: Texture | null;
   ducks: Texture[];
   ground: Texture[];
+  water: Texture[];
 }
 
 /** Sample a texture with no smoothing — crisp pixels when scaled up. */
@@ -57,9 +59,14 @@ export async function loadTextures(): Promise<GameTextures> {
   const stations: Partial<Record<StationType, Texture>> = {};
   const ducks: Texture[] = [];
   const ground: Texture[] = [];
+  const water: Texture[] = [];
   let millSails: Texture | null = null;
 
   await Promise.all([
+    ...WATER_URLS.map(async (url, i) => {
+      const t = await tryLoad(url);
+      if (t) water[i] = t;
+    }),
     ...(Object.keys(STATION_TEXTURE_URL) as StationType[]).map(async (type) => {
       const t = await tryLoad(STATION_TEXTURE_URL[type]);
       if (t) stations[type] = t;
@@ -77,7 +84,7 @@ export async function loadTextures(): Promise<GameTextures> {
     }),
   ]);
 
-  return { stations, millSails, ducks, ground };
+  return { stations, millSails, ducks, ground, water };
 }
 
 /** Stable pseudo-random ground-variant index for a tile, so it doesn't flicker. */

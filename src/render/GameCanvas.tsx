@@ -3,7 +3,7 @@ import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import { stationStatus } from '../game/actions';
 import type { GameEngine } from '../game/engine';
-import { stationAt, type Resource, type Station } from '../game/state';
+import { isPondTile, stationAt, type Resource, type Station } from '../game/state';
 import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './assets';
 
 const TILE = 56;
@@ -57,7 +57,7 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
       .init({ width: W, height: H, background: 0x2a2018, antialias: false })
       .then(async () => {
         if (disposed) return; // unmounted mid-init; cleanup will destroy.
-        let textures: GameTextures = { stations: {}, millSails: null, ducks: [], ground: [] };
+        let textures: GameTextures = { stations: {}, millSails: null, ducks: [], ground: [], water: [] };
         try {
           textures = await loadTextures();
         } catch {
@@ -82,13 +82,22 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         const fieldX0 = OX + 6, fieldX1 = OX + BALANCE.GRID.width * TILE - 6;
         const fieldY0 = OY + 6, fieldY1 = OY + BALANCE.GRID.height * TILE - 6;
 
-        // Ground: real grass tiles when available, else a flat checker.
+        // Ground: real grass tiles when available, else a flat checker. Pond
+        // tiles get animated water; the shore is drawn once around the region.
         const haveGround = textures.ground.some(Boolean);
+        const haveWater = textures.water.some(Boolean);
+        const waterTiles: Sprite[] = [];
         for (let gy = 0; gy < BALANCE.GRID.height; gy++) {
           for (let gx = 0; gx < BALANCE.GRID.width; gx++) {
             const px = OX + gx * TILE;
             const py = OY + gy * TILE;
-            if (haveGround) {
+            if (isPondTile(gx, gy) && haveWater) {
+              const tile = new Sprite(textures.water[0]);
+              tile.position.set(px, py);
+              tile.scale.set(SCALE);
+              gridLayer.addChild(tile);
+              waterTiles.push(tile);
+            } else if (haveGround) {
               const v = groundVariant(gx, gy, GROUND_URLS.length);
               const tex = textures.ground[v] ?? textures.ground.find(Boolean)!;
               const tile = new Sprite(tex);
@@ -101,6 +110,20 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
               gridLayer.addChild(g);
             }
           }
+        }
+
+        // Pond shore: a single rounded rim around the whole pond region.
+        const pond = BALANCE.POND;
+        const pondPx = { x: OX + pond.x * TILE, y: OY + pond.y * TILE, w: pond.w * TILE, h: pond.h * TILE };
+        if (haveWater) {
+          const shore = new Graphics();
+          shore
+            .roundRect(pondPx.x + 1, pondPx.y + 1, pondPx.w - 2, pondPx.h - 2, 10)
+            .stroke({ width: 3, color: 0x2a567a, alignment: 0.5 });
+          shore
+            .roundRect(pondPx.x + 4, pondPx.y + 4, pondPx.w - 8, pondPx.h - 8, 8)
+            .stroke({ width: 1, color: 0x9fd0ec, alpha: 0.35 });
+          gridLayer.addChild(shore);
         }
 
         // Click -> tile. Double-click a station -> tend it (no trip to the
@@ -169,6 +192,10 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         };
 
         let cartT = 0;
+        let waterT = 0;
+        let waterFrame = 0;
+        const inPond = (x: number, y: number) =>
+          x >= pondPx.x && x <= pondPx.x + pondPx.w && y >= pondPx.y && y <= pondPx.y + pondPx.h;
         // Cart entrance: play a one-time "arrival" when Auto-Haul unlocks this
         // session (not on load for a player who already has it).
         let prevAutoHaul = engine.state.autoHaulUnlocked;
@@ -329,10 +356,16 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
                 const dx = d.tx - d.x, dy = d.ty - d.y;
                 const dist = Math.hypot(dx, dy);
                 if (dist < 3) {
-                  // Reached target: idle a beat, then pick a new spot.
+                  // Reached target: idle a beat, then pick a new spot. A third
+                  // of the time they head for the pond (then bob/swim there).
                   d.pause = rand(0.4, 2.2);
-                  d.tx = rand(fieldX0, fieldX1);
-                  d.ty = rand(fieldY0, fieldY1);
+                  if (haveWater && Math.random() < 0.33) {
+                    d.tx = rand(pondPx.x + 8, pondPx.x + pondPx.w - 8);
+                    d.ty = rand(pondPx.y + 8, pondPx.y + pondPx.h - 8);
+                  } else {
+                    d.tx = rand(fieldX0, fieldX1);
+                    d.ty = rand(fieldY0, fieldY1);
+                  }
                 } else {
                   d.x += (dx / dist) * SPEED * dt;
                   d.y += (dy / dist) * SPEED * dt;
@@ -345,11 +378,24 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
                   }
                 }
               }
-              d.sp.position.set(d.x, d.y);
+              // Ducks sit lower (legs under the waterline) and bob when in the pond.
+              const swimming = inPond(d.x, d.y);
+              const bob = swimming ? Math.sin((waterT + d.x) * 3) * 1.5 : 0;
+              d.sp.position.set(d.x, d.y + (swimming ? 6 : 0) + bob);
               d.sp.scale.x = d.facing * DUCK_SCALE; // mirror to face travel direction
               d.sp.zIndex = d.y;
             }
             duckLayer.sortableChildren = true;
+          }
+
+          // Animate pond water (shimmer) by swapping the two water frames.
+          if (haveWater && waterTiles.length) {
+            waterT += app.ticker.deltaMS / 1000;
+            const f = Math.floor(waterT / 0.55) % 2;
+            if (f !== waterFrame) {
+              waterFrame = f;
+              for (const t of waterTiles) t.texture = textures.water[f] ?? textures.water[0];
+            }
           }
 
           // Advance floating +XP labels: rise and fade, then remove.

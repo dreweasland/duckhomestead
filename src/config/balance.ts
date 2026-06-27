@@ -16,6 +16,9 @@ export const BALANCE = {
   /** Bounded play area. Stations occupy one tile each. */
   GRID: { width: 8, height: 8 },
 
+  /** Decorative duck pond (non-buildable tiles) in a corner of the grid. */
+  POND: { x: 6, y: 6, w: 2, h: 2 },
+
   // ── Production chain ────────────────────────────────────────────────
   // Each station runs cycles. A cycle takes `cycleSeconds` and, if its
   // inputs are available, consumes inputs and emits outputs.
