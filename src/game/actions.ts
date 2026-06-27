@@ -1,5 +1,13 @@
 import { BALANCE, STATION_DEFS, type StationType } from '../config/balance';
-import { grantModule, tendCooldownMult, tendPowerMult } from './loot';
+import {
+  grantModule,
+  moduleFits,
+  rollMagnitude,
+  salvageDust,
+  slotCount,
+  tendCooldownMult,
+  tendPowerMult,
+} from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { GameState, Module, Rarity, Resource, Station } from './state';
 import { isPondTile, stationAt } from './state';
@@ -189,6 +197,64 @@ export function gainXP(state: GameState, amount: number): XpResult {
     milestones,
     grantedModules,
   };
+}
+
+// ── Modules: assign / unassign / salvage / reroll ─────────────────────
+/** Slot an inventory module into a station (must fit category + have a free slot). */
+export function assignModule(
+  state: GameState,
+  stationId: string,
+  moduleId: string,
+): ActionResult<Station> {
+  const station = state.stations.find((s) => s.id === stationId);
+  if (!station) return fail('No such station');
+  const idx = state.inventory.findIndex((m) => m.id === moduleId);
+  if (idx < 0) return fail('Module not in inventory');
+  const module = state.inventory[idx];
+  if (!moduleFits(module.stat, station.type)) return fail("Module doesn't fit this station");
+  station.modules ??= [];
+  if (station.modules.length >= slotCount(station)) return fail('No free slot');
+  state.inventory.splice(idx, 1);
+  station.modules.push(module);
+  return done(station);
+}
+
+/** Pull a module out of a station back into the inventory. */
+export function unassignModule(state: GameState, moduleId: string): ActionResult<Station> {
+  for (const station of state.stations) {
+    const idx = station.modules?.findIndex((m) => m.id === moduleId) ?? -1;
+    if (idx >= 0) {
+      const [module] = station.modules!.splice(idx, 1);
+      state.inventory.push(module);
+      return done(station);
+    }
+  }
+  return fail('Module not slotted');
+}
+
+/** Destroy an inventory module for dust (rarity-scaled). */
+export function salvageModule(state: GameState, moduleId: string): ActionResult<{ dust: number }> {
+  const idx = state.inventory.findIndex((m) => m.id === moduleId);
+  if (idx < 0) return fail('Module not in inventory');
+  const [module] = state.inventory.splice(idx, 1);
+  const dust = salvageDust(module.rarity);
+  state.dust += dust;
+  return done({ dust });
+}
+
+/** Spend dust to re-roll an inventory module's magnitude (same stat + rarity). */
+export function rerollModule(
+  state: GameState,
+  moduleId: string,
+  rng: () => number = Math.random,
+): ActionResult<Module> {
+  const module = state.inventory.find((m) => m.id === moduleId);
+  if (!module) return fail('Module not in inventory');
+  const cost = BALANCE.LOOT.REROLL_DUST_COST;
+  if (state.dust < cost) return fail(`Need ${cost} dust`);
+  state.dust -= cost;
+  module.magnitude = rollMagnitude(module.rarity, rng);
+  return done(module);
 }
 
 // ── Dose Brewer's Yeast (active-only intervention; clears a leg debuff) ──

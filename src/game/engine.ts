@@ -1,13 +1,17 @@
 import { BALANCE, type StationType } from '../config/balance';
 import {
+  assignModule,
   collectAll,
   collectStation,
   doseNiacin,
   gainXP,
   moveStation,
   placeStation,
+  rerollModule,
   removeStation,
+  salvageModule,
   tend,
+  unassignModule,
   upgradeStation,
   type ActionResult,
   type XpResult,
@@ -206,6 +210,28 @@ export class GameEngine {
       const dropped = tryTendDrop(this.state);
       if (dropped) this.emitLoot({ module: dropped, source: 'drop' });
     }
+    this.notify();
+    return r;
+  }
+
+  // ── Modules ────────────────────────────────────────────────────────
+  assignModule(stationId: string, moduleId: string): ActionResult<unknown> {
+    const r = assignModule(this.state, stationId, moduleId);
+    this.notify();
+    return r;
+  }
+  unassignModule(moduleId: string): ActionResult<unknown> {
+    const r = unassignModule(this.state, moduleId);
+    this.notify();
+    return r;
+  }
+  salvageModule(moduleId: string): ActionResult<{ dust: number }> {
+    const r = salvageModule(this.state, moduleId);
+    this.notify();
+    return r;
+  }
+  rerollModule(moduleId: string): ActionResult<unknown> {
+    const r = rerollModule(this.state, moduleId);
     this.notify();
     return r;
   }
