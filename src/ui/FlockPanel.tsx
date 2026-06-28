@@ -156,12 +156,14 @@ export function FlockPanel({
 }) {
   const [armedCull, setArmedCull] = useState<string | null>(null);
   // Sort: color (dex order) → stage (adults, then juveniles, then ducklings) →
-  // vigor (best first within each color/stage group).
+  // sex (drakes, then hens) → vigor (best first within each group).
   const colorRank = (d: Duck) => COLORS.indexOf(phenotype(d.genotype));
+  const sexRank: Record<Duck['sex'], number> = { drake: 0, hen: 1 };
   const ducks = [...state.ducks].sort(
     (a, b) =>
       colorRank(a) - colorRank(b) ||
       stageRank[a.stage] - stageRank[b.stage] ||
+      sexRank[a.sex] - sexRank[b.sex] ||
       b.vigor - a.vigor,
   );
   const cap = coopCapacity(state);
