@@ -37,7 +37,13 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
   const B = BALANCE.BREEDING;
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
   const avail = (sex: Duck['sex']) =>
-    state.ducks.filter((d) => d.sex === sex && d.stage === 'adult' && !paired(d.id));
+    state.ducks
+      .filter((d) => d.sex === sex && d.stage === 'adult' && !paired(d.id))
+      .sort(
+        (a, b) =>
+          COLORS.indexOf(phenotype(a.genotype)) - COLORS.indexOf(phenotype(b.genotype)) ||
+          b.vigor - a.vigor,
+      );
   const drakes = avail('drake');
   const hens = avail('hen');
   const byId = (id: string) => state.ducks.find((d) => d.id === id);
