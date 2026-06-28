@@ -36,26 +36,42 @@ describe('active drops', () => {
     expect(s.inventory).toHaveLength(0);
     const drop = tryTendDrop(s, () => 0.0); // below chance -> drop into a free socket
     expect(drop).not.toBeNull();
-    expect(drop!.kept).toBe(true);
+    expect(drop!.outcome).toBe('keep');
     expect(s.inventory).toHaveLength(1);
   });
 
-  it('auto-salvages a drop that cannot improve a full rack (no spare pile)', () => {
+  it('auto-salvages only a drop a perfect reroll could never promote', () => {
     const s = build({ plot: 1 });
     s.rank = 1; // 3 sockets
-    // Fill the rack with maxed legendaries so a common drop can never improve it.
+    // Maxed legendaries: a common's band ceiling (0.10) can't beat 0.50 — true junk.
     s.rack = [
       { id: 'k1', stat: 'stationSpeed', rarity: 'legendary', magnitude: 0.5 },
       { id: 'k2', stat: 'stationYield', rarity: 'legendary', magnitude: 0.5 },
       { id: 'k3', stat: 'eggOutput', rarity: 'legendary', magnitude: 0.5 },
     ];
     const dust0 = s.dust;
-    const drop = tryTendDrop(s, () => 0); // common stationSpeed +0.05 — can't beat the rack
-    expect(drop).not.toBeNull();
-    expect(drop!.kept).toBe(false);
+    const drop = tryTendDrop(s, () => 0); // common stationSpeed +0.05
+    expect(drop!.outcome).toBe('salvaged');
     expect(drop!.dust).toBe(BALANCE.LOOT.SALVAGE_DUST.common);
     expect(s.inventory).toHaveLength(0); // nothing piled up
     expect(s.dust).toBe(dust0 + BALANCE.LOOT.SALVAGE_DUST.common);
+  });
+
+  it('keeps a reroll candidate (potential) rather than salvaging it', () => {
+    const s = build({ plot: 1 });
+    s.rank = 1; // 3 sockets
+    // Rack of weak commons: a common drop can't win NOW, but its band ceiling
+    // (0.10) could beat the installed 0.06 — so it must be kept, not salvaged.
+    s.rack = [
+      { id: 'k1', stat: 'stationSpeed', rarity: 'common', magnitude: 0.06 },
+      { id: 'k2', stat: 'stationYield', rarity: 'common', magnitude: 0.06 },
+      { id: 'k3', stat: 'eggOutput', rarity: 'common', magnitude: 0.06 },
+    ];
+    const dust0 = s.dust;
+    const drop = tryTendDrop(s, () => 0); // common stationSpeed +0.05 (not an upgrade NOW)
+    expect(drop!.outcome).toBe('potential');
+    expect(s.inventory).toHaveLength(1); // kept for rerolling
+    expect(s.dust).toBe(dust0); // not salvaged
   });
 
   it('engine.tend emits a loot event when a drop fires', () => {

@@ -127,6 +127,7 @@ export function ModulesPanel({
               const outlook = spareOutlook(state, m);
               const installable = outlook.kind === 'install';
               const upgrade = outlook.kind === 'upgrade';
+              const potential = outlook.kind === 'potential';
               return (
                 <div key={m.id} className="flex flex-col gap-1 rounded-md bg-[#1f1812] p-2">
                   <div className="flex items-center gap-2">
@@ -169,8 +170,10 @@ export function ModulesPanel({
                         </>
                       ) : upgrade ? (
                         <span className="text-[#e8c45a]">↑ upgrade for {STAT_META[m.stat].scope}</span>
+                      ) : potential ? (
+                        <span className="text-[#b9a3e8]">↻ reroll could make it an upgrade</span>
                       ) : (
-                        <span className="text-[#5a4d3a]">affects {STAT_META[m.stat].scope}</span>
+                        <span className="text-[#5a4d3a]">dominated · safe to salvage</span>
                       )}
                     </span>
                     <span className="flex items-center gap-1.5">

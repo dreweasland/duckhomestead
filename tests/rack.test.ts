@@ -86,23 +86,33 @@ describe('Auto-fill optimizer', () => {
 });
 
 describe('install / swap / uninstall flow + outlook', () => {
-  it('spareOutlook reports install when a socket is free, upgrade/none when full', () => {
+  it('spareOutlook: install (free socket), upgrade/potential/none when full', () => {
     const s = build({});
     s.rank = 1; // 3 sockets
     const a = mod('eggOutput', 'rare', 0.2);
     s.inventory.push(a);
     expect(spareOutlook(s, a).kind).toBe('install');
 
-    // Fill the rack with weak modules.
+    // Full rack of weak commons.
     s.rack = [
-      mod('tendCooldown', 'common', 0.06),
-      mod('tendCooldown', 'common', 0.06),
-      mod('tendCooldown', 'common', 0.06),
+      mod('stationSpeed', 'common', 0.06),
+      mod('stationYield', 'common', 0.06),
+      mod('eggOutput', 'common', 0.06),
     ];
     const strong = mod('eggOutput', 'legendary', 0.5);
-    const weakSpare = mod('tendCooldown', 'common', 0.05);
-    expect(spareOutlook(s, strong).kind).toBe('upgrade'); // beats a weak installed
-    expect(spareOutlook(s, weakSpare).kind).toBe('none'); // wouldn't improve the loadout
+    expect(spareOutlook(s, strong).kind).toBe('upgrade'); // beats a weak installed now
+
+    // A common that can't win now but whose band ceiling (0.10 > 0.06) could -> potential.
+    const rerollable = mod('stationSpeed', 'common', 0.05);
+    expect(spareOutlook(s, rerollable).kind).toBe('potential');
+
+    // Against a maxed-legendary rack, a common is dominated for good -> none.
+    s.rack = [
+      mod('stationSpeed', 'legendary', 0.5),
+      mod('stationYield', 'legendary', 0.5),
+      mod('eggOutput', 'legendary', 0.5),
+    ];
+    expect(spareOutlook(s, rerollable).kind).toBe('none');
   });
 
   it('swapInModule installs into a free socket, then swaps in once full', () => {

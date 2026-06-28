@@ -320,8 +320,9 @@ export class GameEngine {
       // and offline production never call this. A keeper fires the loot banner; a
       // non-upgrade was auto-salvaged to dust (quiet beat).
       const drop = tryTendDrop(this.state);
-      if (drop?.kept) this.emitLoot({ module: drop.module, source: 'drop' });
-      else if (drop) this.emitAutosalvage(drop.dust);
+      if (drop?.outcome === 'keep') this.emitLoot({ module: drop.module, source: 'drop' });
+      else if (drop?.outcome === 'salvaged') this.emitAutosalvage(drop.dust);
+      // 'potential' lands quietly in spares — a reroll project, not a banner moment.
     }
     this.notify();
     return r;
@@ -346,8 +347,8 @@ export class GameEngine {
       this.emitTend({ stationId: s.id, xp: r.value.xp.xpGained });
       this.fireXp(r.value.xp);
       const drop = tryTendDrop(this.state);
-      if (drop?.kept) this.emitLoot({ module: drop.module, source: 'drop' });
-      else if (drop) salvaged += drop.dust;
+      if (drop?.outcome === 'keep') this.emitLoot({ module: drop.module, source: 'drop' });
+      else if (drop?.outcome === 'salvaged') salvaged += drop.dust;
     }
     if (salvaged > 0) this.emitAutosalvage(salvaged);
     this.notify();

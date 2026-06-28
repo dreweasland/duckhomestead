@@ -106,25 +106,41 @@ export function installMarginal(state: GameState, m: Module): number {
 
 export type SpareOutlook =
   | { kind: 'install'; gain: number } // a socket is free
-  | { kind: 'upgrade'; gain: number; replace: Module } // rack full, but swapping in helps
-  | { kind: 'none' }; // rack full and it wouldn't improve the loadout
+  | { kind: 'upgrade'; gain: number; replace: Module } // rack full, but swapping in helps NOW
+  | { kind: 'potential'; replace: Module } // not now, but a max reroll (same band) could
+  | { kind: 'none' }; // rack full and even a perfect reroll couldn't help — true junk
 
-/** What installing this spare would do right now: fill a socket, beat the weakest
- *  installed module (one-click swap), or nothing. Powers the "which is an upgrade"
- *  hints + the install/swap button. */
-export function spareOutlook(state: GameState, spare: Module): SpareOutlook {
-  if (state.rack.length < rackSockets(state)) {
-    return { kind: 'install', gain: statValue(spare.stat) * installMarginal(state, spare) };
-  }
+/** Best strictly-improving swap for a (hypothetical) module against the full rack. */
+function bestSwap(state: GameState, mod: Module): { gain: number; replace: Module } | null {
   const base = rackScore(state.rack);
   let best: { gain: number; replace: Module } | null = null;
   for (let i = 0; i < state.rack.length; i++) {
     const cand = state.rack.slice();
-    cand[i] = spare;
+    cand[i] = mod;
     const gain = rackScore(cand) - base;
     if (gain > (best?.gain ?? 1e-9)) best = { gain, replace: state.rack[i] };
   }
-  return best ? { kind: 'upgrade', gain: best.gain, replace: best.replace } : { kind: 'none' };
+  return best;
+}
+
+/**
+ * What this spare can do for the rack: fill a free socket, swap in as an upgrade
+ * NOW, become an upgrade if rerolled to its rarity-band ceiling ('potential'), or
+ * nothing ('none' — even a perfect reroll can't beat the loadout, so it's safe to
+ * salvage). Reroll is locked to the same rarity band, so band-max is the true
+ * ceiling. Powers the "which is an upgrade" hints AND the auto-salvage gate.
+ */
+export function spareOutlook(state: GameState, spare: Module): SpareOutlook {
+  if (state.rack.length < rackSockets(state)) {
+    return { kind: 'install', gain: statValue(spare.stat) * installMarginal(state, spare) };
+  }
+  const now = bestSwap(state, spare);
+  if (now) return { kind: 'upgrade', gain: now.gain, replace: now.replace };
+  // Could a best-case reroll (this module maxed within its band) make it worth a socket?
+  const maxed: Module = { ...spare, magnitude: L.RARITY_BAND[spare.rarity][1] };
+  const potential = maxed.magnitude > spare.magnitude ? bestSwap(state, maxed) : null;
+  if (potential) return { kind: 'potential', replace: potential.replace };
+  return { kind: 'none' };
 }
 
 // ── Rolls (RNG injectable for deterministic tests) ──────────────────────
@@ -154,32 +170,32 @@ export function makeModule(state: GameState, rarity: Rarity, rng: Rng = Math.ran
 
 export interface TendDrop {
   module: Module;
-  /** True ⇒ the drop could improve the rack and was kept as a spare. False ⇒ it
-   *  couldn't improve the loadout and was auto-salvaged straight to dust. */
-  kept: boolean;
-  /** Dust granted when auto-salvaged (0 when kept). */
+  /** 'keep' ⇒ an install/upgrade kept as a spare (loot banner). 'potential' ⇒ not
+   *  an upgrade now but a max reroll could promote it — kept quietly. 'salvaged' ⇒
+   *  even a perfect reroll can't beat the loadout, so auto-salvaged to dust. */
+  outcome: 'keep' | 'potential' | 'salvaged';
+  /** Dust granted when auto-salvaged (0 otherwise). */
   dust: number;
 }
 
 /**
- * Active drop on a tend: chance gate, then a weighted rarity roll. Because the
- * rack is small, a drop that can't improve your loadout (install into a free
- * socket OR swap in for a weaker installed module) is AUTO-SALVAGED to dust
- * instead of cluttering the spares — so the pile only ever holds real
- * candidates. Returns the drop (kept or salvaged), or null on a miss.
- * Online-only by construction — offline never tends, so it never calls this.
+ * Active drop on a tend: chance gate, then a weighted rarity roll. A drop is only
+ * AUTO-SALVAGED when even a perfect reroll (its rarity-band ceiling) couldn't make
+ * it improve the rack — so reroll option-value is never thrown away. Upgrades land
+ * as spares with a banner; reroll-candidates land quietly. Returns the drop, or
+ * null on a miss. Online-only — offline never tends, so it never calls this.
  */
 export function tryTendDrop(state: GameState, rng: Rng = Math.random): TendDrop | null {
   if (rng() >= L.TEND_DROP_CHANCE) return null;
   const module = makeModule(state, rollRarity(rng), rng);
   const outlook = spareOutlook(state, module);
-  if (outlook.kind === 'install' || outlook.kind === 'upgrade') {
-    state.inventory.push(module);
-    return { module, kept: true, dust: 0 };
+  if (outlook.kind === 'none') {
+    const dust = salvageDust(module.rarity);
+    state.dust += dust;
+    return { module, outcome: 'salvaged', dust };
   }
-  const dust = salvageDust(module.rarity);
-  state.dust += dust;
-  return { module, kept: false, dust };
+  state.inventory.push(module);
+  return { module, outcome: outlook.kind === 'potential' ? 'potential' : 'keep', dust: 0 };
 }
 
 /** Guaranteed milestone grant of a fixed rarity (random stat/magnitude). */
