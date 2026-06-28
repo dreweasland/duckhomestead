@@ -205,23 +205,6 @@ export function FlockPanel({
           </div>
         </div>
 
-        {/* Dex — colors collected so far */}
-        <div className="mb-3 flex items-center gap-2 rounded-md bg-[#1f1812] px-3 py-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">Dex</span>
-          {COLORS.map((c) => {
-            const have = state.dexSeen.includes(c);
-            return (
-              <span
-                key={c}
-                className={`flex items-center gap-1 text-[11px] ${have ? 'text-[#f5ecd8]' : 'text-[#5a4d3a] opacity-50'}`}
-              >
-                <ColorSwatch color={c} size={12} />
-                {COLOR_META[c].label}
-              </span>
-            );
-          })}
-        </div>
-
         {state.ducks.length > 0 && <Breeding engine={engine} state={state} />}
 
         {state.ducks.length === 0 ? (
@@ -230,17 +213,19 @@ export function FlockPanel({
           </div>
         ) : (
           <>
-            {/* Color tabs — black / blue / splash */}
+            {/* Color tabs — also the dex: undiscovered colors read dimmed. */}
             <div className="mb-2 flex gap-1">
               {COLORS.map((c) => {
                 const active = c === colorTab;
+                const seen = state.dexSeen.includes(c);
                 return (
                   <button
                     key={c}
                     onClick={() => setColorTab(c)}
+                    title={seen ? `${COLOR_META[c].label} — ${colorCounts[c]} in flock` : `${COLOR_META[c].label} — not yet bred`}
                     className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition ${
                       active ? 'bg-[#3a2e22] ring-1 ring-[#5a4a32]' : 'bg-[#1f1812] hover:bg-[#33271c]'
-                    }`}
+                    } ${seen ? '' : 'opacity-45'}`}
                   >
                     <ColorSwatch color={c} size={11} />
                     <span className={active ? 'text-[#f5ecd8]' : 'text-[#9a8a6a]'}>{COLOR_META[c].label}</span>
