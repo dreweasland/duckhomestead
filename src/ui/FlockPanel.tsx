@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
+import { expectedVigor, populationMeanVigor } from '../game/genetics';
 import { COLORS, coopCapacity, phenotype, type Color, type Duck, type GameState } from '../game/state';
 import { playPlace } from '../audio/sfx';
 import { CloseIcon } from './icons';
@@ -52,21 +53,33 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
         if (!dr || !he) return null;
         const next = Math.max(0, B.CLUTCH_INTERVAL_S - p.clutchProgress);
         const soonest = p.incubating.length ? Math.max(0, B.INCUBATE_S - Math.max(...p.incubating)) : 0;
+        // Expected offspring vigor (regression toward the live flock mean) so the
+        // player can see whether this cross lifts or drags the line.
+        const popMean = populationMeanVigor(state);
+        const exp = expectedVigor(dr.vigor, he.vigor, popMean);
+        const lifts = exp >= popMean;
         return (
-          <div key={p.id} className="mb-1 flex items-center gap-1.5 text-[11px]">
-            <ColorSwatch color={phenotype(dr.genotype)} size={11} />
-            <span className="text-[#7a6a4a]">×</span>
-            <ColorSwatch color={phenotype(he.genotype)} size={11} />
-            <span className="text-[#9a8a6a]">
+          <div key={p.id} className="mb-1.5 rounded bg-[#171009] px-2 py-1.5">
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <ColorSwatch color={phenotype(dr.genotype)} size={11} />
+              <span className="tabular-nums text-[#ffe9a8]">×{dr.vigor.toFixed(2)}</span>
+              <span className="text-[#7a6a4a]">×</span>
+              <ColorSwatch color={phenotype(he.genotype)} size={11} />
+              <span className="tabular-nums text-[#ffe9a8]">×{he.vigor.toFixed(2)}</span>
+              <span className="ml-1 text-[#7a6a4a]" title={`Expected offspring vigor, regressing toward the flock mean of ×${popMean.toFixed(2)}`}>
+                → <span className="tabular-nums font-bold" style={{ color: lifts ? '#8fe388' : '#e8a35a' }}>~×{exp.toFixed(2)}</span>
+              </span>
+              <button
+                onClick={() => engine.unpair(p.id)}
+                className="ml-auto rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
+              >
+                unpair
+              </button>
+            </div>
+            <div className="mt-0.5 text-[10px] text-[#9a8a6a]">
               clutch {Math.ceil(next)}s
               {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
-            </span>
-            <button
-              onClick={() => engine.unpair(p.id)}
-              className="ml-auto rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
-            >
-              unpair
-            </button>
+            </div>
           </div>
         );
       })}

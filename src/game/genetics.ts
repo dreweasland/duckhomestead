@@ -22,12 +22,25 @@ export function populationMeanVigor(state: GameState): number {
  * contradicting the constraint's own "regression toward the mean / never
  * compounding" intent. Implemented the standard regression form to match intent.
  */
+const clampVigor = (v: number): number =>
+  Math.max(BALANCE.BREEDING.VIGOR_FLOOR, Math.min(BALANCE.BREEDING.VIGOR_CEILING, v));
+
+/** The regression core (unclamped, noiseless): popMean + H2·(midparent − popMean). */
+const regressVigor = (a: number, b: number, popMean: number): number =>
+  popMean + BALANCE.BREEDING.H2 * ((a + b) / 2 - popMean);
+
+/**
+ * Deterministic EXPECTED offspring vigor for a pairing (regression, no noise),
+ * clamped — what a cross will average toward. Powers the breeding-pair preview
+ * so the player can see whether a pairing lifts or drags the line.
+ */
+export function expectedVigor(a: number, b: number, popMean: number): number {
+  return clampVigor(regressVigor(a, b, popMean));
+}
+
 export function breedVigor(a: number, b: number, popMean: number, rng: Rng = Math.random): number {
-  const B = BALANCE.BREEDING;
-  const mid = (a + b) / 2;
-  const noise = (rng() * 2 - 1) * B.VIGOR_NOISE;
-  const v = popMean + B.H2 * (mid - popMean) + noise;
-  return Math.max(B.VIGOR_FLOOR, Math.min(B.VIGOR_CEILING, v));
+  const noise = (rng() * 2 - 1) * BALANCE.BREEDING.VIGOR_NOISE;
+  return clampVigor(regressVigor(a, b, popMean) + noise);
 }
 
 /** Roll a seed-flock vigor uniformly in the configured seed range. */
