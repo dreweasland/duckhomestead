@@ -1,7 +1,7 @@
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { salvageDust } from '../game/loot';
-import type { GameState } from '../game/state';
+import { MODULE_STATS, type GameState } from '../game/state';
 import { playCollect, playUpgrade } from '../audio/sfx';
 import { CloseIcon } from './icons';
 import { ModuleChip, rarityRank } from './lootUi';
@@ -15,7 +15,13 @@ export function ModulesPanel({
   state: GameState;
   onClose: () => void;
 }) {
-  const inventory = [...state.inventory].sort((a, b) => rarityRank[a.rarity] - rarityRank[b.rarity]);
+  // Sort: module type (stat) → rarity (best first) → magnitude (strongest first).
+  const inventory = [...state.inventory].sort(
+    (a, b) =>
+      MODULE_STATS.indexOf(a.stat) - MODULE_STATS.indexOf(b.stat) ||
+      rarityRank[b.rarity] - rarityRank[a.rarity] ||
+      b.magnitude - a.magnitude,
+  );
   const rerollCost = BALANCE.LOOT.REROLL_DUST_COST;
 
   return (
