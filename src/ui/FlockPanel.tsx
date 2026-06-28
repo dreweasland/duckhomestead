@@ -69,9 +69,11 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
           <div key={p.id} className="mb-1.5 rounded bg-[#171009] px-2 py-1.5">
             <div className="flex items-center gap-1.5 text-[11px]">
               <ColorSwatch color={phenotype(dr.genotype)} size={11} />
+              <span className="text-[#9a8a6a]">{dr.sex}</span>
               <span className="tabular-nums text-[#ffe9a8]">×{dr.vigor.toFixed(2)}</span>
-              <span className="text-[#7a6a4a]">×</span>
+              <span className="text-[#5a4d3a]">·</span>
               <ColorSwatch color={phenotype(he.genotype)} size={11} />
+              <span className="text-[#9a8a6a]">{he.sex}</span>
               <span className="tabular-nums text-[#ffe9a8]">×{he.vigor.toFixed(2)}</span>
               <span className="ml-1 text-[#7a6a4a]" title={`Expected offspring vigor, regressing toward the flock mean of ×${popMean.toFixed(2)}`}>
                 → <span className="tabular-nums font-bold" style={{ color: lifts ? '#8fe388' : '#e8a35a' }}>~×{exp.toFixed(2)}</span>
@@ -174,6 +176,16 @@ export function FlockPanel({
   );
   const cap = coopCapacity(state);
 
+  // Tab the flock by color. Counts per color drive the tab badges; open on the
+  // color you have the most of. The sorted `ducks` filtered to a color is already
+  // in stage → sex → vigor order.
+  const colorCounts: Record<Color, number> = { black: 0, blue: 0, splash: 0 };
+  for (const d of state.ducks) colorCounts[phenotype(d.genotype)]++;
+  const [colorTab, setColorTab] = useState<Color>(
+    () => [...COLORS].sort((a, b) => colorCounts[b] - colorCounts[a])[0] ?? 'blue',
+  );
+  const shown = ducks.filter((d) => phenotype(d.genotype) === colorTab);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
@@ -217,16 +229,36 @@ export function FlockPanel({
             No ducks yet — build a Coop to house your starting flock.
           </div>
         ) : (
-          <div className="flex flex-col gap-1">
-            {ducks.map((d) => {
-              const color = phenotype(d.genotype);
-              return (
-                <div key={d.id} className="flex items-center gap-2 rounded-md bg-[#1f1812] px-2.5 py-1.5 text-[11px]">
-                  <ColorSwatch color={color} />
-                  <span className="w-12 font-bold" style={{ color: COLOR_META[color].swatch === '#33333c' ? '#9aa0a8' : COLOR_META[color].swatch }}>
-                    {COLOR_META[color].label}
-                  </span>
-                  <span className="w-10 text-[#c9b88f]">{d.sex}</span>
+          <>
+            {/* Color tabs — black / blue / splash */}
+            <div className="mb-2 flex gap-1">
+              {COLORS.map((c) => {
+                const active = c === colorTab;
+                return (
+                  <button
+                    key={c}
+                    onClick={() => setColorTab(c)}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition ${
+                      active ? 'bg-[#3a2e22] ring-1 ring-[#5a4a32]' : 'bg-[#1f1812] hover:bg-[#33271c]'
+                    }`}
+                  >
+                    <ColorSwatch color={c} size={11} />
+                    <span className={active ? 'text-[#f5ecd8]' : 'text-[#9a8a6a]'}>{COLOR_META[c].label}</span>
+                    <span className="tabular-nums text-[#7a6a4a]">{colorCounts[c]}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {shown.length === 0 ? (
+              <div className="py-6 text-center text-sm text-[#9a8a6a]">
+                No {COLOR_META[colorTab].label.toLowerCase()} ducks yet.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {shown.map((d) => (
+                    <div key={d.id} className="flex items-center gap-2 rounded-md bg-[#1f1812] px-2.5 py-1.5 text-[11px]">
+                      <span className="w-10 text-[#c9b88f]">{d.sex}</span>
                   <span className="w-20 text-[#9a8a6a]">
                     {STAGE_LABEL[d.stage]}
                     {d.stage !== 'adult' && (
@@ -264,10 +296,11 @@ export function FlockPanel({
                   >
                     {armedCull === d.id ? 'sure?' : 'release'}
                   </button>
-                </div>
-              );
-            })}
-          </div>
+                    </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
