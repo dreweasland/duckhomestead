@@ -71,6 +71,19 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
     for (const axis of AXES) supply[axis] += rate * (vals[axis] ?? 0);
   }
 
+  // Phase 4b: free-range forage is pure-ENERGY feed (zone signature), auto-eaten
+  // from shared storage to fill ONLY the flock's energy gap — never protein /
+  // niacin / calcium. It's non-scaling at the source, so it's self-diminishing
+  // as the flock grows; excess stays banked. The throttle / satisfaction /
+  // condition math below is unchanged — it just sees more energy supplied. (When
+  // no forage is stocked this is a no-op, so the Phase 2 math is byte-for-byte.)
+  const energyReqRate = (N.REQUIREMENT.energy * layerCount) / coopCycle;
+  const forageEat = Math.min(Math.max(0, energyReqRate - supply.energy) * step, state.resources.forage);
+  if (forageEat > 0) {
+    state.resources.forage -= forageEat;
+    supply.energy += step > 0 ? forageEat / step : 0;
+  }
+
   // Requirement (rate) + satisfaction. The instantaneous ratio is noisy (chunky
   // production vs continuous eating), so smooth it with an EMA — the bars and
   // throttle then read steady and only move when a line genuinely can't keep up.

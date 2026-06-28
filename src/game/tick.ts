@@ -1,4 +1,4 @@
-import { BALANCE, STATION_DEFS } from '../config/balance';
+import { BALANCE, STATION_DEFS, ZONE_DEFS } from '../config/balance';
 import type { Resource } from './state';
 import type { GameState, Station } from './state';
 import { UPGRADE_OUTPUT } from './actions';
@@ -22,6 +22,26 @@ export interface TickOptions {
 function stationOutput(station: Station, resource: Resource): number {
   const base = STATION_DEFS[station.type].outputs[resource] ?? 0;
   return base * UPGRADE_OUTPUT(station.level) * yieldMult(station);
+}
+
+/**
+ * Phase 4b free-range forage: every unlocked zone with a forage node drips a
+ * FLAT, non-scaling energy feed into shared storage (the `forage` resource,
+ * consumed as pure energy by the nutrition grid). Runs online & offline (at the
+ * offline rate via `rateMult`); grants NO XP and NO modules — it's not a station.
+ */
+function runForage(state: GameState, dt: number, rateMult: number): void {
+  for (const zone of ZONE_DEFS) {
+    if (!zone.forage) continue;
+    const zs = state.zones[zone.id];
+    if (!zs?.unlocked) continue;
+    zs.forageProgress += dt * rateMult;
+    let guard = 100000;
+    while (zs.forageProgress >= zone.forage.cycleSeconds && guard-- > 0) {
+      zs.forageProgress -= zone.forage.cycleSeconds;
+      state.resources.forage += zone.forage.energyPerCycle;
+    }
+  }
 }
 
 /** Move everything in a station's buffer into central storage. */
@@ -115,6 +135,10 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   if (state.doseCooldownRemaining > 0) {
     state.doseCooldownRemaining = Math.max(0, state.doseCooldownRemaining - dt);
   }
+
+  // Free-range forage (zone signature): drip flat energy feed into storage so
+  // it's available to the nutrition grid this same step.
+  runForage(state, dt, rateMult);
 
   // The nutrition grid: feed the flock from storage per the active ration and
   // lay eggs throttled by per-axis satisfaction (buffered by flock condition).
