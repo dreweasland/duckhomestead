@@ -62,6 +62,9 @@ export function deserialize(raw: string, now: number): GameState {
     if (result.ducks.length === 0 && result.stations.some((s) => s.type === 'coop')) {
       seedFlock(result);
     }
+    // Back-derive milestone unlocks from rank so a save from before the milestone
+    // existed gets it immediately (not only on the next rank-up).
+    if (result.rank >= BALANCE.MILESTONE_TENDALL_RANK) result.tendAllUnlocked = true;
     return result;
   } catch {
     return base;

@@ -16,16 +16,23 @@ export interface Milestone {
   title: string;
   description: string;
   /** Picks the banner icon. Defaults to the Auto-Haul cart. */
-  kind?: 'autohaul' | 'zone';
+  kind?: 'autohaul' | 'zone' | 'tend';
 }
 
-/** Milestones earned at given ranks. Phase 1 has one: the Auto-Haul Cart. */
+/** Milestones earned at given ranks. */
 export const MILESTONES: Milestone[] = [
   {
     rank: BALANCE.MILESTONE_AUTOHAUL_RANK,
     title: 'Auto-Haul Cart',
     description:
       'A cart now hauls every station’s output straight to central storage. No more manual collecting!',
+  },
+  {
+    rank: BALANCE.MILESTONE_TENDALL_RANK,
+    title: 'Tending Whistle',
+    description:
+      'One whistle tends every ready station at once — no more round-robin clicking, and a full sweep buys a real breather.',
+    kind: 'tend',
   },
 ];
 

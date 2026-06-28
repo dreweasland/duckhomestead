@@ -210,6 +210,7 @@ export function gainXP(state: GameState, amount: number): XpResult {
     if (m) {
       milestones.push(m);
       if (state.rank >= BALANCE.MILESTONE_AUTOHAUL_RANK) state.autoHaulUnlocked = true;
+      if (state.rank >= BALANCE.MILESTONE_TENDALL_RANK) state.tendAllUnlocked = true;
     }
     const grantRarity = BALANCE.LOOT.MILESTONE_GRANTS[state.rank];
     if (grantRarity) grantedModules.push(grantModule(state, grantRarity as Rarity));

@@ -207,6 +207,14 @@ export const BALANCE = {
   // ── Milestones ──────────────────────────────────────────────────────
   /** Rank at which the Auto-Haul Cart unlocks (auto-collect output). */
   MILESTONE_AUTOHAUL_RANK: 5,
+  /**
+   * Rank at which the Tending Whistle unlocks: a "Tend All" sweep that tends
+   * every ready station at once. Per-station tending is the tactile early loop;
+   * once the homestead is big enough that round-robin clicking is a chore, the
+   * whistle collapses it to one click AND re-syncs every cooldown so a sweep
+   * buys a real ~TEND_COOLDOWN_S breather. Tune later than Auto-Haul.
+   */
+  MILESTONE_TENDALL_RANK: 8,
 
   // ── Phase 4b: zones (data-driven; see ZONE_DEFS below) ──────────────
   ZONES: {

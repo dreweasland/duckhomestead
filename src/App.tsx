@@ -14,6 +14,7 @@ import { DingBanner } from './ui/DingBanner';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { FlockPanel } from './ui/FlockPanel';
 import { HUD } from './ui/HUD';
+import { TendIcon } from './ui/icons';
 import { LootBanner } from './ui/LootBanner';
 import { ModulesPanel } from './ui/ModulesPanel';
 import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
@@ -71,6 +72,7 @@ export default function App() {
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
   const anyBuffer = state.stations.some((s) => Object.values(s.buffer).some((v) => (v ?? 0) > 0));
+  const readyToTend = state.stations.filter((s) => s.tendCooldownRemaining === 0).length;
 
   // Onboarding nudge for the pre-placed starter: the Coop is already laying but
   // short on protein + calcium. Point at the first meaningful build, then
@@ -226,6 +228,22 @@ export default function App() {
               }`}
             >
               Collect All — haul every station to storage
+            </button>
+          )}
+          {state.tendAllUnlocked && state.stations.length > 0 && (
+            <button
+              onClick={() => {
+                if (engine.tendAll().tended > 0) playTend();
+              }}
+              disabled={readyToTend === 0}
+              className={`flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold transition ${
+                readyToTend > 0
+                  ? 'bg-[#2e6b3a] text-[#dfffd6] hover:bg-[#367a44]'
+                  : 'cursor-not-allowed bg-[#1f1812] text-[#6a5a3a]'
+              }`}
+            >
+              <TendIcon size={16} />
+              {readyToTend > 0 ? `Tend All — ${readyToTend} ready` : 'All tended — cooling down'}
             </button>
           )}
           <BuildBar state={state} buildType={buildType} onPick={setBuildType} />

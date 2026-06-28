@@ -176,6 +176,8 @@ export interface GameState {
 
   // Milestones / unlocks
   autoHaulUnlocked: boolean;
+  /** Tending Whistle: the "Tend All" sweep (unlocks at MILESTONE_TENDALL_RANK). */
+  tendAllUnlocked: boolean;
 
   // ── Phase 2: nutrition ──
   /** Active layer ration: units of each ingredient fed per adult duck per cycle. */
@@ -252,6 +254,7 @@ export function initialState(now: number): GameState {
     rank: 1,
     xp: 0,
     autoHaulUnlocked: false,
+    tendAllUnlocked: false,
     ration: { ...BALANCE.NUTRITION.DEFAULT_RATION },
     ducklingRation: { ...BALANCE.BREEDING.DEFAULT_DUCKLING_RATION },
     condition: BALANCE.NUTRITION.CONDITION_MAX,

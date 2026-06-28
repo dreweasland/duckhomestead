@@ -264,6 +264,28 @@ export class GameEngine {
     return r;
   }
 
+  /**
+   * Tending Whistle: tend every ready station in one sweep (same per-station XP,
+   * burst, and loot rolls as manual tending — just batched). Because each tended
+   * station goes on a fresh cooldown, a full sweep re-syncs them into a real
+   * breather. Returns how many stations were tended.
+   */
+  tendAll(): { tended: number } {
+    let tended = 0;
+    for (const s of [...this.state.stations]) {
+      if (s.tendCooldownRemaining > 0) continue;
+      const r = tend(this.state, s.id);
+      if (!r.ok) continue;
+      tended++;
+      this.emitTend({ stationId: s.id, xp: r.value.xp.xpGained });
+      this.fireXp(r.value.xp);
+      const dropped = tryTendDrop(this.state);
+      if (dropped) this.emitLoot({ module: dropped, source: 'drop' });
+    }
+    this.notify();
+    return { tended };
+  }
+
   // ── Modules ────────────────────────────────────────────────────────
   assignModule(stationId: string, moduleId: string): ActionResult<unknown> {
     const r = assignModule(this.state, stationId, moduleId);

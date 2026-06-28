@@ -184,6 +184,15 @@ export const PeaIcon = (p: PixProps) => (
   />
 );
 
+/** Tending Whistle / Tend All — a bright sparkle (the tend "burst" beat). */
+export const TendIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ g: '#8fe388', h: '#d6ffcf' }}
+    rows={['..h..', '..g..', 'hgggh', '..g..', '..h..']}
+  />
+);
+
 export const ForageIcon = (p: PixProps) => (
   <Pix
     {...p}
