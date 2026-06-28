@@ -1,6 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
-import { conditionRegenMult, globalBonus, millThroughputMult } from './loot';
+import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { adultLayers, AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
 
 const N = BALANCE.NUTRITION;
@@ -51,7 +51,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // and yield modules raise it. The requirement/matrix/satisfaction math below
   // is untouched by modules.
   const capacity =
-    mills.reduce((a, m) => a + UPGRADE_OUTPUT(m.level) * millThroughputMult(m), 0) * N.MILL_CAPACITY;
+    mills.reduce((a, m) => a + UPGRADE_OUTPUT(m.level), 0) * N.MILL_CAPACITY * millThroughputMult(state);
   const wantRate: Record<string, number> = {};
   let totalWant = 0;
   for (const ing of INGREDIENTS) {
@@ -166,7 +166,7 @@ function layNutritionTail(
     const wound = hen.wounded ? BALANCE.PREDATORS.WOUND_OUTPUT_MULT : 1;
     flockRate += (BALANCE.COOP.eggPerCycle / coopCycle) * hen.vigor * debuff * wound;
   }
-  const eggModuleMult = 1 + globalBonus(state, 'eggOutput'); // coop modules buff the flock
+  const eggModuleMult = eggOutputMult(state); // rack eggOutput modules buff the flock
   const eggsThisStep = flockRate * eggMult * eggModuleMult * step;
   // Deposit into coop buffers (split evenly) so Collect / Auto-Haul / the buffer
   // chips keep working unchanged. Coops are the flock's collection points.

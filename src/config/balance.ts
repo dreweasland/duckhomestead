@@ -311,7 +311,31 @@ export const BALANCE = {
   // matrix, or the satisfaction/throttle math — only production throughput,
   // egg output, condition regen, and tend levers. See game/loot.ts.
   LOOT: {
-    SLOTS_PER_STATION: 2,
+    /**
+     * The homestead MODULE RACK (Phase 3 rework): modules are no longer slotted
+     * per-tile — they install into ONE homestead-wide rack and each applies to
+     * its whole category (all producers / the flock / tending). Sockets are
+     * scarce and grow with rank, so the choice is "which few modules to run",
+     * not per-tile babysitting. Stacking is still governed by SOFT_CAP per stat.
+     */
+    RACK: {
+      baseSockets: 3, // sockets at rank 1
+      ranksPerSocket: 4, // +1 socket every this many ranks
+      maxSockets: 8, // hard ceiling
+    },
+    /**
+     * Relative value weight per stat for the Auto-fill optimizer — what to prefer
+     * when sockets are scarce (egg output earns most). PURE assist heuristic: it
+     * only orders the optimizer's choices and never touches the sim math.
+     */
+    STAT_VALUE: {
+      eggOutput: 1.5,
+      stationSpeed: 1.0,
+      stationYield: 1.0,
+      conditionRegen: 0.6,
+      tendPower: 0.6,
+      tendCooldown: 0.6,
+    } as Record<string, number>,
     /** Per-stat soft cap for diminishing returns: applied = cap*(1 - e^(-rawSum/cap)). */
     SOFT_CAP: {
       stationSpeed: 0.6,

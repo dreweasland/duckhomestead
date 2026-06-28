@@ -1,6 +1,6 @@
 import { BALANCE, type StationType } from '../config/balance';
 import {
-  assignModule,
+  autoFillRack,
   buildDeterrent,
   buildSecureCoop,
   collectAll,
@@ -9,6 +9,7 @@ import {
   cullDuck,
   doseNiacin,
   gainXP,
+  installModule,
   removePair,
   moveStation,
   placeStation,
@@ -16,9 +17,10 @@ import {
   removeStation,
   salvageModule,
   setSecured,
+  swapInModule,
   tend,
   treatDuck,
-  unassignModule,
+  uninstallModule,
   unlockZone as unlockZoneAction,
   upgradeStation,
   type ActionResult,
@@ -337,14 +339,26 @@ export class GameEngine {
     return { tended, xpGained };
   }
 
-  // ── Modules ────────────────────────────────────────────────────────
-  assignModule(stationId: string, moduleId: string): ActionResult<unknown> {
-    const r = assignModule(this.state, stationId, moduleId);
+  // ── Modules (homestead rack) ───────────────────────────────────────
+  installModule(moduleId: string): ActionResult<unknown> {
+    const r = installModule(this.state, moduleId);
     this.notify();
     return r;
   }
-  unassignModule(moduleId: string): ActionResult<unknown> {
-    const r = unassignModule(this.state, moduleId);
+  uninstallModule(moduleId: string): ActionResult<unknown> {
+    const r = uninstallModule(this.state, moduleId);
+    this.notify();
+    return r;
+  }
+  /** Install into a free socket, or swap in for the weakest if that improves the loadout. */
+  swapInModule(moduleId: string): ActionResult<unknown> {
+    const r = swapInModule(this.state, moduleId);
+    this.notify();
+    return r;
+  }
+  /** Greedy loadout optimizer: fill empty sockets + strictly-improving swaps. */
+  autoFillRack(): ActionResult<{ installed: number; swapped: number }> {
+    const r = autoFillRack(this.state);
     this.notify();
     return r;
   }

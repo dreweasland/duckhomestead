@@ -12,7 +12,7 @@ import {
 import type { StationType } from './config/balance';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
-import { defenseFloor, RARITIES, stationAt, zoneUnlocked } from './game/state';
+import { defenseFloor, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
 import { DuckIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
@@ -224,7 +224,7 @@ export default function App() {
               </span>
             </button>
           )}
-          {(state.inventory.length > 0 || state.dust > 0) && (
+          {(state.inventory.length > 0 || state.rack.length > 0 || state.dust > 0) && (
             <button
               onClick={() => setModulesOpen(true)}
               className="flex items-center justify-between rounded-md bg-[#2e2746] px-3 py-2 text-sm font-bold text-[#cdbcff] transition hover:bg-[#372e57]"
@@ -233,7 +233,7 @@ export default function App() {
                 <ModuleIcon size={16} /> Modules
               </span>
               <span className="tabular-nums">
-                {state.inventory.length} spare · {state.dust} dust
+                {state.rack.length}/{rackSockets(state)} rack · {state.inventory.length} spare
               </span>
             </button>
           )}

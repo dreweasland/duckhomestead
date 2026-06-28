@@ -4,7 +4,7 @@ import { RARITIES, type Module, type ModuleStat } from '../src/game/state';
 import {
   appliedBonus,
   moduleFits,
-  stationBonus,
+  rackBonus,
   rollRarity,
   rollMagnitude,
   STAT_CATEGORIES,
@@ -29,8 +29,8 @@ describe('soft-cap stacking', () => {
 
   it('a legendary stacked many times still cannot run away past the cap', () => {
     const s = build({ plot: 1 });
-    s.stations[0].modules = Array.from({ length: 8 }, () => mod('stationYield', 0.5));
-    expect(stationBonus(s.stations[0], 'stationYield')).toBeLessThan(L.SOFT_CAP.stationYield);
+    s.rack = Array.from({ length: 8 }, () => mod('stationYield', 0.5));
+    expect(rackBonus(s, 'stationYield')).toBeLessThan(L.SOFT_CAP.stationYield);
   });
 });
 

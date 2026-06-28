@@ -1,16 +1,16 @@
 import { BALANCE, STATION_DEFS, zoneDef, type StationType } from '../config/balance';
 import {
   grantModule,
-  moduleFits,
+  rackScore,
   rollMagnitude,
   salvageDust,
-  slotCount,
+  spareOutlook,
   tendCooldownMult,
   tendPowerMult,
 } from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { GameState, Module, Rarity, Resource, Station } from './state';
-import { isBlockedTile, secureCapacity, seedFlock, stationAt, zoneUnlocked } from './state';
+import { isBlockedTile, rackSockets, secureCapacity, seedFlock, stationAt, zoneUnlocked } from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
 export function UPGRADE_OUTPUT(level: number): number {
@@ -98,8 +98,7 @@ export function removeStation(
   const station = state.stations[idx];
   const refund = Math.floor(BALANCE.COSTS[station.type] * BALANCE.REFUND_FRACTION);
   state.resources.eggs += refund;
-  // Return any slotted modules to inventory — don't destroy the player's loot.
-  if (station.modules?.length) state.inventory.push(...station.modules);
+  // (Modules live in the homestead rack now, not on stations — nothing to return.)
   state.stations.splice(idx, 1);
   return done({ refund });
 }
@@ -225,37 +224,101 @@ export function gainXP(state: GameState, amount: number): XpResult {
   };
 }
 
-// ── Modules: assign / unassign / salvage / reroll ─────────────────────
-/** Slot an inventory module into a station (must fit category + have a free slot). */
-export function assignModule(
-  state: GameState,
-  stationId: string,
-  moduleId: string,
-): ActionResult<Station> {
-  const station = state.stations.find((s) => s.id === stationId);
-  if (!station) return fail('No such station');
+// ── Modules: install / uninstall / auto-fill / salvage / reroll ───────
+/** Install a spare module into a free rack socket (applies homestead-wide). */
+export function installModule(state: GameState, moduleId: string): ActionResult<Module> {
   const idx = state.inventory.findIndex((m) => m.id === moduleId);
   if (idx < 0) return fail('Module not in inventory');
-  const module = state.inventory[idx];
-  if (!moduleFits(module.stat, station.type)) return fail("Module doesn't fit this station");
-  station.modules ??= [];
-  if (station.modules.length >= slotCount(station)) return fail('No free slot');
-  state.inventory.splice(idx, 1);
-  station.modules.push(module);
-  return done(station);
+  if (state.rack.length >= rackSockets(state)) return fail('No free socket — uninstall one or Auto-fill');
+  const [module] = state.inventory.splice(idx, 1);
+  state.rack.push(module);
+  return done(module);
 }
 
-/** Pull a module out of a station back into the inventory. */
-export function unassignModule(state: GameState, moduleId: string): ActionResult<Station> {
-  for (const station of state.stations) {
-    const idx = station.modules?.findIndex((m) => m.id === moduleId) ?? -1;
-    if (idx >= 0) {
-      const [module] = station.modules!.splice(idx, 1);
-      state.inventory.push(module);
-      return done(station);
+/** Pull an installed module out of the rack back into spares. */
+export function uninstallModule(state: GameState, moduleId: string): ActionResult<Module> {
+  const idx = state.rack.findIndex((m) => m.id === moduleId);
+  if (idx < 0) return fail('Module not installed');
+  const [module] = state.rack.splice(idx, 1);
+  state.inventory.push(module);
+  return done(module);
+}
+
+/**
+ * One-click "make this count": install a spare into a free socket, or — when the
+ * rack is full — swap it in for the installed module it most improves on (only if
+ * it strictly improves the loadout). The anti-babysitting button on a full rack.
+ */
+export function swapInModule(state: GameState, moduleId: string): ActionResult<Module> {
+  const idx = state.inventory.findIndex((m) => m.id === moduleId);
+  if (idx < 0) return fail('Module not in inventory');
+  const spare = state.inventory[idx];
+  const outlook = spareOutlook(state, spare);
+  if (outlook.kind === 'install') return installModule(state, moduleId);
+  if (outlook.kind === 'upgrade') {
+    const ri = state.rack.findIndex((m) => m.id === outlook.replace.id);
+    if (ri < 0) return fail('Nothing to swap');
+    state.inventory.splice(idx, 1);
+    const removed = state.rack[ri];
+    state.rack[ri] = spare;
+    state.inventory.push(removed);
+    return done(spare);
+  }
+  return fail('Not an upgrade for the current loadout');
+}
+
+/**
+ * Fill every empty socket with the spares that add the most effect, then make any
+ * strictly-improving swaps — the greedy loadout optimizer behind the Auto-fill
+ * button. Uses the value-weighted rackScore (a pure assist heuristic). Returns
+ * how many modules it installed and how many it swapped.
+ */
+export function autoFillRack(state: GameState): ActionResult<{ installed: number; swapped: number }> {
+  const cap = rackSockets(state);
+  let installed = 0;
+  let swapped = 0;
+
+  // 1) Fill empty sockets, each time taking the spare that most raises the score.
+  while (state.rack.length < cap && state.inventory.length > 0) {
+    let bestIdx = -1;
+    let bestScore = rackScore(state.rack);
+    for (let i = 0; i < state.inventory.length; i++) {
+      const sc = rackScore([...state.rack, state.inventory[i]]);
+      if (sc > bestScore + 1e-12) {
+        bestScore = sc;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx < 0) break; // nothing left would help
+    state.rack.push(state.inventory.splice(bestIdx, 1)[0]);
+    installed++;
+  }
+
+  // 2) Strictly-improving swaps until the loadout can't get better.
+  let improved = true;
+  while (improved) {
+    improved = false;
+    const base = rackScore(state.rack);
+    let best = { gain: 1e-9, si: -1, ri: -1 };
+    for (let si = 0; si < state.inventory.length; si++) {
+      for (let ri = 0; ri < state.rack.length; ri++) {
+        const cand = state.rack.slice();
+        cand[ri] = state.inventory[si];
+        const gain = rackScore(cand) - base;
+        if (gain > best.gain) best = { gain, si, ri };
+      }
+    }
+    if (best.si >= 0) {
+      const spare = state.inventory[best.si];
+      const removed = state.rack[best.ri];
+      state.rack[best.ri] = spare;
+      state.inventory.splice(best.si, 1, removed);
+      swapped++;
+      improved = true;
     }
   }
-  return fail('Module not slotted');
+
+  return done({ installed, swapped });
 }
 
 /** Destroy an inventory module for dust (rarity-scaled). */
@@ -431,7 +494,7 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   // A coop's tend burst (tending the flock) is throttled by current nutrition,
   // same as the flock's passive lay. (Leg debuffs are per-duck now.)
   const nutritionMult = station.type === 'coop' ? (state.nutrition?.eggMult ?? 1) : 1;
-  const tendPower = tendPowerMult(station); // module-boosted burst size
+  const tendPower = tendPowerMult(state); // rack-boosted burst size
 
   for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {
     // Affordable inputs?
@@ -453,7 +516,7 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
     }
   }
 
-  station.tendCooldownRemaining = BALANCE.TEND_COOLDOWN_S * tendCooldownMult(station);
+  station.tendCooldownRemaining = BALANCE.TEND_COOLDOWN_S * tendCooldownMult(state);
   const xp = gainXP(state, BALANCE.TEND_XP);
   return done({ station, burst, xp });
 }

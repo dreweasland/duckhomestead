@@ -1,6 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { collectAll, placeStation } from './actions';
-import { initialState, seedFlock, type GameState, type Resource } from './state';
+import { initialState, rackSockets, seedFlock, type GameState, type Resource } from './state';
 import { tick } from './tick';
 
 const SAVE_KEY = 'duck-homestead-save-v1';
@@ -40,6 +40,7 @@ export function deserialize(raw: string, now: number): GameState {
       doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,
       // Phase 3 loot defaults for older saves.
       inventory: parsed.inventory ?? [],
+      rack: parsed.rack ?? [],
       dust: parsed.dust ?? 0,
       nextModuleId: parsed.nextModuleId ?? 1,
       // Phase 4a breeding defaults for older saves.
@@ -77,6 +78,18 @@ export function deserialize(raw: string, now: number): GameState {
     if (result.ducks.length === 0 && result.stations.some((s) => s.type === 'coop')) {
       seedFlock(result);
     }
+    // Phase 3 rework: pre-rack saves slotted modules per-station. Pull them into
+    // the homestead rack (install up to capacity; overflow becomes spares), then
+    // clear the legacy field so stations never carry modules again.
+    if (result.rack.length === 0) {
+      const slotted = result.stations.flatMap((s) => s.modules ?? []);
+      if (slotted.length > 0) {
+        const cap = rackSockets(result);
+        result.rack = slotted.slice(0, cap);
+        result.inventory.push(...slotted.slice(cap));
+      }
+    }
+    for (const s of result.stations) s.modules = [];
     // Back-derive milestone unlocks from rank so a save from before the milestone
     // existed gets it immediately (not only on the next rank-up).
     if (result.rank >= BALANCE.MILESTONE_TENDALL_RANK) result.tendAllUnlocked = true;

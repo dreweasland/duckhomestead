@@ -45,7 +45,9 @@ export interface Station {
   tendCooldownRemaining: number;
   /** Coops only: a leg debuff from sustained niacin shortfall (halves output). */
   debuffed?: boolean;
-  /** Slotted modules (length <= LOOT.SLOTS_PER_STATION). Throughput boosts only. */
+  /** LEGACY (pre-rack): modules used to slot per-station. Now they live in the
+   *  homestead rack (GameState.rack); this field is only read once, on load, to
+   *  migrate old saves into the rack. New stations never populate it. */
   modules?: Module[];
 }
 
@@ -155,6 +157,12 @@ export function phenotype(g: Genotype): Color {
   return blue === 0 ? 'black' : blue === 1 ? 'blue' : 'splash';
 }
 
+/** How many module-rack sockets the homestead has (grows with rank, capped). */
+export function rackSockets(state: GameState): number {
+  const R = BALANCE.LOOT.RACK;
+  return Math.min(R.maxSockets, R.baseSockets + Math.floor((state.rank - 1) / R.ranksPerSocket));
+}
+
 /** Total housing across all coops (capacity scales with coop level). */
 export function coopCapacity(state: GameState): number {
   return state.stations
@@ -206,8 +214,11 @@ export interface GameState {
   nutrition?: NutritionState;
 
   // ── Phase 3: loot ──
-  /** Unassigned modules held in stock. */
+  /** Spare modules held in stock (not installed). */
   inventory: Module[];
+  /** The homestead module RACK: installed modules, each applying to its whole
+   *  category. Length is bounded by rackSockets(state). */
+  rack: Module[];
   /** Reroll currency from salvaging modules. */
   dust: number;
   /** Monotonic id counter for modules. */
@@ -336,6 +347,7 @@ export function initialState(now: number): GameState {
     niacinShortfall: 0,
     doseCooldownRemaining: 0,
     inventory: [],
+    rack: [],
     dust: 0,
     nextModuleId: 1,
     ducks: [],

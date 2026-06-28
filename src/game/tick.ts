@@ -24,10 +24,10 @@ export interface TickOptions {
   predatorLossBudget?: { remaining: number };
 }
 
-/** Effective output of a station per cycle for a given resource (level + yield modules). */
-function stationOutput(station: Station, resource: Resource): number {
+/** Effective output of a station per cycle for a given resource (level + rack yield). */
+function stationOutput(state: GameState, station: Station, resource: Resource): number {
   const base = STATION_DEFS[station.type].outputs[resource] ?? 0;
-  return base * UPGRADE_OUTPUT(station.level) * yieldMult(station);
+  return base * UPGRADE_OUTPUT(station.level) * yieldMult(state);
 }
 
 /**
@@ -80,7 +80,7 @@ function runCycle(state: GameState, station: Station): boolean {
   }
   // Deposit outputs into the station buffer.
   for (const key of Object.keys(def.outputs) as Resource[]) {
-    station.buffer[key] = (station.buffer[key] ?? 0) + stationOutput(station, key);
+    station.buffer[key] = (station.buffer[key] ?? 0) + stationOutput(state, station, key);
   }
   return true;
 }
@@ -118,8 +118,8 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     // runNutrition below, not the generic producer path.
     if (station.type === 'mill' || station.type === 'coop') continue;
 
-    // Speed modules shorten the effective cycle (throughput only).
-    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleMult(station);
+    // Rack speed modules shorten the effective cycle for every producer.
+    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleMult(state);
     station.cycleProgress += dt * rateMult;
 
     // Run as many cycles as progress allows. If inputs are missing, cap

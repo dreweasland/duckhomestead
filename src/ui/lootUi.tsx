@@ -14,14 +14,16 @@ interface StatMeta {
   /** +1 = a bonus (shows +X%), -1 = a reduction (shows −X%). */
   dir: 1 | -1;
   blurb: string;
+  /** What an installed module of this stat affects, homestead-wide (rack model). */
+  scope: string;
 }
 export const STAT_META: Record<ModuleStat, StatMeta> = {
-  stationSpeed: { label: 'Speed', dir: -1, blurb: 'faster cycles' },
-  stationYield: { label: 'Yield', dir: 1, blurb: 'more per cycle' },
-  eggOutput: { label: 'Egg Output', dir: 1, blurb: 'more eggs laid' },
-  conditionRegen: { label: 'Condition Regen', dir: 1, blurb: 'faster flock recovery' },
-  tendPower: { label: 'Tend Power', dir: 1, blurb: 'bigger tend burst' },
-  tendCooldown: { label: 'Tend Cooldown', dir: -1, blurb: 'shorter tend cooldown' },
+  stationSpeed: { label: 'Speed', dir: -1, blurb: 'faster cycles', scope: 'all producers' },
+  stationYield: { label: 'Yield', dir: 1, blurb: 'more per cycle', scope: 'all producers' },
+  eggOutput: { label: 'Egg Output', dir: 1, blurb: 'more eggs laid', scope: 'the flock' },
+  conditionRegen: { label: 'Condition Regen', dir: 1, blurb: 'faster flock recovery', scope: 'the flock' },
+  tendPower: { label: 'Tend Power', dir: 1, blurb: 'bigger tend burst', scope: 'tending' },
+  tendCooldown: { label: 'Tend Cooldown', dir: -1, blurb: 'shorter tend cooldown', scope: 'tending' },
 };
 
 /** "+18%" or "−18%" for the rolled magnitude. */

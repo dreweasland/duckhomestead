@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { playCollect, playPlace, playRemove, playUpgrade } from '../audio/sfx';
+import { playCollect, playRemove, playUpgrade } from '../audio/sfx';
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import { stationStatus, UPGRADE_OUTPUT, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
-import { moduleFits, slotCount } from '../game/loot';
 import { coopCapacity, type GameState, type Resource, type Station } from '../game/state';
 import { fmt } from './format';
 import { CollectIcon, EggIcon, HandIcon, RESOURCE_ICON, UpgradeIcon } from './icons';
-import { ModuleChip, STAT_META, fmtMagnitude } from './lootUi';
 
 interface Props {
   engine: GameEngine;
@@ -22,71 +20,6 @@ function ResAmount({ res, amount }: { res: Resource; amount: number }) {
     <span className="inline-flex items-center gap-1">
       <Icon size={13} /> {fmt(amount)}
     </span>
-  );
-}
-
-/** Module slots for a station: shows slotted modules and assigns from inventory. */
-function StationSlots({ engine, state, station }: { engine: GameEngine; state: GameState; station: Station }) {
-  const [picking, setPicking] = useState<number | null>(null);
-  const slots = slotCount(station);
-  const mods = station.modules ?? [];
-  const fitting = state.inventory.filter((m) => moduleFits(m.stat, station.type));
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
-        Modules ({mods.length}/{slots})
-      </div>
-      {Array.from({ length: slots }).map((_, i) => {
-        const m = mods[i];
-        if (m) {
-          return (
-            <ModuleChip
-              key={m.id}
-              module={m}
-              onRemove={() => engine.unassignModule(m.id)}
-            />
-          );
-        }
-        return (
-          <div key={`empty-${i}`} className="flex flex-col gap-1">
-            <button
-              onClick={() => setPicking(picking === i ? null : i)}
-              className="rounded-md border border-dashed border-[#4a3a2a] px-2 py-1 text-left text-[10px] text-[#7a6a4a] hover:border-[#6a5a3a] hover:text-[#9a8a6a]"
-            >
-              + empty slot
-            </button>
-            {picking === i && (
-              <div className="flex flex-col gap-1 rounded-md bg-[#1f1812] p-1.5">
-                {fitting.length === 0 ? (
-                  <div className="px-1 py-0.5 text-[10px] text-[#7a6a4a]">
-                    No fitting modules — tend stations to find some.
-                  </div>
-                ) : (
-                  fitting.map((fm) => (
-                    <button
-                      key={fm.id}
-                      onClick={() => {
-                        if (engine.assignModule(station.id, fm.id).ok) {
-                          playPlace();
-                          setPicking(null);
-                        }
-                      }}
-                      className="rounded px-1.5 py-1 text-left text-[10px] text-[#c9b88f] hover:bg-[#2a2018]"
-                    >
-                      <span className="font-bold">
-                        {STAT_META[fm.stat].label} {fmtMagnitude(fm)}
-                      </span>{' '}
-                      <span className="capitalize text-[#7a6a4a]">· {fm.rarity}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -289,8 +222,6 @@ export function StationPanel({ engine, state, station }: Props) {
           </button>
         )}
       </div>
-
-      <StationSlots engine={engine} state={state} station={station} />
 
       {/* Remove (demolish) — two-click confirm; refunds part of the cost. */}
       <button

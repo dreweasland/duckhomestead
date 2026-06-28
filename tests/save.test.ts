@@ -72,16 +72,29 @@ describe('back-compat + robustness', () => {
 });
 
 describe('loot save round-trip', () => {
-  it('preserves inventory, slotted modules, dust, and the id counter', () => {
+  it('preserves spares, the installed rack, dust, and the id counter', () => {
     const s = fullSetup();
     s.dust = 42;
     s.nextModuleId = 7;
     s.inventory = [{ id: 'm1', stat: 'stationYield', rarity: 'epic', magnitude: 0.3 }];
-    s.stations[0].modules = [{ id: 'm2', stat: 'stationSpeed', rarity: 'rare', magnitude: 0.2 }];
+    s.rack = [{ id: 'm2', stat: 'stationSpeed', rarity: 'rare', magnitude: 0.2 }];
     const r = deserialize(serialize(s), 0);
     expect(r.dust).toBe(42);
     expect(r.nextModuleId).toBe(7);
     expect(r.inventory).toEqual(s.inventory);
-    expect(r.stations[0].modules).toEqual(s.stations[0].modules);
+    expect(r.rack).toEqual(s.rack);
+  });
+
+  it('migrates a pre-rack save: per-station modules move into the rack', () => {
+    const s = fullSetup();
+    s.rank = 1; // 3 sockets
+    // Legacy shape: modules slotted on stations, no rack field.
+    s.stations[0].modules = [{ id: 'a', stat: 'stationSpeed', rarity: 'rare', magnitude: 0.2 }];
+    s.stations[1].modules = [{ id: 'b', stat: 'stationYield', rarity: 'epic', magnitude: 0.3 }];
+    const raw = JSON.parse(serialize(s));
+    delete raw.rack; // simulate a save written before the rack existed
+    const r = deserialize(JSON.stringify(raw), 0);
+    expect(r.rack.map((m) => m.id).sort()).toEqual(['a', 'b']);
+    expect(r.stations.every((st) => (st.modules ?? []).length === 0)).toBe(true);
   });
 });
