@@ -83,6 +83,7 @@ export class GameEngine {
   private lootListeners = new Set<(e: LootEvent) => void>();
   private dexListeners = new Set<(e: DexEvent) => void>();
   private predatorListeners = new Set<(e: PredatorEvent) => void>();
+  private autosalvageListeners = new Set<(dust: number) => void>();
 
   private rafId = 0;
   private lastTime = 0;
@@ -126,6 +127,12 @@ export class GameEngine {
     this.predatorListeners.add(fn);
     return () => this.predatorListeners.delete(fn);
   }
+  /** Fires when a tend drop was auto-salvaged (couldn't improve the rack) — the
+   *  quiet "+dust" beat, distinct from the celebratory loot banner. */
+  onAutosalvage(fn: (dust: number) => void): () => void {
+    this.autosalvageListeners.add(fn);
+    return () => this.autosalvageListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
@@ -143,6 +150,9 @@ export class GameEngine {
   }
   private emitPredator(e: PredatorEvent) {
     for (const fn of this.predatorListeners) fn(e);
+  }
+  private emitAutosalvage(dust: number) {
+    for (const fn of this.autosalvageListeners) fn(dust);
   }
   /** Fire DINGs for any first-of-color hatches accrued during ticks. */
   private drainDex() {
@@ -307,9 +317,11 @@ export class GameEngine {
       this.emitTend({ stationId, xp: r.value.xp.xpGained });
       this.fireXp(r.value.xp);
       // Active-only loot drop — the chance gate + roll live in loot.ts. Passive
-      // and offline production never call this.
-      const dropped = tryTendDrop(this.state);
-      if (dropped) this.emitLoot({ module: dropped, source: 'drop' });
+      // and offline production never call this. A keeper fires the loot banner; a
+      // non-upgrade was auto-salvaged to dust (quiet beat).
+      const drop = tryTendDrop(this.state);
+      if (drop?.kept) this.emitLoot({ module: drop.module, source: 'drop' });
+      else if (drop) this.emitAutosalvage(drop.dust);
     }
     this.notify();
     return r;
@@ -324,6 +336,7 @@ export class GameEngine {
   tendAll(): { tended: number; xpGained: number } {
     let tended = 0;
     let xpGained = 0;
+    let salvaged = 0; // batch auto-salvaged dust across the sweep into one beat
     for (const s of [...this.state.stations]) {
       if (s.tendCooldownRemaining > 0) continue;
       const r = tend(this.state, s.id);
@@ -332,9 +345,11 @@ export class GameEngine {
       xpGained += r.value.xp.xpGained;
       this.emitTend({ stationId: s.id, xp: r.value.xp.xpGained });
       this.fireXp(r.value.xp);
-      const dropped = tryTendDrop(this.state);
-      if (dropped) this.emitLoot({ module: dropped, source: 'drop' });
+      const drop = tryTendDrop(this.state);
+      if (drop?.kept) this.emitLoot({ module: drop.module, source: 'drop' });
+      else if (drop) salvaged += drop.dust;
     }
+    if (salvaged > 0) this.emitAutosalvage(salvaged);
     this.notify();
     return { tended, xpGained };
   }

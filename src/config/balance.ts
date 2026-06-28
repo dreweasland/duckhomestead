@@ -353,8 +353,11 @@ export const BALANCE = {
       epic: [0.24, 0.34],
       legendary: [0.34, 0.5],
     } as Record<string, [number, number]>,
-    /** Active-drop: chance per tend, then a weighted rarity roll. */
-    TEND_DROP_CHANCE: 0.08,
+    /** Active-drop: chance per tend, then a weighted rarity roll. With the small
+     *  module rack, drops that can't improve your loadout auto-salvage to dust
+     *  (see tryTendDrop), so this is tuned lower than the old per-tile era — a
+     *  drop you KEEP should feel like an event, not a constant trickle. */
+    TEND_DROP_CHANCE: 0.04,
     DROP_RARITY_WEIGHTS: { common: 60, uncommon: 25, rare: 11, epic: 6, legendary: 1.5 } as Record<string, number>,
     /** Guaranteed module of a fixed rarity at these ranks. */
     MILESTONE_GRANTS: { 3: 'uncommon', 7: 'rare', 12: 'epic', 18: 'legendary' } as Record<number, string>,

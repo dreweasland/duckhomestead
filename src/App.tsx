@@ -85,6 +85,23 @@ export default function App() {
     [engine],
   );
 
+  // A tend drop that couldn't improve the rack auto-salvages to dust — a quiet
+  // beat (soft chime + brief toast), distinct from the loot banner for keepers.
+  const [salvage, setSalvage] = useState<{ id: number; dust: number } | null>(null);
+  useEffect(
+    () =>
+      engine.onAutosalvage((dust) => {
+        setSalvage({ id: Date.now(), dust });
+        playCollect();
+      }),
+    [engine],
+  );
+  useEffect(() => {
+    if (!salvage) return;
+    const t = window.setTimeout(() => setSalvage(null), 1500);
+    return () => clearTimeout(t);
+  }, [salvage]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
@@ -141,6 +158,16 @@ export default function App() {
         <div key={milestoneFlash} className="milestone-flash pointer-events-none fixed inset-0 z-40" />
       )}
       <PredatorBanner state={state} onOpen={() => setWatchOpen(true)} />
+      {salvage && (
+        <div
+          key={salvage.id}
+          className="pointer-events-none fixed inset-x-0 top-14 z-40 flex justify-center"
+        >
+          <span className="salvage-toast rounded-full bg-[#2e2746] px-3 py-1 text-xs font-bold text-[#cdbcff] shadow ring-1 ring-[#3a2e64]">
+            Auto-salvaged spare · +{salvage.dust} dust
+          </span>
+        </div>
+      )}
       <DingBanner ding={ding} onDone={() => setDing(null)} />
       <LootBanner loot={loot} onDone={() => setLoot(null)} />
       <DexBanner dex={dex} onDone={() => setDex(null)} />

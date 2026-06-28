@@ -77,6 +77,30 @@ body {
   animation: screen-flash 0.8s ease-out both;
 }
 
+/* Auto-salvage toast: a quick fade in/out over its ~1.5s lifetime. */
+@keyframes salvage-toast {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.salvage-toast {
+  animation: salvage-toast 1.5s ease-out both;
+}
+
 /* Predator window OPEN: a steady danger pulse on the telegraph bar. */
 @keyframes predator-pulse {
   0%,

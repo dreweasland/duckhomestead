@@ -152,14 +152,34 @@ export function makeModule(state: GameState, rarity: Rarity, rng: Rng = Math.ran
   return { id: `m${state.nextModuleId++}`, stat: rollStat(rng), rarity, magnitude: rollMagnitude(rarity, rng) };
 }
 
-/** Active drop on a tend: chance gate, then a weighted rarity roll. Pushes to
- *  inventory and returns the module, or null. Online-only by construction —
- *  offline catch-up never tends, so it never calls this. */
-export function tryTendDrop(state: GameState, rng: Rng = Math.random): Module | null {
+export interface TendDrop {
+  module: Module;
+  /** True ⇒ the drop could improve the rack and was kept as a spare. False ⇒ it
+   *  couldn't improve the loadout and was auto-salvaged straight to dust. */
+  kept: boolean;
+  /** Dust granted when auto-salvaged (0 when kept). */
+  dust: number;
+}
+
+/**
+ * Active drop on a tend: chance gate, then a weighted rarity roll. Because the
+ * rack is small, a drop that can't improve your loadout (install into a free
+ * socket OR swap in for a weaker installed module) is AUTO-SALVAGED to dust
+ * instead of cluttering the spares — so the pile only ever holds real
+ * candidates. Returns the drop (kept or salvaged), or null on a miss.
+ * Online-only by construction — offline never tends, so it never calls this.
+ */
+export function tryTendDrop(state: GameState, rng: Rng = Math.random): TendDrop | null {
   if (rng() >= L.TEND_DROP_CHANCE) return null;
-  const m = makeModule(state, rollRarity(rng), rng);
-  state.inventory.push(m);
-  return m;
+  const module = makeModule(state, rollRarity(rng), rng);
+  const outlook = spareOutlook(state, module);
+  if (outlook.kind === 'install' || outlook.kind === 'upgrade') {
+    state.inventory.push(module);
+    return { module, kept: true, dust: 0 };
+  }
+  const dust = salvageDust(module.rarity);
+  state.dust += dust;
+  return { module, kept: false, dust };
 }
 
 /** Guaranteed milestone grant of a fixed rarity (random stat/magnitude). */

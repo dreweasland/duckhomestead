@@ -63,7 +63,8 @@ export function ModulesPanel({
         <p className="mb-3 text-[10px] text-[#7a6a4a]">
           Installed modules apply across the whole homestead — no per-tile fiddling. Sockets are
           scarce ({used}/{sockets} used; more unlock with rank), so run your best. Auto-fill installs
-          and upgrades for you.
+          and upgrades for you; tend drops that can’t improve your rack auto-salvage to dust, so
+          spares stay clutter-free.
         </p>
 
         {/* ── The rack ── */}

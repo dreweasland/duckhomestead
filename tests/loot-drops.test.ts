@@ -30,13 +30,32 @@ describe('milestone grants (online only, via gainXP)', () => {
 });
 
 describe('active drops', () => {
-  it('tryTendDrop respects the chance gate and rolls into inventory', () => {
-    const s = build({ plot: 1 });
+  it('tryTendDrop respects the chance gate and keeps an installable drop', () => {
+    const s = build({ plot: 1 }); // empty rack, free sockets -> any drop is a keeper
     expect(tryTendDrop(s, () => 0.99)).toBeNull(); // above TEND_DROP_CHANCE
     expect(s.inventory).toHaveLength(0);
-    const m = tryTendDrop(s, () => 0.0); // below chance -> drop
-    expect(m).not.toBeNull();
+    const drop = tryTendDrop(s, () => 0.0); // below chance -> drop into a free socket
+    expect(drop).not.toBeNull();
+    expect(drop!.kept).toBe(true);
     expect(s.inventory).toHaveLength(1);
+  });
+
+  it('auto-salvages a drop that cannot improve a full rack (no spare pile)', () => {
+    const s = build({ plot: 1 });
+    s.rank = 1; // 3 sockets
+    // Fill the rack with maxed legendaries so a common drop can never improve it.
+    s.rack = [
+      { id: 'k1', stat: 'stationSpeed', rarity: 'legendary', magnitude: 0.5 },
+      { id: 'k2', stat: 'stationYield', rarity: 'legendary', magnitude: 0.5 },
+      { id: 'k3', stat: 'eggOutput', rarity: 'legendary', magnitude: 0.5 },
+    ];
+    const dust0 = s.dust;
+    const drop = tryTendDrop(s, () => 0); // common stationSpeed +0.05 — can't beat the rack
+    expect(drop).not.toBeNull();
+    expect(drop!.kept).toBe(false);
+    expect(drop!.dust).toBe(BALANCE.LOOT.SALVAGE_DUST.common);
+    expect(s.inventory).toHaveLength(0); // nothing piled up
+    expect(s.dust).toBe(dust0 + BALANCE.LOOT.SALVAGE_DUST.common);
   });
 
   it('engine.tend emits a loot event when a drop fires', () => {
@@ -50,6 +69,32 @@ describe('active drops', () => {
       eng.tend(coop.id);
       expect(events.some((e) => e.source === 'drop')).toBe(true);
       expect(eng.state.inventory.length).toBeGreaterThan(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('engine.tend auto-salvages (no loot banner) when the rack is full', () => {
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0); // force a common drop
+    try {
+      const eng = new GameEngine(0);
+      eng.state = stockAll(fullSetup());
+      eng.state.rank = 1;
+      eng.state.rack = [
+        { id: 'k1', stat: 'stationSpeed', rarity: 'legendary', magnitude: 0.5 },
+        { id: 'k2', stat: 'stationYield', rarity: 'legendary', magnitude: 0.5 },
+        { id: 'k3', stat: 'eggOutput', rarity: 'legendary', magnitude: 0.5 },
+      ];
+      const loot: LootEvent[] = [];
+      let salvaged = 0;
+      eng.onLoot((e) => loot.push(e));
+      eng.onAutosalvage((d) => (salvaged += d));
+      const coop = eng.state.stations.find((s) => s.type === 'coop')!;
+      coop.tendCooldownRemaining = 0;
+      eng.tend(coop.id);
+      expect(loot.some((e) => e.source === 'drop')).toBe(false); // no banner for junk
+      expect(salvaged).toBeGreaterThan(0); // quiet dust beat instead
+      expect(eng.state.inventory).toHaveLength(0); // no spare pile
     } finally {
       spy.mockRestore();
     }
