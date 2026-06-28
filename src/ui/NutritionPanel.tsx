@@ -121,17 +121,6 @@ export function NutritionPanel({
   const dn = state.ducklingNutrition;
   const adults = state.ducks.filter((d) => d.stage === 'adult').length;
 
-  const TabBtn = ({ id, label }: { id: 'layers' | 'ducklings'; label: string }) => (
-    <button
-      onClick={() => setTab(id)}
-      className={`rounded-t-md px-3 py-1.5 text-xs font-bold ${
-        tab === id ? 'bg-[#1f1812] text-[#ffe9a8]' : 'text-[#7a6a4a] hover:text-[#c9b88f]'
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
@@ -143,8 +132,17 @@ export function NutritionPanel({
         </div>
 
         <div className="mb-3 flex gap-1 border-b border-[#3a2e22]">
-          <TabBtn id="layers" label="Layers" />
-          <TabBtn id="ducklings" label="Ducklings" />
+          {(['layers', 'ducklings'] as const).map((id) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`rounded-t-md px-3 py-1.5 text-xs font-bold capitalize ${
+                tab === id ? 'bg-[#1f1812] text-[#ffe9a8]' : 'text-[#7a6a4a] hover:text-[#c9b88f]'
+              }`}
+            >
+              {id}
+            </button>
+          ))}
         </div>
 
         {tab === 'layers' ? (
