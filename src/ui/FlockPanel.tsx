@@ -20,6 +20,39 @@ const STAGE_LABEL: Record<Duck['stage'], string> = {
 
 const stageRank: Record<Duck['stage'], number> = { adult: 0, juvenile: 1, duckling: 2 };
 
+/** A compact segmented filter: one row of pill options sharing a value. */
+function FilterRow<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string; count?: number }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex gap-1">
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={`flex flex-1 items-center justify-center gap-1 rounded px-1.5 py-1 text-[11px] font-bold transition ${
+              active
+                ? 'bg-[#3a2e22] text-[#f5ecd8] ring-1 ring-[#5a4a32]'
+                : 'bg-[#1f1812] text-[#9a8a6a] hover:bg-[#33271c]'
+            }`}
+          >
+            {o.label}
+            {o.count != null && <span className="tabular-nums text-[#7a6a4a]">{o.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ColorSwatch({ color, size = 14 }: { color: Color; size?: number }) {
   return (
     <span
@@ -187,7 +220,19 @@ export function FlockPanel({
   const [colorTab, setColorTab] = useState<Color>(
     () => [...COLORS].sort((a, b) => colorCounts[b] - colorCounts[a])[0] ?? 'blue',
   );
-  const shown = ducks.filter((d) => phenotype(d.genotype) === colorTab);
+  // Cross-cutting filters (compose with the color tab): sex and life stage.
+  const [sexFilter, setSexFilter] = useState<'all' | Duck['sex']>('all');
+  const [stageFilter, setStageFilter] = useState<'all' | Duck['stage']>('all');
+  const shown = ducks.filter(
+    (d) =>
+      phenotype(d.genotype) === colorTab &&
+      (sexFilter === 'all' || d.sex === sexFilter) &&
+      (stageFilter === 'all' || d.stage === stageFilter),
+  );
+  // Filter badge counts reflect the current color tab (stable as you toggle).
+  const inColor = ducks.filter((d) => phenotype(d.genotype) === colorTab);
+  const sexCount = (s: Duck['sex']) => inColor.filter((d) => d.sex === s).length;
+  const stageCount = (s: Duck['stage']) => inColor.filter((d) => d.stage === s).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -238,9 +283,34 @@ export function FlockPanel({
               })}
             </div>
 
+            {/* Cross-cutting filters: sex and life stage (compose with the color tab). */}
+            <div className="mb-2 flex flex-col gap-1">
+              <FilterRow
+                value={sexFilter}
+                onChange={setSexFilter}
+                options={[
+                  { value: 'all', label: 'All', count: inColor.length },
+                  { value: 'drake', label: 'Drakes', count: sexCount('drake') },
+                  { value: 'hen', label: 'Hens', count: sexCount('hen') },
+                ]}
+              />
+              <FilterRow
+                value={stageFilter}
+                onChange={setStageFilter}
+                options={[
+                  { value: 'all', label: 'All', count: inColor.length },
+                  { value: 'adult', label: 'Adult', count: stageCount('adult') },
+                  { value: 'juvenile', label: 'Juv', count: stageCount('juvenile') },
+                  { value: 'duckling', label: 'Duckling', count: stageCount('duckling') },
+                ]}
+              />
+            </div>
+
             {shown.length === 0 ? (
               <div className="py-6 text-center text-sm text-[#9a8a6a]">
-                No {COLOR_META[colorTab].label.toLowerCase()} ducks yet.
+                {inColor.length === 0
+                  ? `No ${COLOR_META[colorTab].label.toLowerCase()} ducks yet.`
+                  : 'No ducks match these filters.'}
               </div>
             ) : (
               <div className="flex flex-col gap-1">
