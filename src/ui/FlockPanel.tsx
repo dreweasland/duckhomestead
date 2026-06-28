@@ -229,10 +229,16 @@ export function FlockPanel({
       (sexFilter === 'all' || d.sex === sexFilter) &&
       (stageFilter === 'all' || d.stage === stageFilter),
   );
-  // Filter badge counts reflect the current color tab (stable as you toggle).
+  // Faceted counts: each filter row's badges reflect the OTHER active filter (and
+  // the color tab), so the badge on the selected option always equals the number
+  // of rows shown.
   const inColor = ducks.filter((d) => phenotype(d.genotype) === colorTab);
-  const sexCount = (s: Duck['sex']) => inColor.filter((d) => d.sex === s).length;
-  const stageCount = (s: Duck['stage']) => inColor.filter((d) => d.stage === s).length;
+  const matchesSex = (d: Duck) => sexFilter === 'all' || d.sex === sexFilter;
+  const matchesStage = (d: Duck) => stageFilter === 'all' || d.stage === stageFilter;
+  const sexPool = inColor.filter(matchesStage); // counts for the sex row
+  const stagePool = inColor.filter(matchesSex); // counts for the stage row
+  const sexCount = (s: Duck['sex']) => sexPool.filter((d) => d.sex === s).length;
+  const stageCount = (s: Duck['stage']) => stagePool.filter((d) => d.stage === s).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -289,7 +295,7 @@ export function FlockPanel({
                 value={sexFilter}
                 onChange={setSexFilter}
                 options={[
-                  { value: 'all', label: 'All', count: inColor.length },
+                  { value: 'all', label: 'All', count: sexPool.length },
                   { value: 'drake', label: 'Drakes', count: sexCount('drake') },
                   { value: 'hen', label: 'Hens', count: sexCount('hen') },
                 ]}
@@ -298,7 +304,7 @@ export function FlockPanel({
                 value={stageFilter}
                 onChange={setStageFilter}
                 options={[
-                  { value: 'all', label: 'All', count: inColor.length },
+                  { value: 'all', label: 'All', count: stagePool.length },
                   { value: 'adult', label: 'Adult', count: stageCount('adult') },
                   { value: 'juvenile', label: 'Juv', count: stageCount('juvenile') },
                   { value: 'duckling', label: 'Duckling', count: stageCount('duckling') },
