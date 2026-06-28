@@ -1,7 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
 import { conditionRegenMult, globalBonus, millThroughputMult } from './loot';
-import { adultDucks, adultLayers, AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
+import { adultLayers, AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
 
 const N = BALANCE.NUTRITION;
 /** Axes that multiply egg output. Niacin is excluded — it drives the debuff. */
@@ -31,9 +31,14 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // Phase 4a: the layer ration now feeds ADULT DUCKS (requirement driver) and
   // ADULT HENS lay (output). The throttle / satisfaction / condition math below
   // is byte-for-byte Phase 2 — only the driver changed from coop count to heads.
+  // Phase 4a: the LAYER ration feeds the laying hens that actually earn — NOT
+  // the whole adult flock. A seeded/bred drake eats no layer feed (it's breeding
+  // stock); ducklings have their own grow-out ration. Driving demand off every
+  // adult (incl. the seeded drake) tripled cold-start demand and starved even
+  // the energy axis the starter plot covers — so demand scales with hens.
   const layers = adultLayers(state);
-  const adultCount = adultDucks(state).length;
-  if (adultCount === 0) {
+  const layerCount = layers.length;
+  if (layerCount === 0) {
     state.nutrition = undefined;
     return;
   }
@@ -50,7 +55,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const wantRate: Record<string, number> = {};
   let totalWant = 0;
   for (const ing of INGREDIENTS) {
-    wantRate[ing] = ((state.ration[ing] ?? 0) * adultCount) / coopCycle;
+    wantRate[ing] = ((state.ration[ing] ?? 0) * layerCount) / coopCycle;
     totalWant += wantRate[ing];
   }
   const feedScale = hasMill ? (totalWant > 0 ? Math.min(1, capacity / totalWant) : 1) : 0;
@@ -74,7 +79,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const prior = state.nutrition?.satisfaction;
   const alpha = N.SMOOTH_TAU_S > 0 ? Math.min(1, step / N.SMOOTH_TAU_S) : 1;
   for (const axis of AXES) {
-    requirement[axis] = (N.REQUIREMENT[axis] * adultCount) / coopCycle;
+    requirement[axis] = (N.REQUIREMENT[axis] * layerCount) / coopCycle;
     const instant = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
     satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
   }

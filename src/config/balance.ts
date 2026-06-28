@@ -79,10 +79,12 @@ export const BALANCE = {
   /**
    * Eggs the player starts with. MUST cover the full starter chain
    * (plot 10 + mill 25 + coop 50 = 85) or the economy softlocks: eggs only
-   * come from a Coop, so you can't bootstrap without affording one. The
-   * surplus lets you misplace once or grab an early upgrade.
+   * come from a Coop, so you can't bootstrap without affording one. Sized to
+   * ALSO afford the protein + calcium producers (mealwormFarm 35 + oysterSource
+   * 30) right away, so a fresh flock can cover the egg-gating axes from the
+   * start instead of grinding at the floor first (peas/niacin come later).
    */
-  STARTING_EGGS: 100,
+  STARTING_EGGS: 150,
 
   /**
    * Cost in EGGS to upgrade a station to the next level.
@@ -178,7 +180,7 @@ export const BALANCE = {
      * ingredient stations that fix nutrition). This keeps eggs trickling so a
      * starved flock can always bootstrap — throttle, never a wall.
      */
-    MIN_EGG_MULT: 0.3,
+    MIN_EGG_MULT: 0.5,
     /**
      * Smoothing time constant (s) for displayed/throttle satisfaction. Ingredient
      * production is chunky (a plot drops 2 corn every 3s) while the flock eats
