@@ -22,7 +22,7 @@ export function DexBanner({ dex, onDone }: Props) {
   const meta = COLOR_META[dex.color];
 
   return (
-    <NotifyRail top="bottom-28">
+    <NotifyRail top="top-2">
       <button
         type="button"
         onClick={onDone}

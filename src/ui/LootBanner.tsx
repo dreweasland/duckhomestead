@@ -30,7 +30,7 @@ export function LootBanner({ loot, onDone }: Props) {
   const big = tier >= 3; // epic / legendary
 
   return (
-    <NotifyRail top="bottom-6">
+    <NotifyRail top="top-2">
         <button
           type="button"
           onClick={onDone}
