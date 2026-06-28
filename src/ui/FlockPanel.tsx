@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { expectedVigor, populationMeanVigor } from '../game/genetics';
+import { colorOdds, expectedVigor, populationMeanVigor } from '../game/genetics';
 import { COLORS, coopCapacity, phenotype, type Color, type Duck, type GameState } from '../game/state';
 import { playPlace } from '../audio/sfx';
 import { CloseIcon } from './icons';
@@ -58,6 +58,7 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
         const popMean = populationMeanVigor(state);
         const exp = expectedVigor(dr.vigor, he.vigor, popMean);
         const lifts = exp >= popMean;
+        const odds = colorOdds(dr.genotype, he.genotype);
         return (
           <div key={p.id} className="mb-1.5 rounded bg-[#171009] px-2 py-1.5">
             <div className="flex items-center gap-1.5 text-[11px]">
@@ -75,6 +76,14 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
               >
                 unpair
               </button>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#7a6a4a]">
+              {COLORS.filter((c) => odds[c] > 0).map((c) => (
+                <span key={c} className="flex items-center gap-0.5" title={`${COLOR_META[c].label} offspring`}>
+                  <ColorSwatch color={c} size={9} />
+                  <span className="tabular-nums text-[#9a8a6a]">{Math.round(odds[c] * 100)}%</span>
+                </span>
+              ))}
             </div>
             <div className="mt-0.5 text-[10px] text-[#9a8a6a]">
               clutch {Math.ceil(next)}s

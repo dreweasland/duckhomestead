@@ -60,6 +60,20 @@ export function breedGenotype(a: Genotype, b: Genotype, rng: Rng = Math.random):
 }
 
 /**
+ * Offspring color probabilities for a cross — the Punnett square on the Bl
+ * locus. Each parent passes Bl with probability (its Bl count)/2; phenotype is
+ * the blue-allele count (0 black, 1 blue, 2 splash). Powers the pair preview.
+ */
+export function colorOdds(a: Genotype, b: Genotype): Record<Color, number> {
+  const pBl = (g: Genotype) => ((g[0] === 'Bl' ? 1 : 0) + (g[1] === 'Bl' ? 1 : 0)) / 2;
+  const pa = pBl(a);
+  const pb = pBl(b);
+  const splash = pa * pb; // both pass Bl
+  const black = (1 - pa) * (1 - pb); // neither passes Bl
+  return { black, blue: 1 - splash - black, splash };
+}
+
+/**
  * Record a produced color in the flock dex. Returns true if it's the first of
  * that color ever (the collection DING beat). Mutates state.dexSeen.
  */
