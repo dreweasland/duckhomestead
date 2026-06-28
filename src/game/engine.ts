@@ -15,10 +15,12 @@ import {
   salvageModule,
   tend,
   unassignModule,
+  unlockZone as unlockZoneAction,
   upgradeStation,
   type ActionResult,
   type XpResult,
 } from './actions';
+import { zoneDef } from '../config/balance';
 import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
@@ -184,6 +186,30 @@ export class GameEngine {
 
   upgrade(stationId: string): ActionResult<unknown> {
     const r = upgradeStation(this.state, stationId);
+    this.notify();
+    return r;
+  }
+
+  /** Unlock a zone (double-gated rank + egg cost). Fires a milestone DING. */
+  unlockZone(zoneId: string): ActionResult<{ name: string }> {
+    const r = unlockZoneAction(this.state, zoneId);
+    if (r.ok) {
+      const forage = !!zoneDef(zoneId)?.forage;
+      this.emitDing({
+        newRank: this.state.rank,
+        levelsGained: 0,
+        milestones: [
+          {
+            rank: this.state.rank,
+            title: r.value.name,
+            description: forage
+              ? 'New buildable space — and free-range forage now drips energy into storage.'
+              : 'New buildable space for more coops and stations.',
+            kind: 'zone',
+          },
+        ],
+      });
+    }
     this.notify();
     return r;
   }

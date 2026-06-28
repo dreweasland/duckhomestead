@@ -15,6 +15,8 @@ export interface Milestone {
   rank: number;
   title: string;
   description: string;
+  /** Picks the banner icon. Defaults to the Auto-Haul cart. */
+  kind?: 'autohaul' | 'zone';
 }
 
 /** Milestones earned at given ranks. Phase 1 has one: the Auto-Haul Cart. */
