@@ -13,7 +13,7 @@ import type { StationType } from './config/balance';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
 import { defenseFloor, RARITIES, stationAt, zoneUnlocked } from './game/state';
-import { OwlIcon } from './ui/icons';
+import { DuckIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
@@ -216,7 +216,9 @@ export default function App() {
                   : 'bg-[#2e3a26] text-[#bfe8a8] hover:bg-[#36422c]'
               }`}
             >
-              <span>Nutrition</span>
+              <span className="flex items-center gap-1.5">
+                <NutritionIcon size={16} /> Nutrition
+              </span>
               <span className="tabular-nums">
                 eggs {Math.round((state.nutrition?.eggMult ?? 1) * 100)}%
               </span>
@@ -227,7 +229,9 @@ export default function App() {
               onClick={() => setModulesOpen(true)}
               className="flex items-center justify-between rounded-md bg-[#2e2746] px-3 py-2 text-sm font-bold text-[#cdbcff] transition hover:bg-[#372e57]"
             >
-              <span>Modules</span>
+              <span className="flex items-center gap-1.5">
+                <ModuleIcon size={16} /> Modules
+              </span>
               <span className="tabular-nums">
                 {state.inventory.length} spare · {state.dust} dust
               </span>
@@ -238,7 +242,9 @@ export default function App() {
               onClick={() => setFlockOpen(true)}
               className="flex items-center justify-between rounded-md bg-[#26323a] px-3 py-2 text-sm font-bold text-[#a8d0e8] transition hover:bg-[#2e3c46]"
             >
-              <span>Flock</span>
+              <span className="flex items-center gap-1.5">
+                <DuckIcon size={16} /> Flock
+              </span>
               <span className="tabular-nums">{state.ducks.length} ducks</span>
             </button>
           )}

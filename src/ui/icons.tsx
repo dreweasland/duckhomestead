@@ -341,6 +341,38 @@ export const WoundIcon = (p: PixProps) => (
   />
 );
 
+// ── Panel glyphs (side-panel buttons) ───────────────────────────────
+/** Nutrition — a feed sprout (the ration / grid). */
+export const NutritionIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ g: '#7fae54', h: '#a6d27a', d: '#5a8f3a' }}
+    rows={[
+      '..h..',
+      '.hgh.',
+      'hgggh',
+      '.dgd.',
+      '..d..',
+    ]}
+  />
+);
+
+/** Modules — a faceted gem (loot upgrades). */
+export const ModuleIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ p: '#8a6fc0', l: '#cdbcff', d: '#6b4f9e' }}
+    rows={[
+      '.lll.',
+      'lpppl',
+      'lpppl',
+      'dpppd',
+      '.dpd.',
+      '..d..',
+    ]}
+  />
+);
+
 /** Map a resource key to its icon for inline use. */
 export const RESOURCE_ICON = {
   corn: CornIcon,
