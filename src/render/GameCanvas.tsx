@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js';
 import { playPlace } from '../audio/sfx';
-import { BALANCE, STATION_DEFS, type StationType } from '../config/balance';
+import { STATION_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
+import { BALANCE } from '../config/balance';
 import { stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
-import { isPondTile, stationAt, type Resource, type Station } from '../game/state';
+import { isBlockedTile, stationAt, type Resource, type Station } from '../game/state';
 import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './assets';
 
 const TILE = 56;
@@ -14,12 +15,14 @@ const PAD = 16;
 const TOP_EXTRA = 14;
 const OX = PAD;
 const OY = PAD + TOP_EXTRA;
-const W = BALANCE.GRID.width * TILE + PAD * 2;
-const H = BALANCE.GRID.height * TILE + PAD * 2 + TOP_EXTRA;
 
 interface Props {
   engine: GameEngine;
   selectedId: string | null;
+  /** Which zone the board is currently showing/building in. */
+  zoneId: string;
+  /** Whether that zone is unlocked (locked ⇒ a dimmed, non-interactive tease). */
+  unlocked: boolean;
   /** When a build type is selected, matching stations show their upgrade cost. */
   buildType: StationType | null;
   onTileClick: (x: number, y: number) => void;
@@ -38,11 +41,17 @@ const RES_COLOR: Record<Resource, number> = {
 };
 
 /**
- * PixiJS view of the bounded grid + stations. Renders FROM GameState every
- * frame (no game state lives here). Emits tile clicks back to React.
+ * PixiJS view of one zone's grid + its stations. Renders FROM GameState every
+ * frame (no game state lives here). Rebuilds when the active zone changes (the
+ * grid dimensions / pond differ per zone). Emits tile clicks back to React.
  */
-export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props) {
+export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, onTileClick }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const zone = zoneDef(zoneId) ?? ZONE_DEFS[0];
+  const GRID = zone.grid;
+  const W = GRID.width * TILE + PAD * 2;
+  const H = GRID.height * TILE + PAD * 2 + TOP_EXTRA;
+
   // Keep latest selection + click handler available to the long-lived Pixi
   // objects without re-running the init effect (which would rebuild the app).
   // Without these refs the pointer handler would close over the FIRST render's
@@ -58,6 +67,12 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
     let disposed = false;
     const app = new Application();
     const cleanups: Array<() => void> = [];
+    // The blocked region (Yard pond) is rendered as animated water; other zones
+    // have none. Generic future zones with a non-pond blocked region would need
+    // their own visual, but for 4b only the Yard is blocked.
+    const blocked = zone.blocked;
+    const inBlocked = (gx: number, gy: number) =>
+      !!blocked && gx >= blocked.x && gx < blocked.x + blocked.w && gy >= blocked.y && gy < blocked.y + blocked.h;
 
     // app.init() is async; under React StrictMode the effect can be torn down
     // before it resolves. We must NOT destroy a half-initialized Application
@@ -87,21 +102,23 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
         const overlay = new Graphics();
         const floatLayer = new Container(); // rising +XP feedback, on top
         app.stage.addChild(gridLayer, stationLayer, duckLayer, overlay, floatLayer);
+        // Locked zone: a dimmed silhouette tease (no stations, no input).
+        gridLayer.alpha = unlocked ? 1 : 0.4;
 
         // Bounds the ducks wander within (inside the grass area).
-        const fieldX0 = OX + 6, fieldX1 = OX + BALANCE.GRID.width * TILE - 6;
-        const fieldY0 = OY + 6, fieldY1 = OY + BALANCE.GRID.height * TILE - 6;
+        const fieldX0 = OX + 6, fieldX1 = OX + GRID.width * TILE - 6;
+        const fieldY0 = OY + 6, fieldY1 = OY + GRID.height * TILE - 6;
 
-        // Ground: real grass tiles when available, else a flat checker. Pond
-        // tiles get animated water; the shore is drawn once around the region.
+        // Ground: real grass tiles when available, else a flat checker. Blocked
+        // (pond) tiles get animated water; the shore is drawn once around it.
         const haveGround = textures.ground.some(Boolean);
         const haveWater = textures.water.some(Boolean);
         const waterTiles: Sprite[] = [];
-        for (let gy = 0; gy < BALANCE.GRID.height; gy++) {
-          for (let gx = 0; gx < BALANCE.GRID.width; gx++) {
+        for (let gy = 0; gy < GRID.height; gy++) {
+          for (let gx = 0; gx < GRID.width; gx++) {
             const px = OX + gx * TILE;
             const py = OY + gy * TILE;
-            if (isPondTile(gx, gy) && haveWater) {
+            if (inBlocked(gx, gy) && haveWater) {
               const tile = new Sprite(textures.water[0]);
               tile.position.set(px, py);
               tile.scale.set(SCALE);
@@ -122,10 +139,11 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
           }
         }
 
-        // Pond shore: a single rounded rim around the whole pond region.
-        const pond = BALANCE.POND;
-        const pondPx = { x: OX + pond.x * TILE, y: OY + pond.y * TILE, w: pond.w * TILE, h: pond.h * TILE };
-        if (haveWater) {
+        // Pond shore: a single rounded rim around the whole blocked region.
+        const pondPx = blocked
+          ? { x: OX + blocked.x * TILE, y: OY + blocked.y * TILE, w: blocked.w * TILE, h: blocked.h * TILE }
+          : { x: 0, y: 0, w: 0, h: 0 };
+        if (blocked && haveWater) {
           const shore = new Graphics();
           shore
             .roundRect(pondPx.x + 1, pondPx.y + 1, pondPx.w - 2, pondPx.h - 2, 10)
@@ -136,9 +154,24 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
           gridLayer.addChild(shore);
         }
 
+        // Locked tease: a large padlock silhouette centered on the dim grid.
+        if (!unlocked) {
+          const lock = new Graphics();
+          const cx = OX + (GRID.width * TILE) / 2;
+          const cy = OY + (GRID.height * TILE) / 2;
+          const s = TILE * 0.9;
+          lock.roundRect(cx - s * 0.6, cy - s * 0.1, s * 1.2, s * 0.95, 8).fill({ color: 0x9a8a6a, alpha: 0.5 });
+          lock
+            .arc(cx, cy - s * 0.1, s * 0.42, Math.PI, 0)
+            .stroke({ width: s * 0.18, color: 0x9a8a6a, alpha: 0.5 });
+          lock.circle(cx, cy + s * 0.32, s * 0.12).fill({ color: 0x2a2018, alpha: 0.7 });
+          app.stage.addChild(lock);
+        }
+
         // Input: tap = select/place, double-tap a station = tend, drag a
         // station = move it. All derived from pointer down/move/up so the
-        // gestures don't conflict (a drag is movement, taps are not).
+        // gestures don't conflict (a drag is movement, taps are not). Disabled
+        // entirely on a locked zone (it's a non-interactive tease).
         app.stage.eventMode = 'static';
         app.stage.hitArea = { contains: () => true } as never;
         const toTile = (g: { x: number; y: number }) => ({
@@ -146,7 +179,7 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
           gy: Math.floor((g.y - OY) / TILE),
         });
         const inBounds = (gx: number, gy: number) =>
-          gx >= 0 && gy >= 0 && gx < BALANCE.GRID.width && gy < BALANCE.GRID.height;
+          gx >= 0 && gy >= 0 && gx < GRID.width && gy < GRID.height;
 
         let lastTapId: string | null = null;
         let lastTapAt = 0;
@@ -168,12 +201,13 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
         } | null = null;
 
         app.stage.on('pointerdown', (e) => {
+          if (!unlocked) return;
           const { gx, gy } = toTile(e.global);
           if (!inBounds(gx, gy)) {
             down = null;
             return;
           }
-          const st = stationAt(engine.state, gx, gy);
+          const st = stationAt(engine.state, gx, gy, zoneId);
           down = { id: st?.id ?? null, sx: e.global.x, sy: e.global.y, px: e.global.x, py: e.global.y, dragging: false, gx, gy, valid: true };
         });
 
@@ -189,8 +223,8 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
             const { gx, gy } = toTile(e.global);
             down.gx = gx;
             down.gy = gy;
-            const occ = inBounds(gx, gy) ? stationAt(engine.state, gx, gy) : undefined;
-            down.valid = inBounds(gx, gy) && !isPondTile(gx, gy) && (!occ || occ.id === down.id);
+            const occ = inBounds(gx, gy) ? stationAt(engine.state, gx, gy, zoneId) : undefined;
+            down.valid = inBounds(gx, gy) && !isBlockedTile(zoneId, gx, gy) && (!occ || occ.id === down.id);
           }
         });
 
@@ -210,7 +244,7 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
           // tap of the same station.
           const { gx, gy } = toTile(e.global);
           if (!inBounds(gx, gy)) return;
-          const st = stationAt(engine.state, gx, gy);
+          const st = stationAt(engine.state, gx, gy, zoneId);
           const now = performance.now();
           if (st && lastTapId === st.id && now - lastTapAt < 350) {
             engine.tend(st.id);
@@ -274,7 +308,7 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
         let waterT = 0;
         let waterFrame = 0;
         const inPond = (x: number, y: number) =>
-          x >= pondPx.x && x <= pondPx.x + pondPx.w && y >= pondPx.y && y <= pondPx.y + pondPx.h;
+          pondPx.w > 0 && x >= pondPx.x && x <= pondPx.x + pondPx.w && y >= pondPx.y && y <= pondPx.y + pondPx.h;
         // Cart entrance: play a one-time "arrival" when Auto-Haul unlocks this
         // session (not on load for a player who already has it).
         let prevAutoHaul = engine.state.autoHaulUnlocked;
@@ -305,7 +339,7 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
         const floats: Float[] = [];
         const unsubTend = engine.onTend((e) => {
           const s = engine.state.stations.find((st) => st.id === e.stationId);
-          if (!s) return;
+          if (!s || s.zoneId !== zoneId) return; // only float on the visible zone
           const txt = new Text({ text: `+${e.xp} XP`, style: floatStyle });
           txt.anchor.set(0.5, 1);
           txt.position.set(OX + s.x * TILE + TILE / 2, OY + s.y * TILE + 6);
@@ -315,7 +349,7 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
         cleanups.push(() => unsubTend());
 
         // Ambient ducks: cosmetic only (not game state). A small flock that
-        // grows with the number of coops and free-roams the grass.
+        // grows with the number of coops in THIS zone and free-roams the grass.
         interface Duck { sp: Sprite; x: number; y: number; tx: number; ty: number; facing: number; frame: number; frameT: number; pause: number }
         const ducks: Duck[] = [];
         const DUCK_SCALE = SCALE * 0.78; // ducks read a touch smaller than tiles
@@ -332,9 +366,14 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
 
         const render = () => {
           const state = engine.state;
+          overlay.clear();
+          // Locked tease: nothing to simulate on the board.
+          if (!unlocked) return;
+
+          const zoneStations = state.stations.filter((s) => s.zoneId === zoneId);
           const present = new Set<string>();
 
-          for (const s of state.stations) {
+          for (const s of zoneStations) {
             present.add(s.id);
             const def = STATION_DEFS[s.type];
             const entry = sprites.get(s.id) ?? makeSprite(s);
@@ -444,7 +483,7 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
             }
           }
 
-          // Remove sprites for deleted stations.
+          // Remove sprites for deleted/relocated-away stations.
           for (const [id, entry] of sprites) {
             if (!present.has(id)) {
               entry.c.destroy({ children: true });
@@ -452,9 +491,9 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
             }
           }
 
-          // Ducks: keep the flock sized to the homestead, then waddle them.
+          // Ducks: keep the flock sized to this zone's coops, then waddle them.
           if (haveDucks) {
-            const coops = state.stations.filter((s) => s.type === 'coop').length;
+            const coops = zoneStations.filter((s) => s.type === 'coop').length;
             const want = Math.min(8, 2 + coops);
             while (ducks.length < want) ducks.push(spawnDuck());
             while (ducks.length > want) duckLayer.removeChild(ducks.pop()!.sp);
@@ -471,7 +510,7 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
                   // Reached target: idle a beat, then pick a new spot. A third
                   // of the time they head for the pond (then bob/swim there).
                   d.pause = rand(0.4, 2.2);
-                  if (haveWater && Math.random() < 0.33) {
+                  if (haveWater && pondPx.w > 0 && Math.random() < 0.33) {
                     d.tx = rand(pondPx.x + 8, pondPx.x + pondPx.w - 8);
                     d.ty = rand(pondPx.y + 8, pondPx.y + pondPx.h - 8);
                   } else {
@@ -526,10 +565,6 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
             }
           }
 
-          // Auto-Haul cart: a little cart that loops the placed stations once
-          // unlocked — the visible sign the milestone changed how hauling works.
-          overlay.clear();
-
           // Drop-target highlight while dragging a station (green ok / red no).
           if (down?.dragging && inBounds(down.gx, down.gy)) {
             const tx = OX + down.gx * TILE;
@@ -539,12 +574,14 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
             overlay.roundRect(tx + 2, ty + 2, TILE - 4, TILE - 4, 6).stroke({ width: 2, color: col });
           }
 
+          // Auto-Haul cart: loops THIS zone's stations once unlocked — the
+          // visible sign the milestone changed how hauling works.
           if (state.autoHaulUnlocked && !prevAutoHaul) arrivalT = 0; // just unlocked
           prevAutoHaul = state.autoHaulUnlocked;
 
-          if (state.autoHaulUnlocked && state.stations.length > 0) {
+          if (state.autoHaulUnlocked && zoneStations.length > 0) {
             const dt = app.ticker.deltaMS / 1000;
-            const stops = state.stations;
+            const stops = zoneStations;
 
             if (arrivalT >= 0 && arrivalT < ARRIVAL_DUR) {
               // Entrance: roll in from offscreen-left to the first station.
@@ -596,9 +633,7 @@ export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props
         });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine]);
+  }, [engine, zoneId, unlocked]);
 
   return <div ref={hostRef} className="inline-block leading-none" style={{ width: W, height: H }} />;
 }
-
-export const CANVAS_SIZE = { W, H, TILE, PAD };

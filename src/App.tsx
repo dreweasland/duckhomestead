@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { playCollect, playDing, playLoot, playPlace, playTend, playUpgrade } from './audio/sfx';
 import type { StationType } from './config/balance';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
-import { RARITIES, stationAt } from './game/state';
+import { RARITIES, stationAt, zoneUnlocked } from './game/state';
+import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
 import { useGame } from './game/useGame';
 import { GameCanvas } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
@@ -61,6 +62,7 @@ export default function App() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
+  const [activeZone, setActiveZone] = useState('yard');
   const [awayOpen, setAwayOpen] = useState(true);
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
@@ -82,7 +84,7 @@ export default function App() {
 
   const onTileClick = useCallback(
     (x: number, y: number) => {
-      const existing = stationAt(engine.state, x, y);
+      const existing = stationAt(engine.state, x, y, activeZone);
       if (buildType) {
         if (existing) {
           // Build mode doubles as upgrade: clicking a MATCHING station upgrades
@@ -93,16 +95,16 @@ export default function App() {
           setSelectedId(existing.id);
           return;
         }
-        const r = engine.place(buildType, x, y);
+        const r = engine.place(buildType, x, y, activeZone);
         if (r.ok) {
           playPlace();
-          setSelectedId(stationAt(engine.state, x, y)?.id ?? null);
+          setSelectedId(stationAt(engine.state, x, y, activeZone)?.id ?? null);
         }
         return;
       }
       setSelectedId(existing ? existing.id : null);
     },
-    [engine, buildType],
+    [engine, buildType, activeZone],
   );
 
   return (
@@ -134,6 +136,7 @@ export default function App() {
       <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas + the station box directly under it (close to the tiles). */}
         <div className="flex flex-col items-center gap-3">
+          <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
           <div className="rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
             <ErrorBoundary
               fallback={
@@ -144,13 +147,19 @@ export default function App() {
               }
             >
               <GameCanvas
+                key={activeZone}
                 engine={engine}
                 selectedId={selectedId}
+                zoneId={activeZone}
+                unlocked={zoneUnlocked(state, activeZone)}
                 buildType={buildType}
                 onTileClick={onTileClick}
               />
             </ErrorBoundary>
           </div>
+          {!zoneUnlocked(state, activeZone) && (
+            <ZoneUnlockCard engine={engine} state={state} zoneId={activeZone} />
+          )}
           {showStarterNudge && (
             <div className="max-w-[460px] rounded-md bg-[#2a2018] px-4 py-2.5 text-center text-xs text-[#c9b88f] ring-1 ring-[#3a2e22]">
               Your homestead is already running — the Coop is laying. The flock is short on protein

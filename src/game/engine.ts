@@ -178,8 +178,8 @@ export class GameEngine {
   }
 
   // ── Player actions (wrap pure actions, fire events, re-render) ─────
-  place(type: StationType, x: number, y: number): ActionResult<unknown> {
-    const r = placeStation(this.state, type, x, y);
+  place(type: StationType, x: number, y: number, zoneId = 'yard'): ActionResult<unknown> {
+    const r = placeStation(this.state, type, x, y, zoneId);
     this.notify();
     return r;
   }

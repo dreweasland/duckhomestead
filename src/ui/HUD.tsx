@@ -21,6 +21,9 @@ export function HUD({ state }: { state: GameState }) {
   const prog = rankProgress(state.rank, state.xp);
   const need = xpForLevel(state.rank);
   const [muted, setMutedState] = useState(isMuted());
+  // Forage (foraged energy feed) only appears once a forage zone is in play.
+  const res =
+    state.resources.forage > 0 ? [...RES, { key: 'forage' as Resource, label: 'Forage' }] : RES;
 
   return (
     <div className="flex flex-col gap-3">
@@ -43,7 +46,7 @@ export function HUD({ state }: { state: GameState }) {
 
       {/* Resources: eggs (currency) + the five nutrition ingredients. */}
       <div className="grid grid-cols-3 gap-1.5">
-        {RES.map((r) => {
+        {res.map((r) => {
           const Icon = RESOURCE_ICON[r.key];
           return (
             <div
