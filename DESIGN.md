@@ -106,8 +106,13 @@ Later stages deepen it: different life stages want different profiles (ducklings
 - **Separate duckling ration** (high niacin + protein, its own formulation) gates maturation rate/health → the throughput pipe for flock growth. Crucially it draws from the **same ingredient storage as layers — layers eat first** — so growing the flock *competes* with feeding it; the growth puzzle threads back into the validated layer economy rather than running as a parallel supply chain. Under scarcity, growth throttles before laying does (penalty floor 0.3, never a hard wall); sustained tight protein/niacin → slow grow-out → natural pressure toward feed-economy & grid expansion (a key motivator for zones, 4b). Maturation runs online & offline, but only as well as the ration left set.
 - Build order puts the duckling ration **last** (clean cut-point if the session runs long).
 
-**Predators (Dane County owls):**
-- Threat events that active play defends against; pure idle leaves you slightly exposed — another reason active > idle.
+**Predators — locked design (4c):**
+- **Stakes are real (Drew's pick): any duck can be targeted, breeders included; losses are mixed — usually soft, rare permanent.** Defense is *both* a built floor and active cover.
+- **Locked principle — attributability:** every permanent loss must trace to a *choice* (absence, under-defense, or a neglected wound), **never pure RNG out of nowhere.** This is what makes high stakes feel earned instead of griefed (and kills the save-scum urge).
+- **Mechanisms:** (a) **telegraphed windows** — danger is signaled (dusk/warning), so risk is a decision not an ambush; (b) **built deterrents = protection floor**, **active presence during a window = full cover**; (c) a landed attack is almost always a **wound (soft)**; a wounded duck **escalates to permanent loss only if untended** within a recovery window → active care is the save; (d) **securable breeders** (defended coop / lockdown) — nothing inherently safe, but the irreplaceable is protectable if you invest/act.
+- **Brutality dial:** default = wound-escalation only (every death preventable). Optional `balance.ts` toggle for a **rare instant snatch** (owl just takes a duck, no wound phase) — more brutal/memorable, save-scum-tempting.
+- **Offline = exposure:** windows that pass while away get only the built floor (no presence); unsecured wounds escalate past the timer. A careful player (defenses up, breeders secured) takes soft losses, not a wipe — extended absence during risk windows is where it bites. Enforces active > idle.
+- **Scope:** one predator (the owl — Dane County) as extensible template; foxes/hawks later config.
 
 **Zones / empire — locked design (4b onward):**
 - **Extensible, data-driven zone system.** Yard → back pasture → pond → second homestead. Each unlocked zone adds buildable space **and a signature resource/mechanic**. Build the *system* once; each new zone is config, not new architecture. Back pasture is the first instance (template).
@@ -168,4 +173,4 @@ Later stages deepen it: different life stages want different profiles (ducklings
 
 ---
 
-*v7 — Phase 4a (breeding) built, validated & feeling good. Zones (4b) locked: extensible zone system, double-gated unlock (rank + sink), back pasture first with energy-only free-range forage (passive-but-harmless), shared economy / no logistics. Phase 4b prompt written from this section.*
+*v8 — Phase 4b (back pasture) built & validated. Predators (4c) locked: real stakes (any duck, mixed soft/rare-permanent), both-defense (floor + active), with the attributability principle — every permanent loss traces to a choice (absence/under-defense/neglected wound), never pure RNG. Telegraphed windows + wound-escalation + securable breeders; instant-snatch on a toggle. One owl, extensible. Phase 4c prompt written from this section.*
