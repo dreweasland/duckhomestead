@@ -79,9 +79,11 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // no forage is stocked this is a no-op, so the Phase 2 math is byte-for-byte.)
   const energyReqRate = (N.REQUIREMENT.energy * layerCount) / coopCycle;
   const forageEat = Math.min(Math.max(0, energyReqRate - supply.energy) * step, state.resources.forage);
+  let forageEnergy = 0; // energy/s the forage actually supplied this step (for the dashboard)
   if (forageEat > 0) {
     state.resources.forage -= forageEat;
-    supply.energy += step > 0 ? forageEat / step : 0;
+    forageEnergy = step > 0 ? forageEat / step : 0;
+    supply.energy += forageEnergy;
   }
 
   // Requirement (rate) + satisfaction. The instantaneous ratio is noisy (chunky
@@ -123,7 +125,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // Condition buffers: full condition masks the penalty; empty applies it fully.
   const eggMult = eggMultRaw + (1 - eggMultRaw) * cond;
 
-  state.nutrition = { satisfaction, supply, requirement, eggMultRaw, eggMult, feedScale, hasMill };
+  state.nutrition = { satisfaction, supply, requirement, eggMultRaw, eggMult, feedScale, hasMill, forageEnergy };
 
   // Niacin debuff: sustained shortfall accrues a timer; each time it crosses the
   // onset threshold, one healthy coop's duck gets a leg debuff (halves output).

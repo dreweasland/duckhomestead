@@ -93,6 +93,8 @@ export interface NutritionState {
   /** Mill-capacity scaling on feed throughput (1 = enough mills). */
   feedScale: number;
   hasMill: boolean;
+  /** Energy/s supplied passively by free-range forage this tick (Phase 4b). */
+  forageEnergy?: number;
 }
 
 /** Derived duckling-ration snapshot (gates maturation speed). */

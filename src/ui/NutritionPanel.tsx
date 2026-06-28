@@ -3,7 +3,7 @@ import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from '../game/state';
 import { fmt } from './format';
-import { CloseIcon, RESOURCE_ICON } from './icons';
+import { CloseIcon, ForageIcon, RESOURCE_ICON } from './icons';
 
 const N = BALANCE.NUTRITION;
 const B = BALANCE.BREEDING;
@@ -170,6 +170,19 @@ export function NutritionPanel({
                 Nutrient balance ({adults} adult{adults > 1 ? 's' : ''})
               </div>
               <AxisBars satisfaction={n?.satisfaction ?? ({} as Record<Axis, number>)} axes={AXES} />
+
+              {n && (n.forageEnergy ?? 0) > 0 && (
+                <div className="mb-3 flex items-center gap-2 rounded-md bg-[#26331f] px-3 py-1.5 text-[11px] text-[#bfe8a8]">
+                  <ForageIcon size={14} />
+                  <span>
+                    Free-range forage is auto-feeding{' '}
+                    <span className="font-bold">
+                      {Math.round((100 * (n.forageEnergy ?? 0)) / (n.requirement.energy || 1))}%
+                    </span>{' '}
+                    of energy — dial corn down to lean on it. ({fmt(state.resources.forage)} banked)
+                  </span>
+                </div>
+              )}
 
               {n && n.feedScale < 1 && (
                 <div className="mb-3 rounded-md bg-[#3a2418] px-3 py-1.5 text-[11px] text-[#e8a35a]">
