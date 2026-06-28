@@ -64,6 +64,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
+  const [tendFlash, setTendFlash] = useState<{ id: number; xp: number } | null>(null);
   const [awayOpen, setAwayOpen] = useState(true);
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
@@ -231,20 +232,35 @@ export default function App() {
             </button>
           )}
           {state.tendAllUnlocked && state.stations.length > 0 && (
-            <button
-              onClick={() => {
-                if (engine.tendAll().tended > 0) playTend();
-              }}
-              disabled={readyToTend === 0}
-              className={`flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold transition ${
-                readyToTend > 0
-                  ? 'bg-[#2e6b3a] text-[#dfffd6] hover:bg-[#367a44]'
-                  : 'cursor-not-allowed bg-[#1f1812] text-[#6a5a3a]'
-              }`}
-            >
-              <TendIcon size={16} />
-              {readyToTend > 0 ? `Tend All — ${readyToTend} ready` : 'All tended — cooling down'}
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => {
+                  const { tended, xpGained } = engine.tendAll();
+                  if (tended > 0) {
+                    playTend();
+                    setTendFlash({ id: Date.now(), xp: xpGained });
+                  }
+                }}
+                disabled={readyToTend === 0}
+                className={`flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold transition ${
+                  readyToTend > 0
+                    ? 'bg-[#2e6b3a] text-[#dfffd6] hover:bg-[#367a44]'
+                    : 'cursor-not-allowed bg-[#1f1812] text-[#6a5a3a]'
+                }`}
+              >
+                <TendIcon size={16} />
+                {readyToTend > 0 ? `Tend All — ${readyToTend} ready` : 'All tended — cooling down'}
+              </button>
+              {tendFlash && (
+                <span
+                  key={tendFlash.id}
+                  className="xp-float pointer-events-none absolute -top-3 right-2 text-sm font-black text-[#8fe388] drop-shadow"
+                  onAnimationEnd={() => setTendFlash(null)}
+                >
+                  +{tendFlash.xp} XP
+                </span>
+              )}
+            </div>
           )}
           <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
           {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}

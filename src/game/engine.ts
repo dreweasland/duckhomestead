@@ -270,20 +270,22 @@ export class GameEngine {
    * station goes on a fresh cooldown, a full sweep re-syncs them into a real
    * breather. Returns how many stations were tended.
    */
-  tendAll(): { tended: number } {
+  tendAll(): { tended: number; xpGained: number } {
     let tended = 0;
+    let xpGained = 0;
     for (const s of [...this.state.stations]) {
       if (s.tendCooldownRemaining > 0) continue;
       const r = tend(this.state, s.id);
       if (!r.ok) continue;
       tended++;
+      xpGained += r.value.xp.xpGained;
       this.emitTend({ stationId: s.id, xp: r.value.xp.xpGained });
       this.fireXp(r.value.xp);
       const dropped = tryTendDrop(this.state);
       if (dropped) this.emitLoot({ module: dropped, source: 'drop' });
     }
     this.notify();
-    return { tended };
+    return { tended, xpGained };
   }
 
   // ── Modules ────────────────────────────────────────────────────────

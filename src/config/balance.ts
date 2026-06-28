@@ -214,14 +214,14 @@ export const BALANCE = {
    * whistle collapses it to one click AND re-syncs every cooldown so a sweep
    * buys a real ~TEND_COOLDOWN_S breather. Tune later than Auto-Haul.
    */
-  MILESTONE_TENDALL_RANK: 8,
+  MILESTONE_TENDALL_RANK: 10,
 
   // ── Phase 4b: zones (data-driven; see ZONE_DEFS below) ──────────────
   ZONES: {
     /** The first zone beyond the always-unlocked Yard. */
     BACK_PASTURE: {
-      rankRequired: 10, // gate against the rank curve — tune
-      eggCost: 2000, // the big egg sink — tune to feel like a real milestone
+      rankRequired: 15, // gate against the rank curve — tune
+      eggCost: 4000, // the big egg sink — tune to feel like a real milestone
       tileRegionSize: { width: 6, height: 8 }, // added buildable space
     },
     /**
