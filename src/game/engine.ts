@@ -21,9 +21,9 @@ import {
 } from './actions';
 import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
-import { clearStorage, loadGame, saveToStorage, type AwaySummary } from './save';
+import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
-import { initialState, type Color, type GameState, type Ingredient, type Module, type Resource } from './state';
+import { type Color, type GameState, type Ingredient, type Module, type Resource } from './state';
 
 export interface DingEvent {
   newRank: number;
@@ -306,7 +306,7 @@ export class GameEngine {
   /** Wipe the save and start a fresh homestead. */
   reset() {
     clearStorage();
-    this.state = initialState(Date.now());
+    this.state = newGame(Date.now());
     this.away = null;
     this.saveNow();
     this.notify();

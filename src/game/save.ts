@@ -1,5 +1,5 @@
 import { BALANCE } from '../config/balance';
-import { collectAll } from './actions';
+import { collectAll, placeStation } from './actions';
 import { initialState, seedFlock, type GameState, type Resource } from './state';
 import { tick } from './tick';
 
@@ -124,6 +124,27 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
  * Load saved state and apply offline catch-up. If no save exists, returns a
  * fresh state and no summary.
  */
+/**
+ * A genuinely fresh homestead. The starter engine — plot + mill + coop — is
+ * pre-placed for FREE so eggs flow from t=0, the core loop is legible, and
+ * nothing can softlock; the flock auto-seeds on the coop. The player keeps a
+ * small egg stipend so their FIRST build is the meaningful one: the protein
+ * (Mealworm Farm) + calcium (Oyster Source) producers that fix the flock's
+ * nutrition. Only the real new-game path uses this — `initialState` stays an
+ * empty board for tests and the deserialize template.
+ */
+export function newGame(now: number): GameState {
+  const state = initialState(now);
+  // placeStation charges eggs and seeds the flock on the first coop, so fund it
+  // generously, place the engine, then set the actual starting stipend.
+  state.resources.eggs = Number.MAX_SAFE_INTEGER;
+  placeStation(state, 'plot', 2, 3);
+  placeStation(state, 'mill', 3, 3);
+  placeStation(state, 'coop', 4, 3);
+  state.resources.eggs = BALANCE.STARTING_EGGS;
+  return state;
+}
+
 export function loadGame(now: number): { state: GameState; away: AwaySummary | null } {
   let raw: string | null = null;
   try {
@@ -131,7 +152,7 @@ export function loadGame(now: number): { state: GameState; away: AwaySummary | n
   } catch {
     raw = null;
   }
-  if (!raw) return { state: initialState(now), away: null };
+  if (!raw) return { state: newGame(now), away: null };
 
   const state = deserialize(raw, now);
   const away = runOfflineCatchUp(state, now);

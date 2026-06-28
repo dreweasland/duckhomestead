@@ -77,14 +77,13 @@ export const BALANCE = {
   REFUND_FRACTION: 0.5,
 
   /**
-   * Eggs the player starts with. MUST cover the full starter chain
-   * (plot 10 + mill 25 + coop 50 = 85) or the economy softlocks: eggs only
-   * come from a Coop, so you can't bootstrap without affording one. Sized to
-   * ALSO afford the protein + calcium producers (mealwormFarm 35 + oysterSource
-   * 30) right away, so a fresh flock can cover the egg-gating axes from the
-   * start instead of grinding at the floor first (peas/niacin come later).
+   * Egg stipend a fresh game starts with. The starter engine (plot + mill +
+   * coop) is now PRE-PLACED for free by newGame(), so this only has to fund the
+   * player's first meaningful build: the protein (mealwormFarm 35) + calcium
+   * (oysterSource 30) producers that fix the flock's nutrition, with a little
+   * slack to misplace once. Peas/niacin come later, earned from eggs.
    */
-  STARTING_EGGS: 150,
+  STARTING_EGGS: 70,
 
   /**
    * Cost in EGGS to upgrade a station to the next level.

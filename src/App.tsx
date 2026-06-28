@@ -70,6 +70,16 @@ export default function App() {
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
   const anyBuffer = state.stations.some((s) => Object.values(s.buffer).some((v) => (v ?? 0) > 0));
 
+  // Onboarding nudge for the pre-placed starter: the Coop is already laying but
+  // short on protein + calcium. Point at the first meaningful build, then
+  // self-hide once both producers exist. (No persisted flag — purely derived.)
+  const hasCoop = state.stations.some((s) => s.type === 'coop');
+  const missingProducers = [
+    !state.stations.some((s) => s.type === 'mealwormFarm') && 'a Mealworm Farm (protein)',
+    !state.stations.some((s) => s.type === 'oysterSource') && 'an Oyster Source (calcium)',
+  ].filter(Boolean) as string[];
+  const showStarterNudge = hasCoop && missingProducers.length > 0;
+
   const onTileClick = useCallback(
     (x: number, y: number) => {
       const existing = stationAt(engine.state, x, y);
@@ -141,12 +151,11 @@ export default function App() {
               />
             </ErrorBoundary>
           </div>
-          {state.stations.length === 0 && (
-            <div className="max-w-[460px] text-center text-xs text-[#9a8a6a]">
-              You start with {state.resources.eggs} eggs. Place a Feed Plot (grows corn), a Feed Mill
-              (blends the ration), and a Coop (lays eggs). The Coop's lay rate depends on its
-              feed — once it's running, open Nutrition to balance the ration and add ingredient
-              stations (peas, mealworms, yeast, shell).
+          {showStarterNudge && (
+            <div className="max-w-[460px] rounded-md bg-[#2a2018] px-4 py-2.5 text-center text-xs text-[#c9b88f] ring-1 ring-[#3a2e22]">
+              Your homestead is already running — the Coop is laying. The flock is short on protein
+              and calcium, so build {missingProducers.join(' and ')} from the bar below (you have{' '}
+              {Math.round(state.resources.eggs)} eggs), then open Nutrition to balance the ration.
             </div>
           )}
           {selected && (
