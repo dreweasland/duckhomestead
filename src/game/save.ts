@@ -31,6 +31,7 @@ export function deserialize(raw: string, now: number): GameState {
       // Default Phase 2 fields for Phase 1 saves; merge ration so a partial
       // saved ration still has every ingredient key.
       ration: { ...base.ration, ...(parsed.ration ?? {}) },
+      ducklingRation: { ...base.ducklingRation, ...(parsed.ducklingRation ?? {}) },
       condition: parsed.condition ?? base.condition,
       niacinShortfall: parsed.niacinShortfall ?? 0,
       doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,

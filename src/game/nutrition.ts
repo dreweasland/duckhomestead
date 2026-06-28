@@ -123,6 +123,19 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
     state.niacinShortfall = Math.max(0, state.niacinShortfall - step);
   }
 
+  layNutritionTail(state, willHaul, coops, eggMult, layers, coopCycle, step);
+}
+
+// Split out so runDucklingNutrition can sit beside the layer logic below.
+function layNutritionTail(
+  state: GameState,
+  willHaul: boolean,
+  coops: GameState['stations'],
+  eggMult: number,
+  layers: ReturnType<typeof adultLayers>,
+  coopCycle: number,
+  step: number,
+): void {
   // Lay eggs: sum over adult hens of base × VIGOR × nutrition throttle × leg
   // debuff, then × the flock-wide eggOutput module bonus. Vigor and modules
   // multiply OUTPUT only — never the f(axis)/requirement math above.
@@ -146,4 +159,52 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
       }
     }
   }
+}
+
+/** Axes the duckling grow-out ration must cover (calcium isn't required). */
+const DUCKLING_AXES: Axis[] = ['energy', 'protein', 'niacin'];
+
+/**
+ * Advance the duckling grow-out ration: immature ducks consume ingredients from
+ * the SAME storage pool as the layers (so feeding the flock competes with growing
+ * it). Returns a maturation-speed multiplier (1 = full, down to the penalty floor)
+ * from the worst required axis. Runs online & offline; never grants XP. Uses the
+ * same satisfaction math as the layer ration — a throttle, never a wall.
+ */
+export function runDucklingNutrition(state: GameState, dt: number, rateMult: number): number {
+  const B = BALANCE.BREEDING;
+  const immature = state.ducks.filter((d) => d.stage !== 'adult');
+  if (immature.length === 0) {
+    state.ducklingNutrition = undefined;
+    return 1;
+  }
+  const step = dt * rateMult;
+  const coopCycle = BALANCE.COOP.cycleSeconds;
+  const n = immature.length;
+
+  const supply = zeroAxes();
+  for (const ing of INGREDIENTS) {
+    const want = (((state.ducklingRation[ing] ?? 0) * n) / coopCycle) * step;
+    const consume = Math.min(want, state.resources[ing as Ingredient]);
+    if (consume > 0) state.resources[ing as Ingredient] -= consume;
+    const rate = step > 0 ? consume / step : 0;
+    const vals = N.INGREDIENT[ing as Ingredient] as Record<Axis, number>;
+    for (const axis of AXES) supply[axis] += rate * (vals[axis] ?? 0);
+  }
+
+  const requirement = zeroAxes();
+  const satisfaction = zeroAxes();
+  const prior = state.ducklingNutrition?.satisfaction;
+  const alpha = N.SMOOTH_TAU_S > 0 ? Math.min(1, step / N.SMOOTH_TAU_S) : 1;
+  for (const axis of AXES) {
+    requirement[axis] = (B.DUCKLING_REQUIREMENT[axis] * n) / coopCycle;
+    const instant = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
+    satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
+  }
+
+  const minSat = Math.min(...DUCKLING_AXES.map((a) => satisfaction[a]));
+  const floor = B.DUCKLING_RATION_MATURE_PENALTY_FLOOR;
+  const matureRate = floor + (1 - floor) * clamp01(minSat);
+  state.ducklingNutrition = { satisfaction, requirement, matureRate, immatureCount: n };
+  return matureRate;
 }

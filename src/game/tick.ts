@@ -3,7 +3,7 @@ import type { Resource } from './state';
 import type { GameState, Station } from './state';
 import { UPGRADE_OUTPUT } from './actions';
 import { cycleMult, yieldMult } from './loot';
-import { runNutrition } from './nutrition';
+import { runNutrition, runDucklingNutrition } from './nutrition';
 import { runBreeding } from './breeding';
 
 export type SimMode = 'online' | 'offline';
@@ -120,7 +120,10 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // lay eggs throttled by per-axis satisfaction (buffered by flock condition).
   runNutrition(state, dt, rateMult, willHaul);
 
+  // Duckling grow-out ration consumes the leftover ingredients (layers eat first)
+  // and gates maturation speed.
+  const matureRate = runDucklingNutrition(state, dt, rateMult);
+
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
-  // matureRate is 1 until Step 5's duckling ration gates it.
-  runBreeding(state, dt * rateMult);
+  runBreeding(state, dt * rateMult, matureRate);
 }

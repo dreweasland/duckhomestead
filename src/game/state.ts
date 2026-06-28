@@ -92,6 +92,15 @@ export interface NutritionState {
   hasMill: boolean;
 }
 
+/** Derived duckling-ration snapshot (gates maturation speed). */
+export interface DucklingNutritionState {
+  satisfaction: Record<Axis, number>;
+  requirement: Record<Axis, number>;
+  /** Maturation speed multiplier (1 = full, down to the penalty floor). */
+  matureRate: number;
+  immatureCount: number;
+}
+
 // ── Phase 4a: breeding & genetics ──
 /** Blue-dilution locus alleles. `Bl` = blue allele, `bl` = wild-type. */
 export type Allele = 'Bl' | 'bl';
@@ -164,8 +173,12 @@ export interface GameState {
   autoHaulUnlocked: boolean;
 
   // ── Phase 2: nutrition ──
-  /** Active ration: units of each ingredient fed per coop per cycle. */
+  /** Active layer ration: units of each ingredient fed per adult duck per cycle. */
   ration: Record<Ingredient, number>;
+  /** Grow-out ration fed to immature ducks (gates maturation). */
+  ducklingRation: Record<Ingredient, number>;
+  /** Derived duckling-nutrition snapshot (recomputed each tick). */
+  ducklingNutrition?: DucklingNutritionState;
   /** Flock condition reserve (0..CONDITION_MAX) — the battery that buffers
    *  shortfalls and powers offline. */
   condition: number;
@@ -217,6 +230,7 @@ export function initialState(now: number): GameState {
     xp: 0,
     autoHaulUnlocked: false,
     ration: { ...BALANCE.NUTRITION.DEFAULT_RATION },
+    ducklingRation: { ...BALANCE.BREEDING.DEFAULT_DUCKLING_RATION },
     condition: BALANCE.NUTRITION.CONDITION_MAX,
     niacinShortfall: 0,
     doseCooldownRemaining: 0,

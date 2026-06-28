@@ -283,6 +283,11 @@ export class GameEngine {
     this.state.ration[ingredient] = Math.max(0, value);
     this.notify();
   }
+  /** Set the grow-out ration fed to immature ducks (gates maturation). */
+  setDucklingRation(ingredient: Ingredient, value: number) {
+    this.state.ducklingRation[ingredient] = Math.max(0, value);
+    this.notify();
+  }
 
   /** Active-only intervention: clear one duck's niacin leg debuff. */
   dose(): ActionResult<unknown> {

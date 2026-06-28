@@ -4,7 +4,7 @@ import { createPair, cullDuck, removePair } from '../src/game/actions';
 import { breedVigor, populationMeanVigor } from '../src/game/genetics';
 import { runOfflineCatchUp, serialize, deserialize } from '../src/game/save';
 import { phenotype, type Duck, type GameState } from '../src/game/state';
-import { build, run } from './helpers';
+import { build, run, stockAll } from './helpers';
 
 const B = BALANCE.BREEDING;
 
@@ -31,7 +31,7 @@ describe('createPair guards', () => {
 
 describe('breeding loop end to end', () => {
   it('pair → clutch → incubate → hatch → mature to adult', () => {
-    const s = build({ coop: 2 }); // capacity 8, seeded 3
+    const s = stockAll(build({ coop: 2 })); // capacity 8; stocked so ducklings can grow
     const { drakeId, henId } = pairFlock(s, ['Bl', 'bl']);
     // re-seed leaves nextDuckId; createPair needs the controlled ducks
     createPair(s, drakeId, henId);

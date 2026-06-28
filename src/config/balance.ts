@@ -258,9 +258,11 @@ export const BALANCE = {
     INCUBATE_S: 60, // fertilized egg -> duckling
     MATURE_DUCKLING_S: 180, // duckling -> juvenile (gated by duckling ration)
     MATURE_JUVENILE_S: 180, // juvenile -> adult
-    /** Duckling ration profile (Step 5) — high protein/niacin. */
+    /** Duckling ration profile — high protein/niacin (per immature duck per cycle). */
     DUCKLING_REQUIREMENT: { energy: 1, protein: 3, niacin: 2, calcium: 0 },
     DUCKLING_RATION_MATURE_PENALTY_FLOOR: 0.3, // worst-case maturation speed mult
+    /** Default grow-out ration fed to immature ducks (satisfies E/P/N when stocked). */
+    DEFAULT_DUCKLING_RATION: { corn: 1, peas: 0, mealworms: 2.5, brewersYeast: 2, oysterShell: 0 },
     /** Starting flock seeded into the first coop (Blue carriers, mid vigor). */
     SEED_DRAKES: 1,
     SEED_HENS: 2,
