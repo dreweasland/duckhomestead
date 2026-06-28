@@ -275,6 +275,18 @@ export const BALANCE = {
 
     /** Eggs to build one deterrent (raises the floor). */
     DETERRENT_COST_EGGS: 150,
+    /**
+     * Deterrents weather: their protection floor scales with an integrity meter
+     * (1 = pristine). Each threat window weathers them a little; a landed attack
+     * (a breach of the floor) tears them more. They never repair themselves —
+     * Repair (active, eggs) is the upkeep. So a defended homestead is never
+     * "done": idle erodes the floor too, not just exposes ducks. Secured housing
+     * stays reliable (it carries the no-wipe guarantee), so a worn-down offline
+     * night is still soft, capped losses on the UNSECURED flock — not a wipe.
+     */
+    DETERRENT_WEAR_PER_WINDOW: 0.03, // ambient weathering per threat window
+    DETERRENT_WEAR_PER_HIT: 0.12, // extra damage when an attack breaches the floor
+    DETERRENT_REPAIR_COST_PER_NET: 50, // eggs to fully repair one net (prorated by wear)
     /** Eggs to build one Secure Coop. Each adds SECURE_SLOTS_PER_COOP slots; a
      *  duck marked secured (up to the slot total) is excluded from targeting. */
     SECURE_COOP_COST_EGGS: 400,

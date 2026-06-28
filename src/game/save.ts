@@ -57,6 +57,7 @@ export function deserialize(raw: string, now: number): GameState {
       // every known predator present; drop any stale transient events.
       predators: { ...base.predators, ...(parsed.predators ?? {}) },
       deterrents: parsed.deterrents ?? 0,
+      deterrentIntegrity: parsed.deterrentIntegrity ?? 1,
       secureCoops: parsed.secureCoops ?? 0,
       // Pre-4c saves (and any not-yet-introduced save) keep the first-contact
       // grace: predators won't resolve their first window until the player is

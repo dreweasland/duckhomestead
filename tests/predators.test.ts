@@ -18,6 +18,7 @@ import {
 import {
   buildDeterrent,
   buildSecureCoop,
+  repairDeterrents,
   setSecured,
   treatDuck,
 } from '../src/game/actions';
@@ -104,6 +105,68 @@ describe('attack success formula', () => {
     for (let i = 0; i < 20; i++) buildDeterrent(s);
     expect(defenseFloor(s)).toBe(P.DEFENSE_FLOOR_CAP);
     expect(attackChance(s, OWL, false)).toBeGreaterThan(0);
+  });
+});
+
+describe('deterrent integrity — the defense upkeep loop', () => {
+  it('the floor scales with integrity (a worn floor protects less)', () => {
+    const s = flock(4);
+    buildDeterrent(s); // 1 pristine net
+    const full = defenseFloor(s);
+    s.deterrentIntegrity = 0.5;
+    expect(defenseFloor(s)).toBeCloseTo(full * 0.5, 6);
+  });
+
+  it('a threat window weathers the nets (ambient wear)', () => {
+    const s = flock(4);
+    s.deterrents = 4;
+    s.deterrentIntegrity = 1;
+    s.predators.owl.timeToNextWindow = 0; // opens this step
+    runPredators(s, 1, { mode: 'online', rng: never }); // no attacks land
+    expect(s.deterrentIntegrity).toBeCloseTo(1 - P.DETERRENT_WEAR_PER_WINDOW, 6);
+  });
+
+  it('a breach tears the nets harder than ambient wear', () => {
+    const s = flock(4);
+    s.deterrents = 1; // low floor -> the attack breaches
+    s.deterrentIntegrity = 1;
+    openWindow(s);
+    runPredators(s, OWL.windowDurationSec / (OWL.attacksPerWindow + 1), { mode: 'offline', rng: always });
+    expect(s.deterrentIntegrity).toBeCloseTo(1 - P.DETERRENT_WEAR_PER_HIT, 6);
+    expect(P.DETERRENT_WEAR_PER_HIT).toBeGreaterThan(P.DETERRENT_WEAR_PER_WINDOW);
+  });
+
+  it('Repair restores integrity to pristine for a wear-prorated cost', () => {
+    const s = flock(4);
+    s.resources.eggs = 1000;
+    s.deterrents = 4;
+    s.deterrentIntegrity = 0.5;
+    const expectedCost = Math.round(4 * P.DETERRENT_REPAIR_COST_PER_NET * 0.5);
+    const r = repairDeterrents(s);
+    expect(r.ok).toBe(true);
+    expect(s.deterrentIntegrity).toBe(1);
+    expect(s.resources.eggs).toBe(1000 - expectedCost);
+    expect(repairDeterrents(s).ok).toBe(false); // already pristine
+  });
+
+  it('building a fresh net raises the average integrity of a worn set', () => {
+    const s = flock(4);
+    s.resources.eggs = 1e7;
+    s.deterrents = 3;
+    s.deterrentIntegrity = 0; // three fully-worn nets
+    buildDeterrent(s);
+    expect(s.deterrents).toBe(4);
+    expect(s.deterrentIntegrity).toBeCloseTo((0 * 3 + 1) / 4, 6);
+  });
+
+  it('the floor weathers down while you are away (offline)', () => {
+    const s = flock(8);
+    s.rank = 5;
+    s.deterrents = 4;
+    s.deterrentIntegrity = 1;
+    s.lastSeen = -8 * HOUR;
+    runOfflineCatchUp(s, 0);
+    expect(s.deterrentIntegrity).toBeLessThan(1); // can't repair while away
   });
 });
 

@@ -418,8 +418,30 @@ export function buildDeterrent(state: GameState): ActionResult<{ deterrents: num
   const cost = BALANCE.PREDATORS.DETERRENT_COST_EGGS;
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;
+  // A fresh, pristine net raises the average integrity of the (possibly worn) set.
+  state.deterrentIntegrity =
+    (state.deterrentIntegrity * state.deterrents + 1) / (state.deterrents + 1);
   state.deterrents += 1;
   return done({ deterrents: state.deterrents });
+}
+
+/**
+ * Repair the deterrent floor back to pristine. Cost is prorated by how worn it is
+ * (and how many nets), so topping off and full repairs cost the same per unit.
+ * Active-only upkeep — you can't repair while away, so the floor decays offline.
+ */
+export function repairDeterrents(state: GameState): ActionResult<{ cost: number }> {
+  const P = BALANCE.PREDATORS;
+  if (state.deterrents <= 0) return fail('No deterrents to repair');
+  if (state.deterrentIntegrity >= 1) return fail('Deterrents are already pristine');
+  const cost = Math.max(
+    1,
+    Math.round(state.deterrents * P.DETERRENT_REPAIR_COST_PER_NET * (1 - state.deterrentIntegrity)),
+  );
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.deterrentIntegrity = 1;
+  return done({ cost });
 }
 
 /**

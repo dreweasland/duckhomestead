@@ -247,6 +247,9 @@ export interface GameState {
   predators: Record<string, PredatorState>;
   /** Built deterrents (count) — each raises the homestead-wide protection floor. */
   deterrents: number;
+  /** Deterrent integrity (0..1): the floor scales with it. Worn by threat windows
+   *  + breaches; restored by the Repair action. The defense upkeep loop. */
+  deterrentIntegrity: number;
   /** Built Secure Coops (count) — each adds SECURE_SLOTS_PER_COOP secure slots. */
   secureCoops: number;
   /** First-contact grace: predators only ever resolve their first window once the
@@ -305,11 +308,13 @@ export function secureCapacity(state: GameState): number {
   return state.secureCoops * BALANCE.PREDATORS.SECURE_SLOTS_PER_COOP;
 }
 
-/** Homestead-wide protection floor from built deterrents (capped). Passive,
- *  always-on, works offline — the floor that survives your absence. */
+/** Homestead-wide protection floor from built deterrents (capped), scaled by their
+ *  integrity. Passive and offline-safe, but it WEARS — a neglected floor sags
+ *  toward zero, so it must be repaired to keep its full value. */
 export function defenseFloor(state: GameState): number {
   const P = BALANCE.PREDATORS;
-  return Math.min(P.DEFENSE_FLOOR_CAP, state.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT);
+  const raw = state.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT * state.deterrentIntegrity;
+  return Math.min(P.DEFENSE_FLOOR_CAP, raw);
 }
 
 /** Mutable per-zone state (the static shape lives in ZONE_DEFS). */
@@ -358,6 +363,7 @@ export function initialState(now: number): GameState {
     zones: initialZones(),
     predators: initialPredators(),
     deterrents: 0,
+    deterrentIntegrity: 1,
     secureCoops: 0,
     predatorsIntroduced: false,
     lastSeen: now,

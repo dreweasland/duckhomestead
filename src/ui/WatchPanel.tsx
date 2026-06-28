@@ -46,7 +46,19 @@ export function WatchPanel({
   const deterrentCost = P.DETERRENT_COST_EGGS;
   const secureCost = P.SECURE_COOP_COST_EGGS;
   const treatCost = P.TREAT_COST_EGGS;
-  const floorMaxed = floor >= P.DEFENSE_FLOOR_CAP;
+  // Maxed keys off PRISTINE capacity (so wear doesn't re-invite building more nets —
+  // you repair instead).
+  const floorMaxed = state.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP;
+
+  // Deterrent integrity + repair.
+  const integrity = state.deterrentIntegrity;
+  const integrityPct = Math.round(integrity * 100);
+  const repairCost = Math.max(
+    1,
+    Math.round(state.deterrents * P.DETERRENT_REPAIR_COST_PER_NET * (1 - integrity)),
+  );
+  const integrityColor = integrity >= 0.66 ? '#8fe388' : integrity >= 0.33 ? '#e8c45a' : '#e8835a';
+  const canRepair = state.deterrents > 0 && integrity < 1 && eggs >= repairCost;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -94,11 +106,47 @@ export function WatchPanel({
           <StatRow
             label="Protection floor"
             value={`${floorPct}%`}
-            hint={`cap ${capPct}% · ${state.deterrents} built`}
+            hint={`cap ${capPct}% · ${state.deterrents} nets @ ${integrityPct}%`}
           />
           <StatRow label="Secured breeders" value={`${securedCount} / ${slots}`} hint="excluded from attacks" />
           <StatRow label="Wounded" value={`${wounded.length}`} hint={wounded.length ? 'treat before they escalate' : 'none'} />
         </div>
+
+        {/* Deterrent integrity + repair — the upkeep loop */}
+        {state.deterrents > 0 && (
+          <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+                Deterrent integrity
+              </span>
+              <span className="text-xs font-bold tabular-nums" style={{ color: integrityColor }}>
+                {integrityPct}%
+              </span>
+            </div>
+            <div className="mb-2 h-2 overflow-hidden rounded-full bg-[#3a2e22]">
+              <div
+                className="h-full rounded-full transition-[width]"
+                style={{ width: `${integrityPct}%`, background: integrityColor }}
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (engine.repairDeterrents().ok) playPlace();
+              }}
+              disabled={!canRepair}
+              className={`w-full rounded-md px-3 py-2 text-xs font-bold transition ${
+                canRepair
+                  ? 'bg-[#2e3a26] text-[#bfe8a8] hover:bg-[#36422c]'
+                  : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+              }`}
+            >
+              {integrity >= 1 ? 'Nets pristine' : `Repair nets · ${repairCost} eggs`}
+            </button>
+            <div className="mt-1 text-[10px] text-[#7a6a4a]">
+              Threat windows weather the nets and breaches tear them — repair to keep the floor up.
+            </div>
+          </div>
+        )}
 
         {/* Build defenses */}
         <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">

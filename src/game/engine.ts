@@ -3,6 +3,7 @@ import {
   autoFillRack,
   buildDeterrent,
   buildSecureCoop,
+  repairDeterrents,
   collectAll,
   collectStation,
   createPair,
@@ -428,6 +429,12 @@ export class GameEngine {
   /** Build a Secure Coop (adds secure slots for protecting prize breeders). */
   buildSecureCoop(): ActionResult<{ secureCoops: number }> {
     const r = buildSecureCoop(this.state);
+    this.notify();
+    return r;
+  }
+  /** Repair the deterrent floor back to pristine (active-only upkeep). */
+  repairDeterrents(): ActionResult<{ cost: number }> {
+    const r = repairDeterrents(this.state);
     this.notify();
     return r;
   }

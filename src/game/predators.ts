@@ -150,10 +150,20 @@ function emit(state: GameState, e: PredatorEvent): void {
   (state.pendingPredatorEvents ??= []).push(e);
 }
 
+/** Weather the deterrent floor (no-op without deterrents). Clamped at 0; only the
+ *  Repair action brings it back up. */
+function wearDeterrents(state: GameState, amount: number): void {
+  if (state.deterrents <= 0) return;
+  state.deterrentIntegrity = Math.max(0, state.deterrentIntegrity - amount);
+}
+
 /** Resolve one attack attempt for a predator during its open window. */
 function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, rng: () => number): void {
   const success = attackChance(state, def, opts.mode === 'online');
   if (rng() >= success) return; // attack missed (defenses/presence held)
+
+  // A breach — the attack got past the floor — tears the netting extra.
+  wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
 
   const target = pickTarget(state, rng);
   if (!target) return; // nothing exposed (all secured / none eligible) — no effect
@@ -211,6 +221,7 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     ps.windowRemaining = def.windowDurationSec;
     ps.windowElapsed = 0;
     ps.attacksFired = 0;
+    wearDeterrents(state, P.DETERRENT_WEAR_PER_WINDOW); // the night weathers the nets
     emit(state, { kind: 'open', predatorId: def.id });
   }
 }
