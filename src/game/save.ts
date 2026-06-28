@@ -45,8 +45,12 @@ export function deserialize(raw: string, now: number): GameState {
       breedingPairs: parsed.breedingPairs ?? [],
       nextPairId: parsed.nextPairId ?? 1,
       dexSeen: parsed.dexSeen ?? [],
+      // Phase 4b zones: pre-4b saves get the default (Yard-only unlocked); merge
+      // so a partial saved zone map still has every known zone present.
+      zones: { ...base.zones, ...(parsed.zones ?? {}) },
       stations: (parsed.stations ?? []).map((s) => ({
         ...s,
+        zoneId: s.zoneId ?? 'yard', // pre-4b stations all lived in the Yard
         level: s.level ?? 1,
         cycleProgress: s.cycleProgress ?? 0,
         buffer: s.buffer ?? {},

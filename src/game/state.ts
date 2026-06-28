@@ -1,4 +1,4 @@
-import { BALANCE, type StationType } from '../config/balance';
+import { BALANCE, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
 
 /**
  * Storage resources. `eggs` is the primary spendable currency. `corn`,
@@ -12,6 +12,7 @@ export type Resource =
   | 'mealworms'
   | 'brewersYeast'
   | 'oysterShell'
+  | 'forage'
   | 'pellets'
   | 'eggs';
 
@@ -29,7 +30,9 @@ export type Ingredient = (typeof INGREDIENTS)[number];
 export interface Station {
   id: string;
   type: StationType;
-  /** Tile coordinates on the bounded grid. */
+  /** Which zone this station lives in (Phase 4b). Defaults to 'yard'. */
+  zoneId: string;
+  /** Tile coordinates within its zone's local grid. */
   x: number;
   y: number;
   /** Upgrade level, starts at 1. Higher = more output per cycle. */
@@ -211,12 +214,30 @@ export interface GameState {
   /** Transient: colors discovered this tick, drained by the engine for DINGs. */
   pendingDex?: Color[];
 
+  // ── Phase 4b: zones ──
+  /** Per-zone dynamic state, keyed by zone id (defs live in config/balance). */
+  zones: Record<string, ZoneState>;
+
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
 }
 
+/** Mutable per-zone state (the static shape lives in ZONE_DEFS). */
+export interface ZoneState {
+  unlocked: boolean;
+  /** Seconds accrued toward the next forage cycle (signature node). */
+  forageProgress: number;
+}
+
+/** Fresh zone state from the defs: a zone starts unlocked iff it has no gate. */
+export function initialZones(): Record<string, ZoneState> {
+  const zones: Record<string, ZoneState> = {};
+  for (const def of ZONE_DEFS) zones[def.id] = { unlocked: !def.unlock, forageProgress: 0 };
+  return zones;
+}
+
 export function initialResources(): Resources {
-  return { corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, pellets: 0, eggs: 0 };
+  return { corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, forage: 0, pellets: 0, eggs: 0 };
 }
 
 export function initialState(now: number): GameState {
@@ -242,6 +263,7 @@ export function initialState(now: number): GameState {
     breedingPairs: [],
     nextPairId: 1,
     dexSeen: [],
+    zones: initialZones(),
     lastSeen: now,
   };
 }
@@ -269,12 +291,28 @@ export function seedFlock(state: GameState): void {
 }
 
 /** True if tile (x,y) is occupied by a station. */
-export function stationAt(state: GameState, x: number, y: number): Station | undefined {
-  return state.stations.find((s) => s.x === x && s.y === y);
+export function stationAt(
+  state: GameState,
+  x: number,
+  y: number,
+  zoneId = 'yard',
+): Station | undefined {
+  return state.stations.find((s) => s.zoneId === zoneId && s.x === x && s.y === y);
 }
 
-/** True if (x,y) is part of the decorative pond (not buildable). */
+/** True if (x,y) is part of the Yard's decorative pond (kept for water render). */
 export function isPondTile(x: number, y: number): boolean {
   const p = BALANCE.POND;
   return x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h;
+}
+
+/** True if a tile is non-buildable within a zone (e.g. the Yard pond). */
+export function isBlockedTile(zoneId: string, x: number, y: number): boolean {
+  const b = zoneDef(zoneId)?.blocked;
+  return !!b && x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
+}
+
+/** Whether a zone is currently unlocked (the Yard always is). */
+export function zoneUnlocked(state: GameState, zoneId: string): boolean {
+  return state.zones[zoneId]?.unlocked ?? false;
 }

@@ -208,6 +208,27 @@ export const BALANCE = {
   /** Rank at which the Auto-Haul Cart unlocks (auto-collect output). */
   MILESTONE_AUTOHAUL_RANK: 5,
 
+  // ── Phase 4b: zones (data-driven; see ZONE_DEFS below) ──────────────
+  ZONES: {
+    /** The first zone beyond the always-unlocked Yard. */
+    BACK_PASTURE: {
+      rankRequired: 10, // gate against the rank curve — tune
+      eggCost: 2000, // the big egg sink — tune to feel like a real milestone
+      tileRegionSize: { width: 6, height: 8 }, // added buildable space
+    },
+    /**
+     * Free-range forage: a fixed-rate node that drips the ENERGY axis only into
+     * shared storage (never protein/niacin/calcium — energy was never the
+     * bottleneck, so a passive trickle can't trivialize the puzzle). NON-scaling
+     * by design, so it's self-diminishing: real relief when the pasture unlocks,
+     * a rounding error once the flock/economy grows.
+     */
+    FORAGE: {
+      energyPerCycle: 2, // flat energy yield — must not scale with anything
+      cycleSeconds: 4,
+    },
+  },
+
   // ── Phase 3: loot / modules (throughput boosts ONLY) ────────────────
   // Hard guardrail: modules NEVER touch nutrition requirements, the ingredient
   // matrix, or the satisfaction/throttle math — only production throughput,
@@ -283,6 +304,7 @@ type ResourceKey =
   | 'mealworms'
   | 'brewersYeast'
   | 'oysterShell'
+  | 'forage'
   | 'pellets'
   | 'eggs';
 
@@ -365,3 +387,48 @@ export const STATION_ORDER: StationType[] = [
   'yeastVat',
   'oysterSource',
 ];
+
+// ── Phase 4b: data-driven zones ──────────────────────────────────────
+/**
+ * A zone is buildable space. Adding a new one (the pond, a far field, …) is a
+ * new entry in ZONE_DEFS — NOT new code: the unlock flow, placement, rendering,
+ * and forage all iterate these defs. The Yard is zone 0 and always unlocked.
+ */
+export interface ForageDef {
+  /** Flat energy per cycle into shared storage. ENERGY axis only; non-scaling. */
+  energyPerCycle: number;
+  cycleSeconds: number;
+}
+export interface ZoneDef {
+  id: string;
+  name: string;
+  /** This zone's own buildable tile grid (local coordinates). */
+  grid: { width: number; height: number };
+  /** Non-buildable region within the grid (e.g. the Yard pond). */
+  blocked?: { x: number; y: number; w: number; h: number };
+  /** Double-gated unlock. Absent ⇒ always unlocked (the Yard). */
+  unlock?: { rankRequired: number; eggCost: number };
+  /** Signature node that activates on unlock (the pasture's free-range forage). */
+  forage?: ForageDef;
+}
+
+export const ZONE_DEFS: ZoneDef[] = [
+  {
+    id: 'yard',
+    name: 'Yard',
+    grid: BALANCE.GRID,
+    blocked: BALANCE.POND,
+  },
+  {
+    id: 'backPasture',
+    name: 'Back Pasture',
+    grid: BALANCE.ZONES.BACK_PASTURE.tileRegionSize,
+    unlock: {
+      rankRequired: BALANCE.ZONES.BACK_PASTURE.rankRequired,
+      eggCost: BALANCE.ZONES.BACK_PASTURE.eggCost,
+    },
+    forage: BALANCE.ZONES.FORAGE,
+  },
+];
+
+export const zoneDef = (id: string): ZoneDef | undefined => ZONE_DEFS.find((z) => z.id === id);

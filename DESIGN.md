@@ -99,18 +99,23 @@ Later stages deepen it: different life stages want different profiles (ducklings
 **Breeding & genetics — locked design (Phase 4a):**
 - **Two orthogonal axes.** *Color* = the Bl locus (Mendelian, incomplete dominance: 0 blue alleles = Black, 1 = Blue, 2 = Splash; Blue×Blue → 1:2:1 Black:Blue:Splash; Black×Splash → all Blue) — the **collection** grind, popping a rare Splash is a DING. *Vigor* = a continuous heritable production stat — the **power** grind. Independent: a pretty Splash can be a poor layer → the breeder's real dilemma (breed for the dex or for production).
 - **Vigor is throughput-only.** It boosts egg output, never reduces a duck's nutrition requirement (same guardrail as loot).
-- **Vigor inheritance = regression toward the mean.** `offspring ≈ midparent + h²·(midparent − popMean) + noise`, clamped to a ceiling. Real quantitative genetics; self-limiting → steady, *bounded* selective-breeding progress, never runaway.
+- **Vigor inheritance = regression toward the mean (breeder's equation).** `offspring ≈ popMean + h²·(midparent − popMean) + noise`, clamped to a ceiling. **`popMean` must be the *live* flock mean** (recomputed as you cull/replace), or the grind plateaus/decays instead of climbing. Self-limiting → steady, *bounded* cumulative progress toward the ceiling, never runaway. (NB: an earlier draft wrote `midparent + h²·(…)`, which compounds — wrong; the `popMean +` form is correct.)
+- **Selection needs BOTH halves.** Pairing your best (positive selection) *and* releasing your worst (culling = truncation selection). Culling frees housing and lifts the live `popMean`, raising the breeding target so the flock climbs. Without a release action the flock dilutes with regression-to-mean offspring and housing deadlocks — the power grind stalls (~1.15) and is non-functional. A per-duck "release" action is required. Orthogonality is what keeps releasing from being a brainless treadmill (a low-vigor duck may be a rare color worth keeping).
 - **Population is the scaling lever.** Adult layers are the output unit (total eggs = Σ per-duck base × vigor × nutrition throttle × module boosts). Nutrition re-points from **per-coop → per-duck** (the validated layer puzzle math is untouched — just driven by adult count). Coops become **housing/capacity** (cap on ducks).
 - **Eggs are dual-purpose** — currency *or* future duck. A breeding pair (drake + hen) throws a clutch of fertilized eggs; incubate (consuming the **separate duckling ration**) → hatch with genotype + vigor rolled from parents. Surplus eggs stay currency. Every clutch is a spend-vs-grow choice.
-- **Separate duckling ration** (high niacin + protein profile) gates maturation rate/health → the throughput pipe for flock growth. Maturation timer runs online & offline (biological time, not "free good stuff"), but only as well as the ration left set.
+- **Separate duckling ration** (high niacin + protein, its own formulation) gates maturation rate/health → the throughput pipe for flock growth. Crucially it draws from the **same ingredient storage as layers — layers eat first** — so growing the flock *competes* with feeding it; the growth puzzle threads back into the validated layer economy rather than running as a parallel supply chain. Under scarcity, growth throttles before laying does (penalty floor 0.3, never a hard wall); sustained tight protein/niacin → slow grow-out → natural pressure toward feed-economy & grid expansion (a key motivator for zones, 4b). Maturation runs online & offline, but only as well as the ration left set.
 - Build order puts the duckling ration **last** (clean cut-point if the session runs long).
 
 **Predators (Dane County owls):**
 - Threat events that active play defends against; pure idle leaves you slightly exposed — another reason active > idle.
 
-**Empire / prestige:**
-- Yard → back pasture → pond → second homestead.
-- Prestige = "raise a champion flock / start a new legacy" for a permanent multiplier.
+**Zones / empire — locked design (4b onward):**
+- **Extensible, data-driven zone system.** Yard → back pasture → pond → second homestead. Each unlocked zone adds buildable space **and a signature resource/mechanic**. Build the *system* once; each new zone is config, not new architecture. Back pasture is the first instance (template).
+- **Shared economy, NO inter-zone logistics.** Zones add space + local nodes to the single shared storage. No transport/belts/routing layer (that's a different game). The one formulation economy stays intact.
+- **Double-gated unlock:** reach a **rank threshold** AND pay a **big egg sink**. Zones show **teased-but-locked** on the map from the start (the aspirational silhouette you climb toward — the "first mount" feeling). Unlocking is a milestone DING.
+- **Back pasture signature = free-range forage, ENERGY-ONLY.** The locked principle that lets "passive cheap feed" coexist with idle-is-the-floor: forage passively produces *only energy* — the cheapest, least-constraining axis — and nothing else. Passivity is harmless because energy was never the bottleneck (protein/niacin/calcium are), so it can't trivialize the puzzle. Fixed-rate node → **self-diminishing** (early relief, late irrelevance). Runs offline at reduced rate, no XP. (Veto path: nutritionally-complete forage would trade away puzzle integrity.)
+- Unlocking the pasture also **relieves 4a's cramp** — more space for coops (housing) + the energy floor — so the breeding number-go-up engine finally has room.
+- Prestige (4d) = "raise a champion flock / start a new legacy" for a permanent multiplier.
 
 ## 5. Duck-Homestead Reskin Map
 
@@ -163,4 +168,4 @@ Later stages deepen it: different life stages want different profiles (ducklings
 
 ---
 
-*v6 — Phases 1-3 built & validated. Phase 4 split into 4a-4d. Breeding (4a) locked: two-axis selective breeding (color × vigor), population scales output, separate duckling ration, vigor throughput-only with regression-to-mean. Phase 4a prompt written from this section.*
+*v7 — Phase 4a (breeding) built, validated & feeling good. Zones (4b) locked: extensible zone system, double-gated unlock (rank + sink), back pasture first with energy-only free-range forage (passive-but-harmless), shared economy / no logistics. Phase 4b prompt written from this section.*

@@ -1,4 +1,4 @@
-import { BALANCE, STATION_DEFS, type StationType } from '../config/balance';
+import { BALANCE, STATION_DEFS, zoneDef, type StationType } from '../config/balance';
 import {
   grantModule,
   moduleFits,
@@ -10,7 +10,7 @@ import {
 } from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { GameState, Module, Rarity, Resource, Station } from './state';
-import { isPondTile, seedFlock, stationAt } from './state';
+import { isBlockedTile, seedFlock, stationAt, zoneUnlocked } from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
 export function UPGRADE_OUTPUT(level: number): number {
@@ -57,12 +57,16 @@ export function placeStation(
   type: StationType,
   x: number,
   y: number,
+  zoneId = 'yard',
 ): ActionResult<Station> {
-  if (x < 0 || y < 0 || x >= BALANCE.GRID.width || y >= BALANCE.GRID.height) {
+  const zone = zoneDef(zoneId);
+  if (!zone) return fail('No such zone');
+  if (!zoneUnlocked(state, zoneId)) return fail('Zone locked');
+  if (x < 0 || y < 0 || x >= zone.grid.width || y >= zone.grid.height) {
     return fail('Out of bounds');
   }
-  if (isPondTile(x, y)) return fail('That’s the pond');
-  if (stationAt(state, x, y)) return fail('Tile occupied');
+  if (isBlockedTile(zoneId, x, y)) return fail('That’s the pond');
+  if (stationAt(state, x, y, zoneId)) return fail('Tile occupied');
   const cost = BALANCE.COSTS[type];
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
 
@@ -70,6 +74,7 @@ export function placeStation(
   const station: Station = {
     id: `s${state.nextStationId++}`,
     type,
+    zoneId,
     x,
     y,
     level: 1,
@@ -108,15 +113,31 @@ export function moveStation(
 ): ActionResult<Station> {
   const station = state.stations.find((s) => s.id === stationId);
   if (!station) return fail('No such station');
-  if (x < 0 || y < 0 || x >= BALANCE.GRID.width || y >= BALANCE.GRID.height) {
+  const zone = zoneDef(station.zoneId);
+  if (!zone) return fail('No such zone');
+  // Moves stay within the station's own zone (no inter-zone transport).
+  if (x < 0 || y < 0 || x >= zone.grid.width || y >= zone.grid.height) {
     return fail('Out of bounds');
   }
-  if (isPondTile(x, y)) return fail('That’s the pond');
-  const occupant = stationAt(state, x, y);
+  if (isBlockedTile(station.zoneId, x, y)) return fail('That’s the pond');
+  const occupant = stationAt(state, x, y, station.zoneId);
   if (occupant && occupant.id !== stationId) return fail('Tile occupied');
   station.x = x;
   station.y = y;
   return done(station);
+}
+
+// ── Unlock a zone (Phase 4b: double-gated — rank AND egg cost) ─────────
+export function unlockZone(state: GameState, zoneId: string): ActionResult<{ name: string }> {
+  const zone = zoneDef(zoneId);
+  if (!zone) return fail('No such zone');
+  if (zoneUnlocked(state, zoneId)) return fail('Already unlocked');
+  if (!zone.unlock) return fail('Zone has no unlock');
+  if (state.rank < zone.unlock.rankRequired) return fail(`Reach Rank ${zone.unlock.rankRequired}`);
+  if (state.resources.eggs < zone.unlock.eggCost) return fail(`Need ${zone.unlock.eggCost} eggs`);
+  state.resources.eggs -= zone.unlock.eggCost;
+  (state.zones[zoneId] ??= { unlocked: false, forageProgress: 0 }).unlocked = true;
+  return done({ name: zone.name });
 }
 
 // ── Upgrade ───────────────────────────────────────────────────────────

@@ -184,6 +184,14 @@ export const PeaIcon = (p: PixProps) => (
   />
 );
 
+export const ForageIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ g: '#7fae54', d: '#5a8f3a', h: '#a6d27a' }}
+    rows={['h..g.', 'hg.gd', 'hgdgd', 'gdgdg', '.ddd.']}
+  />
+);
+
 export const MealwormIcon = (p: PixProps) => (
   <Pix
     {...p}
@@ -255,6 +263,7 @@ export const RESOURCE_ICON = {
   mealworms: MealwormIcon,
   brewersYeast: YeastIcon,
   oysterShell: ShellIcon,
+  forage: ForageIcon,
   pellets: PelletIcon,
   eggs: EggIcon,
 } as const;
