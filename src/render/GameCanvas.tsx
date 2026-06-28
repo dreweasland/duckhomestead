@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js';
 import { playPlace } from '../audio/sfx';
-import { BALANCE, STATION_DEFS } from '../config/balance';
-import { stationStatus } from '../game/actions';
+import { BALANCE, STATION_DEFS, type StationType } from '../config/balance';
+import { stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import { isPondTile, stationAt, type Resource, type Station } from '../game/state';
 import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './assets';
@@ -20,6 +20,8 @@ const H = BALANCE.GRID.height * TILE + PAD * 2 + TOP_EXTRA;
 interface Props {
   engine: GameEngine;
   selectedId: string | null;
+  /** When a build type is selected, matching stations show their upgrade cost. */
+  buildType: StationType | null;
   onTileClick: (x: number, y: number) => void;
 }
 
@@ -38,7 +40,7 @@ const RES_COLOR: Record<Resource, number> = {
  * PixiJS view of the bounded grid + stations. Renders FROM GameState every
  * frame (no game state lives here). Emits tile clicks back to React.
  */
-export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
+export function GameCanvas({ engine, selectedId, buildType, onTileClick }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Keep latest selection + click handler available to the long-lived Pixi
   // objects without re-running the init effect (which would rebuild the app).
@@ -48,6 +50,8 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
   selRef.current = selectedId;
   const clickRef = useRef(onTileClick);
   clickRef.current = onTileClick;
+  const buildRef = useRef(buildType);
+  buildRef.current = buildType;
 
   useEffect(() => {
     let disposed = false;
@@ -223,9 +227,11 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
         const labelStyle = new TextStyle({ fontSize: 11, fill: 0xfff4d6, fontFamily: 'monospace' });
         const smallStyle = new TextStyle({ fontSize: 10, fill: 0xffe9a8, fontFamily: 'monospace' });
 
+        const upStyle = new TextStyle({ fontSize: 12, fontWeight: 'bold', fill: 0x8fe388, stroke: { color: 0x0f0b07, width: 3 }, fontFamily: 'monospace' });
+
         const sprites = new Map<
           string,
-          { c: Container; art: Sprite | null; sails: Sprite | null; body: Graphics; ring: Graphics; lvl: Text; buf: Text }
+          { c: Container; art: Sprite | null; sails: Sprite | null; body: Graphics; ring: Graphics; lvl: Text; buf: Text; up: Text }
         >();
 
         const makeSprite = (s: Station) => {
@@ -254,9 +260,11 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
           const ring = new Graphics();
           const lvl = new Text({ text: '', style: smallStyle });
           const buf = new Text({ text: '', style: labelStyle });
-          c.addChild(body, ring, lvl, buf);
+          const up = new Text({ text: '', style: upStyle });
+          up.anchor.set(0.5);
+          c.addChild(body, ring, lvl, buf, up);
           stationLayer.addChild(c);
-          const entry = { c, art, sails, body, ring, lvl, buf };
+          const entry = { c, art, sails, body, ring, lvl, buf, up };
           sprites.set(s.id, entry);
           return entry;
         };
@@ -413,6 +421,25 @@ export function GameCanvas({ engine, selectedId, onTileClick }: Props) {
               entry.buf.position.set(16, 5);
             } else {
               entry.buf.text = '';
+            }
+
+            // Build-mode upgrade hint: when this station's type is selected in the
+            // Build bar, show its own upgrade cost (green = affordable, red = not),
+            // since clicking it will upgrade in place.
+            if (buildRef.current === s.type) {
+              const cost = upgradeCost(s);
+              const ok = state.resources.eggs >= cost;
+              const cx = TILE / 2;
+              const cy = TILE / 2 + 2;
+              entry.body.roundRect(cx - 20, cy - 9, 40, 18, 4).fill({ color: 0x16110b, alpha: 0.82 });
+              // up-chevron
+              const col = ok ? 0x8fe388 : 0xd95f5f;
+              entry.body.poly([cx - 12, cy + 3, cx - 8, cy - 4, cx - 4, cy + 3]).fill(col);
+              entry.up.text = `${cost}`;
+              entry.up.style.fill = col;
+              entry.up.position.set(cx + 5, cy);
+            } else {
+              entry.up.text = '';
             }
           }
 

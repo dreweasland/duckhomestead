@@ -133,7 +133,12 @@ export default function App() {
                 </div>
               }
             >
-              <GameCanvas engine={engine} selectedId={selectedId} onTileClick={onTileClick} />
+              <GameCanvas
+                engine={engine}
+                selectedId={selectedId}
+                buildType={buildType}
+                onTileClick={onTileClick}
+              />
             </ErrorBoundary>
           </div>
           {state.stations.length === 0 && (
