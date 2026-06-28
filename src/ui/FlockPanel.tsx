@@ -155,13 +155,14 @@ export function FlockPanel({
   onClose: () => void;
 }) {
   const [armedCull, setArmedCull] = useState<string | null>(null);
-  // Sort: color (dex order) → vigor (best first) → stage as a final tiebreak.
+  // Sort: color (dex order) → stage (adults, then juveniles, then ducklings) →
+  // vigor (best first within each color/stage group).
   const colorRank = (d: Duck) => COLORS.indexOf(phenotype(d.genotype));
   const ducks = [...state.ducks].sort(
     (a, b) =>
       colorRank(a) - colorRank(b) ||
-      b.vigor - a.vigor ||
-      stageRank[a.stage] - stageRank[b.stage],
+      stageRank[a.stage] - stageRank[b.stage] ||
+      b.vigor - a.vigor,
   );
   const cap = coopCapacity(state);
 
