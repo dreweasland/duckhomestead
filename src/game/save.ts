@@ -13,6 +13,9 @@ export interface AwaySummary {
   capped: boolean;
   /** Net resources gained during catch-up. NEVER includes XP. */
   produced: Partial<Record<Resource, number>>;
+  /** Phase 4c: predator toll while away — ducks currently wounded (treatable)
+   *  and ducks permanently lost. Absent when nothing happened. */
+  predator?: { wounded: number; lost: number };
 }
 
 export function serialize(state: GameState): string {
@@ -48,6 +51,13 @@ export function deserialize(raw: string, now: number): GameState {
       // Phase 4b zones: pre-4b saves get the default (Yard-only unlocked); merge
       // so a partial saved zone map still has every known zone present.
       zones: { ...base.zones, ...(parsed.zones ?? {}) },
+      // Phase 4c predators: pre-4c saves load with no windows in flight, no
+      // deterrents, and no secure coops. Merge so a partial saved map still has
+      // every known predator present; drop any stale transient events.
+      predators: { ...base.predators, ...(parsed.predators ?? {}) },
+      deterrents: parsed.deterrents ?? 0,
+      secureCoops: parsed.secureCoops ?? 0,
+      pendingPredatorEvents: undefined,
       stations: (parsed.stations ?? []).map((s) => ({
         ...s,
         zoneId: s.zoneId ?? 'yard', // pre-4b stations all lived in the Yard
@@ -101,12 +111,23 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
 
   const before = { ...state.resources };
 
+  // Phase 4c offline mercy rail: cap permanent predator losses this catch-up at
+  // a fraction of the NON-secured flock (computed once, up front) so a defended/
+  // secured overnight is soft losses, not a wipe — for ANY absence length.
+  // Secured ducks never count and never die. Reset any leftover transient events
+  // so the toll we summarize is purely from this catch-up.
+  state.pendingPredatorEvents = [];
+  const unsecured = state.ducks.filter((d) => !d.secured).length;
+  const predatorLossBudget = {
+    remaining: Math.floor(unsecured * BALANCE.PREDATORS.MAX_OFFLINE_LOSS_FRACTION),
+  };
+
   // Simulate in coarse 1-second steps for speed (up to 8h = 28800 steps).
   const STEP = 1;
   let remaining = creditedSeconds;
   while (remaining > 0) {
     const dt = Math.min(STEP, remaining);
-    tick(state, dt, { mode: 'offline', autoHaul: true });
+    tick(state, dt, { mode: 'offline', autoHaul: true, predatorLossBudget });
     remaining -= dt;
   }
   // Sweep any residual buffers into storage so the summary is complete.
@@ -118,12 +139,21 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     if (delta > 0) produced[key] = delta;
   }
 
+  // Predator toll: deaths from this catch-up's events; wounded = current
+  // survivors carrying a treatable wound. Clear the transient (consumed here).
+  const events = state.pendingPredatorEvents ?? [];
+  const lost = events.filter((e) => e.kind === 'snatched' || e.kind === 'escalated').length;
+  const woundedNow = state.ducks.filter((d) => d.wounded).length;
+  state.pendingPredatorEvents = [];
+  const predator = lost > 0 || woundedNow > 0 ? { wounded: woundedNow, lost } : undefined;
+
   state.lastSeen = now;
   return {
     elapsedSeconds,
     creditedSeconds,
     capped: elapsedSeconds > capSeconds,
     produced,
+    predator,
   };
 }
 

@@ -5,6 +5,7 @@ import { UPGRADE_OUTPUT } from './actions';
 import { cycleMult, yieldMult } from './loot';
 import { runNutrition, runDucklingNutrition } from './nutrition';
 import { runBreeding } from './breeding';
+import { runPredators } from './predators';
 
 export type SimMode = 'online' | 'offline';
 
@@ -16,6 +17,11 @@ export interface TickOptions {
    * unlock; offline catch-up always hauls (idle is the floor — resources only).
    */
   autoHaul: boolean;
+  /** Phase 4c: injectable RNG for the predator layer (defaults to Math.random). */
+  rng?: () => number;
+  /** Phase 4c: offline mercy rail — a mutable permanent-loss budget for the
+   *  predator layer (set by offline catch-up; absent/uncapped online). */
+  predatorLossBudget?: { remaining: number };
 }
 
 /** Effective output of a station per cycle for a given resource (level + yield modules). */
@@ -150,4 +156,14 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
 
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
   runBreeding(state, dt * rateMult, matureRate);
+
+  // Predators (Phase 4c): window scheduling, attack rolls, wound escalation.
+  // Wall-clock danger — advanced by the RAW dt, never the offline rate-scaled
+  // step (an owl doesn't hunt slower because you're away). Offline passes the
+  // mercy budget so a defended/secured overnight is soft losses, not a wipe.
+  runPredators(state, dt, {
+    mode: opts.mode,
+    rng: opts.rng,
+    lossBudget: opts.predatorLossBudget,
+  });
 }

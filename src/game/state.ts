@@ -1,4 +1,4 @@
-import { BALANCE, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
+import { BALANCE, PREDATOR_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
 
 /**
  * Storage resources. `eggs` is the primary spendable currency. `corn`,
@@ -127,6 +127,15 @@ export interface Duck {
   ageTicks: number;
   /** Niacin leg debuff (halves this duck's lay until dosed). */
   debuffed?: boolean;
+  /** Phase 4c: a predator wound (soft). Reduces output, blocks breeding, and
+   *  escalates to a permanent loss if untended past WOUND_ESCALATE_SEC. Cleared
+   *  by the Treat action. */
+  wounded?: boolean;
+  /** Seconds since this wound landed (the escalation timer). Runs online & offline. */
+  woundElapsed?: number;
+  /** Phase 4c: marked secured (housed in a Secure Coop slot) — excluded from
+   *  predator targeting during windows. The lever for protecting prize breeders. */
+  secured?: boolean;
 }
 
 /** An active breeding pair: lays fertilized clutches that incubate into ducklings. */
@@ -222,8 +231,67 @@ export interface GameState {
   /** Per-zone dynamic state, keyed by zone id (defs live in config/balance). */
   zones: Record<string, ZoneState>;
 
+  // ── Phase 4c: predators (the risk layer) ──
+  /** Per-predator window/schedule state, keyed by predator id (defs in config). */
+  predators: Record<string, PredatorState>;
+  /** Built deterrents (count) — each raises the homestead-wide protection floor. */
+  deterrents: number;
+  /** Built Secure Coops (count) — each adds SECURE_SLOTS_PER_COOP secure slots. */
+  secureCoops: number;
+  /** Transient: predator events accrued this tick, drained by the engine (banners
+   *  + SFX) and aggregated by offline catch-up. Never serialized meaningfully. */
+  pendingPredatorEvents?: PredatorEvent[];
+
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
+}
+
+/** Mutable per-predator state (the static schedule/params live in PREDATOR_DEFS). */
+export interface PredatorState {
+  /** Seconds until the next window opens (counts down). When it dips under the
+   *  def's warningLeadSec the telegraph fires; at 0 the window opens. */
+  timeToNextWindow: number;
+  /** Seconds left in the currently-open window (0 = closed). */
+  windowRemaining: number;
+  /** Seconds elapsed within the current open window (staggers the attacks). */
+  windowElapsed: number;
+  /** Attacks already resolved in the current window. */
+  attacksFired: number;
+}
+
+/** Transient predator events for UI feedback + the away summary. Not authoritative. */
+export type PredatorEvent =
+  | { kind: 'incoming'; predatorId: string }
+  | { kind: 'open'; predatorId: string }
+  | { kind: 'wound'; predatorId: string; duckId: string }
+  | { kind: 'snatched'; predatorId: string; duckId: string }
+  | { kind: 'escalated'; duckId: string };
+
+/** Fresh per-predator state from the defs: first window is a full interval out. */
+export function initialPredators(): Record<string, PredatorState> {
+  const out: Record<string, PredatorState> = {};
+  for (const def of PREDATOR_DEFS) {
+    out[def.id] = {
+      timeToNextWindow: def.windowEverySec,
+      windowRemaining: 0,
+      windowElapsed: 0,
+      attacksFired: 0,
+    };
+  }
+  return out;
+}
+
+/** Total secure slots from built Secure Coops. A duck can be secured (excluded
+ *  from targeting) only while secured ducks ≤ this. */
+export function secureCapacity(state: GameState): number {
+  return state.secureCoops * BALANCE.PREDATORS.SECURE_SLOTS_PER_COOP;
+}
+
+/** Homestead-wide protection floor from built deterrents (capped). Passive,
+ *  always-on, works offline — the floor that survives your absence. */
+export function defenseFloor(state: GameState): number {
+  const P = BALANCE.PREDATORS;
+  return Math.min(P.DEFENSE_FLOOR_CAP, state.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT);
 }
 
 /** Mutable per-zone state (the static shape lives in ZONE_DEFS). */
@@ -269,6 +337,9 @@ export function initialState(now: number): GameState {
     nextPairId: 1,
     dexSeen: [],
     zones: initialZones(),
+    predators: initialPredators(),
+    deterrents: 0,
+    secureCoops: 0,
     lastSeen: now,
   };
 }

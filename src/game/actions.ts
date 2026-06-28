@@ -10,7 +10,7 @@ import {
 } from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { GameState, Module, Rarity, Resource, Station } from './state';
-import { isBlockedTile, seedFlock, stationAt, zoneUnlocked } from './state';
+import { isBlockedTile, secureCapacity, seedFlock, stationAt, zoneUnlocked } from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
 export function UPGRADE_OUTPUT(level: number): number {
@@ -343,6 +343,65 @@ export function doseNiacin(state: GameState): ActionResult<DoseResult> {
   state.doseCooldownRemaining = BALANCE.NUTRITION.DOSE_COOLDOWN_S;
   const xp = gainXP(state, BALANCE.NUTRITION.DOSE_XP);
   return done({ xp });
+}
+
+// ── Phase 4c: predator defenses, securing, and wound care ─────────────
+/**
+ * Build one deterrent (netting/guard post) — raises the homestead-wide
+ * protection FLOOR (passive, always-on, works offline). Costs eggs. The floor
+ * is capped (DEFENSE_FLOOR_CAP) so built defenses alone can't be 100%.
+ */
+export function buildDeterrent(state: GameState): ActionResult<{ deterrents: number }> {
+  const cost = BALANCE.PREDATORS.DETERRENT_COST_EGGS;
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.deterrents += 1;
+  return done({ deterrents: state.deterrents });
+}
+
+/**
+ * Build one Secure Coop — adds SECURE_SLOTS_PER_COOP secure slots. A duck marked
+ * secured (up to the slot total) is excluded from predator targeting: the lever
+ * for protecting irreplaceable breeders.
+ */
+export function buildSecureCoop(state: GameState): ActionResult<{ secureCoops: number }> {
+  const cost = BALANCE.PREDATORS.SECURE_COOP_COST_EGGS;
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.secureCoops += 1;
+  return done({ secureCoops: state.secureCoops });
+}
+
+/** Mark/unmark a duck as secured (excluded from targeting), bounded by slots. */
+export function setSecured(state: GameState, duckId: string, secured: boolean): ActionResult<unknown> {
+  const duck = state.ducks.find((d) => d.id === duckId);
+  if (!duck) return fail('No such duck');
+  if (secured) {
+    if (duck.secured) return done(true);
+    const used = state.ducks.filter((d) => d.secured).length;
+    if (used >= secureCapacity(state)) return fail('No secure slots free — build a Secure Coop');
+    duck.secured = true;
+  } else {
+    duck.secured = false;
+  }
+  return done(true);
+}
+
+/**
+ * Treat (heal) a wounded duck — the active save that stops a wound escalating to
+ * a permanent loss. Costs eggs. This is the checkpoint every death passes
+ * through: a wound the player could have caught.
+ */
+export function treatDuck(state: GameState, duckId: string): ActionResult<unknown> {
+  const duck = state.ducks.find((d) => d.id === duckId);
+  if (!duck) return fail('No such duck');
+  if (!duck.wounded) return fail('Not wounded');
+  const cost = BALANCE.PREDATORS.TREAT_COST_EGGS;
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  duck.wounded = false;
+  duck.woundElapsed = 0;
+  return done(true);
 }
 
 // ── Tend (the active engine; ONLY source of XP) ───────────────────────

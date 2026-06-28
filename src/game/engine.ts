@@ -1,6 +1,8 @@
 import { BALANCE, type StationType } from '../config/balance';
 import {
   assignModule,
+  buildDeterrent,
+  buildSecureCoop,
   collectAll,
   collectStation,
   createPair,
@@ -13,7 +15,9 @@ import {
   rerollModule,
   removeStation,
   salvageModule,
+  setSecured,
   tend,
+  treatDuck,
   unassignModule,
   unlockZone as unlockZoneAction,
   upgradeStation,
@@ -25,7 +29,14 @@ import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
-import { type Color, type GameState, type Ingredient, type Module, type Resource } from './state';
+import {
+  type Color,
+  type GameState,
+  type Ingredient,
+  type Module,
+  type PredatorEvent,
+  type Resource,
+} from './state';
 
 export interface DingEvent {
   newRank: number;
@@ -51,6 +62,8 @@ export interface DexEvent {
 }
 
 type Listener = () => void;
+/** Re-exported so the UI can type predator-event handlers without reaching into state. */
+export type { PredatorEvent } from './state';
 
 /**
  * Owns the single GameState and the fixed-timestep simulation loop. The sim is
@@ -67,6 +80,7 @@ export class GameEngine {
   private tendListeners = new Set<(e: TendEvent) => void>();
   private lootListeners = new Set<(e: LootEvent) => void>();
   private dexListeners = new Set<(e: DexEvent) => void>();
+  private predatorListeners = new Set<(e: PredatorEvent) => void>();
 
   private rafId = 0;
   private lastTime = 0;
@@ -106,6 +120,10 @@ export class GameEngine {
     this.dexListeners.add(fn);
     return () => this.dexListeners.delete(fn);
   }
+  onPredator(fn: (e: PredatorEvent) => void): () => void {
+    this.predatorListeners.add(fn);
+    return () => this.predatorListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
@@ -121,12 +139,22 @@ export class GameEngine {
   private emitDex(e: DexEvent) {
     for (const fn of this.dexListeners) fn(e);
   }
+  private emitPredator(e: PredatorEvent) {
+    for (const fn of this.predatorListeners) fn(e);
+  }
   /** Fire DINGs for any first-of-color hatches accrued during ticks. */
   private drainDex() {
     const pending = this.state.pendingDex;
     if (!pending || pending.length === 0) return;
     for (const color of pending) this.emitDex({ color });
     this.state.pendingDex = [];
+  }
+  /** Surface predator events (telegraph / attack / loss) accrued during ticks. */
+  private drainPredatorEvents() {
+    const pending = this.state.pendingPredatorEvents;
+    if (!pending || pending.length === 0) return;
+    for (const e of pending) this.emitPredator(e);
+    this.state.pendingPredatorEvents = [];
   }
 
   // ── Loop ──────────────────────────────────────────────────────────
@@ -146,6 +174,7 @@ export class GameEngine {
         this.accumulator -= this.stepMs;
       }
       this.drainDex(); // fire DINGs for any first-of-color hatches this frame
+      this.drainPredatorEvents(); // telegraph / attack / loss feedback this frame
       if (t - this.lastNotify >= this.notifyIntervalMs) {
         this.lastNotify = t;
         this.notify();
@@ -337,6 +366,32 @@ export class GameEngine {
   setDucklingRation(ingredient: Ingredient, value: number) {
     this.state.ducklingRation[ingredient] = Math.max(0, value);
     this.notify();
+  }
+
+  // ── Phase 4c: predator defenses + wound care ───────────────────────
+  /** Build a deterrent (raises the homestead-wide protection floor). */
+  buildDeterrent(): ActionResult<{ deterrents: number }> {
+    const r = buildDeterrent(this.state);
+    this.notify();
+    return r;
+  }
+  /** Build a Secure Coop (adds secure slots for protecting prize breeders). */
+  buildSecureCoop(): ActionResult<{ secureCoops: number }> {
+    const r = buildSecureCoop(this.state);
+    this.notify();
+    return r;
+  }
+  /** Mark/unmark a duck as secured (excluded from predator targeting). */
+  setSecured(duckId: string, secured: boolean): ActionResult<unknown> {
+    const r = setSecured(this.state, duckId, secured);
+    this.notify();
+    return r;
+  }
+  /** Treat a wounded duck — the active save that stops a wound escalating. */
+  treat(duckId: string): ActionResult<unknown> {
+    const r = treatDuck(this.state, duckId);
+    this.notify();
+    return r;
   }
 
   /** Active-only intervention: clear one duck's niacin leg debuff. */

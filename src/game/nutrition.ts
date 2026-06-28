@@ -157,12 +157,14 @@ function layNutritionTail(
   step: number,
 ): void {
   // Lay eggs: sum over adult hens of base × VIGOR × nutrition throttle × leg
-  // debuff, then × the flock-wide eggOutput module bonus. Vigor and modules
-  // multiply OUTPUT only — never the f(axis)/requirement math above.
+  // debuff × predator wound, then × the flock-wide eggOutput module bonus. Vigor,
+  // modules, and the wound penalty multiply OUTPUT only — never the f(axis)/
+  // requirement math above. (Phase 4c: a wounded hen lays at WOUND_OUTPUT_MULT.)
   let flockRate = 0; // eggs per second from the whole laying flock
   for (const hen of layers) {
     const debuff = hen.debuffed ? N.DEBUFF_COOP_OUTPUT_MULT : 1;
-    flockRate += (BALANCE.COOP.eggPerCycle / coopCycle) * hen.vigor * debuff;
+    const wound = hen.wounded ? BALANCE.PREDATORS.WOUND_OUTPUT_MULT : 1;
+    flockRate += (BALANCE.COOP.eggPerCycle / coopCycle) * hen.vigor * debuff * wound;
   }
   const eggModuleMult = 1 + globalBonus(state, 'eggOutput'); // coop modules buff the flock
   const eggsThisStep = flockRate * eggMult * eggModuleMult * step;

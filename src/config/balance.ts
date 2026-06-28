@@ -237,6 +237,75 @@ export const BALANCE = {
     },
   },
 
+  // ── Phase 4c: predators (the risk layer) ────────────────────────────
+  // The locked principle: EVERY permanent loss must trace to a CHOICE —
+  // absence, under-defense, or a neglected wound — never a bolt from the blue.
+  // Danger arrives only in TELEGRAPHED windows; a landed attack almost always
+  // WOUNDS (soft) and escalates to a permanent loss only if left untended.
+  // Built deterrents set a passive protection FLOOR (works offline); being
+  // present (online) during an open window adds active cover; securing a duck
+  // excludes it from targeting entirely. See game/predators.ts. Per-predator
+  // schedule/attack params live in PREDATOR_DEFS below (owl is the first); the
+  // globals here apply across all predators.
+  PREDATORS: {
+    /** Brutality dial — when ON, a rare landed attack skips the wound phase and
+     *  takes a duck outright. Default OFF: every death passes through a wound
+     *  checkpoint the player could have caught. */
+    ALLOW_INSTANT_SNATCH: false,
+    /** Only consulted when ALLOW_INSTANT_SNATCH is true. */
+    INSTANT_SNATCH_CHANCE: 0.03,
+
+    /** Each built deterrent raises the homestead-wide protection floor by this. */
+    DEFENSE_FLOOR_PER_DETERRENT: 0.18,
+    /** Built defenses alone can never exceed this floor (can't be 100% passive —
+     *  presence and securing remain the levers for the rest). */
+    DEFENSE_FLOOR_CAP: 0.7,
+    /** Active cover applied to attack success while the player is PRESENT (online)
+     *  during an open window. Absence removes it — only the built floor remains. */
+    PRESENCE_FACTOR: 0.6,
+
+    /** A wound escalates to a PERMANENT loss this many seconds after it lands if
+     *  the duck is never treated. The save is the active Treat action. */
+    WOUND_ESCALATE_SEC: 240,
+    /** A wounded duck's egg output while injured (flows through the per-duck
+     *  output chain alongside vigor/nutrition/modules). It also can't breed. */
+    WOUND_OUTPUT_MULT: 0.5,
+    /** Eggs spent to Treat (heal) one wounded duck. */
+    TREAT_COST_EGGS: 30,
+
+    /** Eggs to build one deterrent (raises the floor). */
+    DETERRENT_COST_EGGS: 150,
+    /** Eggs to build one Secure Coop. Each adds SECURE_SLOTS_PER_COOP slots; a
+     *  duck marked secured (up to the slot total) is excluded from targeting. */
+    SECURE_COOP_COST_EGGS: 400,
+    SECURE_SLOTS_PER_COOP: 4,
+
+    /** Targeting weights by stage (juveniles count as adults). Secured ducks are
+     *  excluded entirely; ducklings are the most exposed. */
+    TARGET_WEIGHTS: { duckling: 3, adult: 1 } as Record<string, number>,
+
+    /** Predators stay dormant until the player has a flock AND reaches this rank,
+     *  so the risk layer never ambushes a brand-new homestead mid-onboarding. */
+    INTRO_RANK: 3,
+
+    /** Offline mercy rail: a single catch-up can permanently lose AT MOST this
+     *  fraction of the (non-secured) flock — past it, escalating wounds are held
+     *  at the brink so the player returns to woundeds to TREAT, not a wipe. This
+     *  guarantees "a defended/secured overnight is soft losses, not a wipe" for
+     *  any absence length. Secured ducks never count against it (they're safe). */
+    MAX_OFFLINE_LOSS_FRACTION: 0.25,
+
+    /** The owl — first predator instance. Aerial, dusk/night windows. Foxes/hawks
+     *  are later config: add an entry to PREDATOR_DEFS, no core changes. */
+    OWL: {
+      windowEverySec: 300, // a risk window opens this often (real seconds)
+      windowDurationSec: 60, // how long the window stays open
+      warningLeadSec: 20, // telegraph: warn this long BEFORE the window opens
+      baseAttackChance: 0.45, // per attack attempt, before defenses/presence
+      attacksPerWindow: 2, // attempts spread across each open window
+    },
+  },
+
   // ── Phase 3: loot / modules (throughput boosts ONLY) ────────────────
   // Hard guardrail: modules NEVER touch nutrition requirements, the ingredient
   // matrix, or the satisfaction/throttle math — only production throughput,
@@ -440,3 +509,38 @@ export const ZONE_DEFS: ZoneDef[] = [
 ];
 
 export const zoneDef = (id: string): ZoneDef | undefined => ZONE_DEFS.find((z) => z.id === id);
+
+// ── Phase 4c: data-driven predators ──────────────────────────────────
+/**
+ * A predator is pure data: its window schedule + attack params. The window
+ * scheduler, telegraph, attack resolution, wound/escalation, and offline
+ * catch-up all iterate these defs — adding a fox or a hawk is a NEW ENTRY here,
+ * not new code. The owl is the first instance; "owl" never appears in core
+ * logic. The numbers live in BALANCE.PREDATORS so balance.ts stays the single
+ * source of feel.
+ */
+export interface PredatorDef {
+  id: string;
+  name: string;
+  /** A risk window opens this often (real seconds). */
+  windowEverySec: number;
+  /** How long a window stays open. */
+  windowDurationSec: number;
+  /** Telegraph: a warning fires this long before the window opens. */
+  warningLeadSec: number;
+  /** Per-attack success before defenses/presence. */
+  baseAttackChance: number;
+  /** Attack attempts spread across each open window. */
+  attacksPerWindow: number;
+}
+
+export const PREDATOR_DEFS: PredatorDef[] = [
+  {
+    id: 'owl',
+    name: 'Owl',
+    ...BALANCE.PREDATORS.OWL,
+  },
+];
+
+export const predatorDef = (id: string): PredatorDef | undefined =>
+  PREDATOR_DEFS.find((p) => p.id === id);

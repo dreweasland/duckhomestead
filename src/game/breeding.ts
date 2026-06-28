@@ -20,6 +20,7 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
     const drake = state.ducks.find((d) => d.id === pair.drakeId && d.sex === 'drake' && d.stage === 'adult');
     const hen = state.ducks.find((d) => d.id === pair.henId && d.sex === 'hen' && d.stage === 'adult');
     if (!drake || !hen) continue; // pair invalid until both are present adults
+    if (drake.wounded || hen.wounded) continue; // Phase 4c: a wounded bird can't breed
 
     // Lay a fertilized clutch on the interval (bounded queue so it can't pile up).
     pair.clutchProgress += step;
