@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { playCollect, playDing, playLoot, playPlace, playTend, playUpgrade } from './audio/sfx';
+import {
+  playAttack,
+  playCollect,
+  playDing,
+  playLoot,
+  playPlace,
+  playTend,
+  playThreat,
+  playUpgrade,
+} from './audio/sfx';
 import type { StationType } from './config/balance';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
-import { RARITIES, stationAt, zoneUnlocked } from './game/state';
+import { currentThreat, predatorsActive } from './game/predators';
+import { defenseFloor, RARITIES, stationAt, zoneUnlocked } from './game/state';
+import { OwlIcon } from './ui/icons';
+import { PredatorBanner } from './ui/PredatorBanner';
+import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
 import { useGame } from './game/useGame';
 import { GameCanvas } from './render/GameCanvas';
@@ -61,6 +74,17 @@ export default function App() {
     [engine],
   );
 
+  // Predators: the telegraph hoot (window incoming/open) and the attack screech.
+  useEffect(
+    () =>
+      engine.onPredator((e) => {
+        if (e.kind === 'introduced') return; // the milestone DING covers first contact
+        if (e.kind === 'incoming' || e.kind === 'open') playThreat();
+        else playAttack();
+      }),
+    [engine],
+  );
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
@@ -69,6 +93,7 @@ export default function App() {
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
   const [flockOpen, setFlockOpen] = useState(false);
+  const [watchOpen, setWatchOpen] = useState(false);
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
@@ -115,6 +140,7 @@ export default function App() {
       {milestoneFlash > 0 && (
         <div key={milestoneFlash} className="milestone-flash pointer-events-none fixed inset-0 z-40" />
       )}
+      <PredatorBanner state={state} onOpen={() => setWatchOpen(true)} />
       <DingBanner ding={ding} onDone={() => setDing(null)} />
       <LootBanner loot={loot} onDone={() => setLoot(null)} />
       <DexBanner dex={dex} onDone={() => setDex(null)} />
@@ -135,6 +161,7 @@ export default function App() {
         <ModulesPanel engine={engine} state={state} onClose={() => setModulesOpen(false)} />
       )}
       {flockOpen && <FlockPanel engine={engine} state={state} onClose={() => setFlockOpen(false)} />}
+      {watchOpen && <WatchPanel engine={engine} state={state} onClose={() => setWatchOpen(false)} />}
 
       <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas + the station box directly under it (close to the tiles). */}
@@ -215,6 +242,38 @@ export default function App() {
               <span className="tabular-nums">{state.ducks.length} ducks</span>
             </button>
           )}
+          {(predatorsActive(state) ||
+            state.deterrents > 0 ||
+            state.secureCoops > 0 ||
+            state.ducks.some((d) => d.wounded)) &&
+            (() => {
+              const attention = watchNeedsAttention(state);
+              const threat = currentThreat(state);
+              const woundedCount = state.ducks.filter((d) => d.wounded).length;
+              const label =
+                woundedCount > 0
+                  ? `${woundedCount} wounded`
+                  : threat?.phase === 'open'
+                    ? `hunting ${Math.ceil(threat.seconds)}s`
+                    : threat?.phase === 'incoming'
+                      ? `in ${Math.ceil(threat.seconds)}s`
+                      : `floor ${Math.round(defenseFloor(state) * 100)}%`;
+              return (
+                <button
+                  onClick={() => setWatchOpen(true)}
+                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${
+                    attention
+                      ? 'bg-[#5a2a2a] text-[#ffd9d9] ring-1 ring-[#e26d6d] hover:bg-[#6a3434]'
+                      : 'bg-[#2a2230] text-[#d8c8a8] hover:bg-[#332a3a]'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <OwlIcon size={16} /> The Watch
+                  </span>
+                  <span className="tabular-nums">{label}</span>
+                </button>
+              );
+            })()}
           {!state.autoHaulUnlocked && state.stations.length > 0 && (
             <button
               onClick={() => {

@@ -238,6 +238,12 @@ export interface GameState {
   deterrents: number;
   /** Built Secure Coops (count) — each adds SECURE_SLOTS_PER_COOP secure slots. */
   secureCoops: number;
+  /** First-contact grace: predators only ever resolve their first window once the
+   *  player is PRESENT (online) to see the new threat and set up defenses — never
+   *  first during an absence. Set true the moment predators activate online; once
+   *  set, absence becomes a real (attributable) choice. Keeps the feature's debut
+   *  from ever being a bolt from the blue. */
+  predatorsIntroduced: boolean;
   /** Transient: predator events accrued this tick, drained by the engine (banners
    *  + SFX) and aggregated by offline catch-up. Never serialized meaningfully. */
   pendingPredatorEvents?: PredatorEvent[];
@@ -261,6 +267,7 @@ export interface PredatorState {
 
 /** Transient predator events for UI feedback + the away summary. Not authoritative. */
 export type PredatorEvent =
+  | { kind: 'introduced' }
   | { kind: 'incoming'; predatorId: string }
   | { kind: 'open'; predatorId: string }
   | { kind: 'wound'; predatorId: string; duckId: string }
@@ -340,6 +347,7 @@ export function initialState(now: number): GameState {
     predators: initialPredators(),
     deterrents: 0,
     secureCoops: 0,
+    predatorsIntroduced: false,
     lastSeen: now,
   };
 }

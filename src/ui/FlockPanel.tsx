@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { colorOdds, expectedVigor, populationMeanVigor } from '../game/genetics';
-import { COLORS, coopCapacity, phenotype, type Color, type Duck, type GameState } from '../game/state';
-import { playPlace } from '../audio/sfx';
-import { CloseIcon } from './icons';
+import { COLORS, coopCapacity, phenotype, secureCapacity, type Color, type Duck, type GameState } from '../game/state';
+import { playPlace, playTend } from '../audio/sfx';
+import { CloseIcon, HealIcon, ShieldIcon, WoundIcon } from './icons';
 
 export const COLOR_META: Record<Color, { label: string; swatch: string }> = {
   black: { label: 'Black', swatch: '#33333c' },
@@ -38,7 +38,7 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
   const avail = (sex: Duck['sex']) =>
     state.ducks
-      .filter((d) => d.sex === sex && d.stage === 'adult' && !paired(d.id))
+      .filter((d) => d.sex === sex && d.stage === 'adult' && !paired(d.id) && !d.wounded)
       .sort(
         (a, b) =>
           COLORS.indexOf(phenotype(a.genotype)) - COLORS.indexOf(phenotype(b.genotype)) ||
@@ -175,6 +175,9 @@ export function FlockPanel({
       b.vigor - a.vigor,
   );
   const cap = coopCapacity(state);
+  const slotsTotal = secureCapacity(state);
+  const slotsUsed = state.ducks.filter((d) => d.secured).length;
+  const treatCost = BALANCE.PREDATORS.TREAT_COST_EGGS;
 
   // Tab the flock by color. Counts per color drive the tab badges; open on the
   // color you have the most of. The sorted `ducks` filtered to a color is already
@@ -241,48 +244,101 @@ export function FlockPanel({
               </div>
             ) : (
               <div className="flex flex-col gap-1">
-                {shown.map((d) => (
-                    <div key={d.id} className="flex items-center gap-2 rounded-md bg-[#1f1812] px-2.5 py-1.5 text-[11px]">
-                      <span className="w-10 text-[#c9b88f]">{d.sex}</span>
-                  <span className="w-20 text-[#9a8a6a]">
-                    {STAGE_LABEL[d.stage]}
-                    {d.stage !== 'adult' && (
-                      <span className="text-[#5a4d3a]">
-                        {' '}
-                        {Math.round(
-                          (d.ageTicks /
-                            (d.stage === 'duckling'
-                              ? BALANCE.BREEDING.MATURE_DUCKLING_S
-                              : BALANCE.BREEDING.MATURE_JUVENILE_S)) *
-                            100,
+                {shown.map((d) => {
+                  const canSecure = d.secured || slotsUsed < slotsTotal;
+                  return (
+                    <div
+                      key={d.id}
+                      className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] ${
+                        d.wounded ? 'bg-[#2a1818] ring-1 ring-[#5a2a2a]' : 'bg-[#1f1812]'
+                      }`}
+                    >
+                      <span className="w-9 text-[#c9b88f]">{d.sex}</span>
+                      <span className="w-16 text-[#9a8a6a]">
+                        {STAGE_LABEL[d.stage]}
+                        {d.stage !== 'adult' && (
+                          <span className="text-[#5a4d3a]">
+                            {' '}
+                            {Math.round(
+                              (d.ageTicks /
+                                (d.stage === 'duckling'
+                                  ? BALANCE.BREEDING.MATURE_DUCKLING_S
+                                  : BALANCE.BREEDING.MATURE_JUVENILE_S)) *
+                                100,
+                            )}
+                            %
+                          </span>
                         )}
-                        %
                       </span>
-                    )}
-                  </span>
-                  <span className="ml-auto tabular-nums text-[#ffe9a8]">×{d.vigor.toFixed(2)}</span>
-                  <span className="text-[9px] text-[#5a4d3a]">vigor</span>
-                  <button
-                    onClick={() => {
-                      if (armedCull !== d.id) {
-                        setArmedCull(d.id);
-                        window.setTimeout(() => setArmedCull((a) => (a === d.id ? null : a)), 2500);
-                        return;
-                      }
-                      engine.cull(d.id);
-                      setArmedCull(null);
-                    }}
-                    className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                      armedCull === d.id
-                        ? 'bg-[#d95f5f] text-[#fff4d6]'
-                        : 'text-[#7a5a5a] hover:bg-[#33271c] hover:text-[#b06a6a]'
-                    }`}
-                    title="Release this duck (frees housing, raises the flock's vigor mean)"
-                  >
-                    {armedCull === d.id ? 'sure?' : 'release'}
-                  </button>
+                      {d.wounded && (
+                        <span
+                          className="inline-flex items-center"
+                          title={`Wounded — ${Math.ceil(
+                            Math.max(0, BALANCE.PREDATORS.WOUND_ESCALATE_SEC - (d.woundElapsed ?? 0)),
+                          )}s to escalate. Treat to save.`}
+                        >
+                          <WoundIcon size={11} />
+                        </span>
+                      )}
+                      <span className="ml-auto tabular-nums text-[#ffe9a8]">×{d.vigor.toFixed(2)}</span>
+                      {d.wounded && (
+                        <button
+                          onClick={() => {
+                            if (engine.treat(d.id).ok) playTend();
+                          }}
+                          disabled={state.resources.eggs < treatCost}
+                          className={`inline-flex items-center rounded px-1 py-0.5 ${
+                            state.resources.eggs >= treatCost
+                              ? 'text-[#8fe388] hover:bg-[#33271c]'
+                              : 'cursor-not-allowed text-[#5a4d3a]'
+                          }`}
+                          title={`Treat (${treatCost} eggs) — heal this wound before it’s permanent`}
+                        >
+                          <HealIcon size={12} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => engine.setSecured(d.id, !d.secured)}
+                        disabled={!canSecure}
+                        className={`inline-flex items-center rounded px-1 py-0.5 ${
+                          d.secured
+                            ? 'text-[#8fc8e8]'
+                            : canSecure
+                              ? 'text-[#5a6a7a] hover:bg-[#33271c] hover:text-[#8fc8e8]'
+                              : 'cursor-not-allowed text-[#3a4048]'
+                        }`}
+                        title={
+                          d.secured
+                            ? 'Secured — excluded from predator attacks. Click to release the slot.'
+                            : canSecure
+                              ? 'Secure this duck (a Secure Coop slot) — excludes it from attacks'
+                              : 'No secure slots free — build a Secure Coop in The Watch'
+                        }
+                      >
+                        <ShieldIcon size={12} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (armedCull !== d.id) {
+                            setArmedCull(d.id);
+                            window.setTimeout(() => setArmedCull((a) => (a === d.id ? null : a)), 2500);
+                            return;
+                          }
+                          engine.cull(d.id);
+                          setArmedCull(null);
+                        }}
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                          armedCull === d.id
+                            ? 'bg-[#d95f5f] text-[#fff4d6]'
+                            : 'text-[#7a5a5a] hover:bg-[#33271c] hover:text-[#b06a6a]'
+                        }`}
+                        title="Release this duck (frees housing, raises the flock's vigor mean)"
+                      >
+                        {armedCull === d.id ? 'sure?' : 'release'}
+                      </button>
                     </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>

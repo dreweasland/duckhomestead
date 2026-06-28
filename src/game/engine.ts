@@ -149,11 +149,31 @@ export class GameEngine {
     for (const color of pending) this.emitDex({ color });
     this.state.pendingDex = [];
   }
-  /** Surface predator events (telegraph / attack / loss) accrued during ticks. */
+  /** Surface predator events (telegraph / attack / loss) accrued during ticks.
+   *  First contact (the 'introduced' beat) is promoted to a milestone DING so the
+   *  player gets a clear, can't-miss "predators now hunt here" moment — always
+   *  while present, never as a silent surprise. */
   private drainPredatorEvents() {
     const pending = this.state.pendingPredatorEvents;
     if (!pending || pending.length === 0) return;
-    for (const e of pending) this.emitPredator(e);
+    for (const e of pending) {
+      if (e.kind === 'introduced') {
+        this.emitDing({
+          newRank: this.state.rank,
+          levelsGained: 0,
+          milestones: [
+            {
+              rank: this.state.rank,
+              title: 'Predators',
+              description:
+                'An owl now hunts the homestead in telegraphed windows. Build deterrents, secure your prize breeders, and treat any wounds before they turn fatal — open The Watch.',
+              kind: 'predator',
+            },
+          ],
+        });
+      }
+      this.emitPredator(e);
+    }
     this.state.pendingPredatorEvents = [];
   }
 

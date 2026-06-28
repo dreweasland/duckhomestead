@@ -16,7 +16,7 @@ export interface Milestone {
   title: string;
   description: string;
   /** Picks the banner icon. Defaults to the Auto-Haul cart. */
-  kind?: 'autohaul' | 'zone' | 'tend';
+  kind?: 'autohaul' | 'zone' | 'tend' | 'predator';
 }
 
 /** Milestones earned at given ranks. */

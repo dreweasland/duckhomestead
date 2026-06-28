@@ -72,6 +72,36 @@ export function attackChance(state: GameState, def: PredatorDef, present: boolea
   return def.baseAttackChance * (1 - defenseFloor(state)) * (1 - presence);
 }
 
+/** The most urgent predator state for the UI telegraph: an open window outranks
+ *  an incoming one; among equals, the soonest. Null when all is calm. Pure read
+ *  off GameState (the UI never simulates). */
+export interface Threat {
+  def: PredatorDef;
+  phase: 'open' | 'incoming';
+  /** Seconds left in the open window, or seconds until the incoming one opens. */
+  seconds: number;
+}
+export function currentThreat(state: GameState): Threat | null {
+  if (!predatorsActive(state)) return null;
+  let best: Threat | null = null;
+  for (const def of PREDATOR_DEFS) {
+    const ps = state.predators[def.id];
+    if (!ps) continue;
+    let t: Threat | null = null;
+    if (windowOpen(ps)) t = { def, phase: 'open', seconds: ps.windowRemaining };
+    else if (incoming(ps, def)) t = { def, phase: 'incoming', seconds: ps.timeToNextWindow };
+    if (!t) continue;
+    if (!best) {
+      best = t;
+    } else if (t.phase === 'open' && best.phase === 'incoming') {
+      best = t;
+    } else if (t.phase === best.phase && t.seconds < best.seconds) {
+      best = t;
+    }
+  }
+  return best;
+}
+
 /** Ducks that may be targeted by a fresh attack: not secured, not already
  *  wounded. Secured ducks are excluded entirely; an already-wounded duck's
  *  danger is escalation (governed by Treat), not a second wound. */
@@ -211,7 +241,29 @@ function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void 
  */
 export function runPredators(state: GameState, dt: number, opts: PredatorOpts): void {
   const rng = opts.rng ?? Math.random;
+
   if (predatorsActive(state)) {
+    // First-contact grace: predators may ONLY debut while the player is present
+    // (online). If they would first activate during an absence (offline catch-up
+    // — e.g. a returning player's first 4c load), hold them entirely so nobody
+    // is exposed before they ever saw the threat. Introduction resets the
+    // schedule so the first window is a full, telegraphed interval away.
+    if (!state.predatorsIntroduced) {
+      if (opts.mode === 'offline') {
+        escalateWounds(state, dt, opts);
+        return;
+      }
+      state.predatorsIntroduced = true;
+      for (const def of PREDATOR_DEFS) {
+        state.predators[def.id] = {
+          timeToNextWindow: def.windowEverySec,
+          windowRemaining: 0,
+          windowElapsed: 0,
+          attacksFired: 0,
+        };
+      }
+      emit(state, { kind: 'introduced' });
+    }
     for (const def of PREDATOR_DEFS) advancePredator(state, def, opts, dt, rng);
   }
   // Wounds always age/escalate — even if predators went dormant, an existing

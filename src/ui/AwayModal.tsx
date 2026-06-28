@@ -2,7 +2,7 @@ import { BALANCE } from '../config/balance';
 import type { AwaySummary } from '../game/save';
 import type { Resource } from '../game/state';
 import { fmt, fmtDuration } from './format';
-import { RESOURCE_ICON } from './icons';
+import { HealIcon, OwlIcon, RESOURCE_ICON } from './icons';
 
 export function AwayModal({ away, onClose }: { away: AwaySummary; onClose: () => void }) {
   const entries = (Object.keys(away.produced) as Resource[]).filter(
@@ -41,6 +41,32 @@ export function AwayModal({ away, onClose }: { away: AwaySummary; onClose: () =>
             })
           )}
         </div>
+
+        {away.predator && (away.predator.wounded > 0 || away.predator.lost > 0) && (
+          <div className="mt-3 rounded-md bg-[#2a1818] px-3 py-2 text-xs ring-1 ring-[#5a2a2a]">
+            <div className="flex items-center gap-1.5 font-bold text-[#e8a3a3]">
+              <OwlIcon size={15} /> The owl came in the night
+            </div>
+            <div className="mt-1 text-[#c9a0a0]">
+              {away.predator.lost > 0 && (
+                <span>
+                  {away.predator.lost} duck{away.predator.lost > 1 ? 's' : ''} lost
+                  {away.predator.wounded > 0 ? ' · ' : '.'}
+                </span>
+              )}
+              {away.predator.wounded > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  {away.predator.wounded} wounded — <HealIcon size={11} /> treat them before they
+                  escalate.
+                </span>
+              )}
+            </div>
+            <div className="mt-1 text-[10px] text-[#8a6a6a]">
+              Secured breeders stayed safe. Build deterrents and secure prize birds to harden the
+              homestead.
+            </div>
+          </div>
+        )}
 
         <p className="mt-3 text-[10px] text-[#7a6a4a]">
           Idle produces resources only — no rank XP. Tend stations while you’re here to rank up.

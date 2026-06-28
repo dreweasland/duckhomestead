@@ -139,6 +139,32 @@ export function playLoot(tier: number) {
   notes.forEach((f, i) => note(c, f, t + i * 0.07, 0.28, 'triangle', 0.22));
 }
 
+/** A low ominous hoot — a predator window is incoming/open (the telegraph). */
+export function playThreat() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  note(c, 196, t, 0.22, 'sine', 0.16);
+  note(c, 164, t + 0.16, 0.3, 'sine', 0.14);
+}
+
+/** A sharp descending screech-thud — an attack landed (a duck was hurt/lost). */
+export function playAttack() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(880, t);
+  osc.frequency.exponentialRampToValueAtTime(120, t + 0.22);
+  gain.gain.setValueAtTime(0.2, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.28);
+}
+
 /** The level-up chime; a fuller fanfare for milestone level-ups. */
 export function playDing(milestone: boolean) {
   const c = audio();

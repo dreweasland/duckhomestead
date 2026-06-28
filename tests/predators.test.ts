@@ -21,7 +21,7 @@ import {
   setSecured,
   treatDuck,
 } from '../src/game/actions';
-import { runOfflineCatchUp } from '../src/game/save';
+import { runOfflineCatchUp, deserialize, serialize } from '../src/game/save';
 import { fullSetup, stockAll, setHens, run } from './helpers';
 
 const P = BALANCE.PREDATORS;
@@ -39,6 +39,7 @@ function flock(n: number): GameState {
   const s = initialState(0);
   s.resources.eggs = 1e7; // fund deterrents / secure coops freely
   s.rank = P.INTRO_RANK;
+  s.predatorsIntroduced = true; // most tests exercise post-introduction behavior
   s.ducks = Array.from({ length: n }, (_, i): Duck => ({
     id: `d${i}`,
     genotype: ['bl', 'bl'] as Genotype,
@@ -130,6 +131,32 @@ describe('telegraph — never an ambush', () => {
     for (let t = 0; t < 1000; t++) runPredators(s, 1, { mode: 'online', rng: always });
     expect(events(s).filter((e) => e.kind === 'open')).toHaveLength(0);
     expect(s.ducks.every((d) => !d.wounded)).toBe(true);
+  });
+});
+
+describe('first-contact grace — the feature never debuts as a bolt from the blue', () => {
+  it('predators do NOT first activate during an absence (offline catch-up)', () => {
+    const s = flock(12);
+    s.predatorsIntroduced = false; // never been online with predators active
+    s.rank = 5;
+    s.lastSeen = -8 * HOUR;
+    const away = runOfflineCatchUp(s, 0);
+    expect(s.predatorsIntroduced).toBe(false); // still not introduced
+    expect(s.ducks).toHaveLength(12); // nobody touched
+    expect(s.ducks.every((d) => !d.wounded)).toBe(true);
+    expect(away.predator).toBeUndefined();
+  });
+
+  it('introduces only while present (online), with a full telegraphed lead before the first window', () => {
+    const s = flock(6);
+    s.predatorsIntroduced = false;
+    // A short online spell — well under the warning lead + interval.
+    for (let t = 0; t < 100; t++) runPredators(s, 1, { mode: 'online', rng: always });
+    expect(s.predatorsIntroduced).toBe(true);
+    expect(events(s).some((e) => e.kind === 'introduced')).toBe(true);
+    // No window has opened yet (first one is a full interval out), so no wounds.
+    expect(s.ducks.every((d) => !d.wounded)).toBe(true);
+    expect(s.predators.owl.timeToNextWindow).toBeGreaterThan(OWL.windowDurationSec);
   });
 });
 
@@ -238,6 +265,41 @@ describe('THE GUARDRAIL: fully-defended + secured + present takes ZERO permanent
     for (let t = 0; t < 3600; t++) runPredators(s, 1, { mode: 'online', rng: always });
     expect(s.ducks).toHaveLength(4);
     expect(s.ducks.every((d) => !d.wounded && d.secured)).toBe(true);
+  });
+});
+
+describe('save back-compat', () => {
+  it('a pre-4c save loads with no predators in flight, no defenses, ungraced', () => {
+    // A save shaped like Phase 4b: no predator/deterrent/secure fields at all.
+    const legacy = JSON.stringify({
+      version: 1,
+      resources: { eggs: 500 },
+      stations: [],
+      rank: 8,
+      ducks: [{ id: 'd0', genotype: ['Bl', 'bl'], vigor: 1, sex: 'hen', stage: 'adult', ageTicks: 0 }],
+    });
+    const s = deserialize(legacy, 0);
+    expect(s.deterrents).toBe(0);
+    expect(s.secureCoops).toBe(0);
+    expect(s.predatorsIntroduced).toBe(false); // first-contact grace preserved
+    expect(s.predators.owl).toBeDefined();
+    expect(s.ducks[0].wounded).toBeUndefined();
+    expect(s.ducks[0].secured).toBeUndefined();
+  });
+
+  it('predator/wound/defense state round-trips through serialize', () => {
+    const s = flock(3);
+    s.deterrents = 2;
+    s.secureCoops = 1;
+    s.ducks[0].wounded = true;
+    s.ducks[0].woundElapsed = 42;
+    s.ducks[1].secured = true;
+    const r = deserialize(serialize(s), 0);
+    expect(r.deterrents).toBe(2);
+    expect(r.secureCoops).toBe(1);
+    expect(r.ducks[0].wounded).toBe(true);
+    expect(r.ducks[0].woundElapsed).toBe(42);
+    expect(r.ducks[1].secured).toBe(true);
   });
 });
 

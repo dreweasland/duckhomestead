@@ -265,6 +265,82 @@ export const MuteIcon = (p: PixProps) => (
   />
 );
 
+// ── Phase 4c: predators / defenses ──────────────────────────────────
+/** The owl — predator threat. A round face, two big yellow eyes, a beak. */
+export const OwlIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ b: '#6b5a44', d: '#4a3d2c', y: '#ffd24a', k: '#1a1410', o: '#d98a3a' }}
+    rows={[
+      'b.....b',
+      'bb...bb',
+      'byybyyb',
+      'bykbkyb',
+      'bbbobbb',
+      '.bbobb.',
+      '.b.k.b.',
+    ]}
+  />
+);
+
+/** Protection floor / deterrent netting — a woven mesh. */
+export const NetIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor' }}
+    rows={[
+      'x.x.x.x',
+      '.x.x.x.',
+      'x.x.x.x',
+      '.x.x.x.',
+      'x.x.x.x',
+      '.x.x.x.',
+    ]}
+  />
+);
+
+/** Secured housing — a shield (excluded from targeting). */
+export const ShieldIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor', h: '#8fe388' }}
+    rows={[
+      '.xxxxx.',
+      'xxxxxxx',
+      'xx.h.xx',
+      'xxh.hxx',
+      '.xhhhx.',
+      '..xxx..',
+      '...x...',
+    ]}
+  />
+);
+
+/** Treat / heal a wound — a medical cross. */
+export const HealIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ r: '#e26d6d', h: '#f4a3a3' }}
+    rows={[
+      '..hh..',
+      '..rr..',
+      'hrrrrh',
+      'hrrrrh',
+      '..rr..',
+      '..rr..',
+    ]}
+  />
+);
+
+/** A wounded duck — a small bandage/heart-break tick used on flock rows. */
+export const WoundIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ r: '#e26d6d', d: '#a84a4a' }}
+    rows={['rr.rr', 'rrdrr', 'rrrrr', '.rrr.', '..r..']}
+  />
+);
+
 /** Map a resource key to its icon for inline use. */
 export const RESOURCE_ICON = {
   corn: CornIcon,

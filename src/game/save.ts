@@ -57,6 +57,11 @@ export function deserialize(raw: string, now: number): GameState {
       predators: { ...base.predators, ...(parsed.predators ?? {}) },
       deterrents: parsed.deterrents ?? 0,
       secureCoops: parsed.secureCoops ?? 0,
+      // Pre-4c saves (and any not-yet-introduced save) keep the first-contact
+      // grace: predators won't resolve their first window until the player is
+      // back online to see them. So a returning player is never first-exposed
+      // during the load's offline catch-up.
+      predatorsIntroduced: parsed.predatorsIntroduced ?? false,
       pendingPredatorEvents: undefined,
       stations: (parsed.stations ?? []).map((s) => ({
         ...s,

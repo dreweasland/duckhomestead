@@ -1,0 +1,210 @@
+import { BALANCE, PREDATOR_DEFS } from '../config/balance';
+import type { GameEngine } from '../game/engine';
+import { currentThreat } from '../game/predators';
+import { defenseFloor, secureCapacity, type GameState } from '../game/state';
+import { playPlace, playTend } from '../audio/sfx';
+import { CloseIcon, EggIcon, HealIcon, NetIcon, OwlIcon, ShieldIcon } from './icons';
+
+const P = BALANCE.PREDATORS;
+
+/** Side-panel button styling: pull attention when a window is live or ducks are
+ *  wounded (something to act on right now). */
+export function watchNeedsAttention(state: GameState): boolean {
+  return currentThreat(state) !== null || state.ducks.some((d) => d.wounded);
+}
+
+function StatRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="flex items-baseline justify-between rounded bg-[#171009] px-2.5 py-1.5">
+      <span className="text-[11px] text-[#9a8a6a]">{label}</span>
+      <span className="text-right">
+        <span className="text-sm font-bold tabular-nums text-[#f5ecd8]">{value}</span>
+        {hint && <span className="ml-1 text-[10px] text-[#7a6a4a]">{hint}</span>}
+      </span>
+    </div>
+  );
+}
+
+export function WatchPanel({
+  engine,
+  state,
+  onClose,
+}: {
+  engine: GameEngine;
+  state: GameState;
+  onClose: () => void;
+}) {
+  const eggs = Math.round(state.resources.eggs);
+  const floor = defenseFloor(state);
+  const floorPct = Math.round(floor * 100);
+  const capPct = Math.round(P.DEFENSE_FLOOR_CAP * 100);
+  const securedCount = state.ducks.filter((d) => d.secured).length;
+  const slots = secureCapacity(state);
+  const threat = currentThreat(state);
+  const wounded = state.ducks.filter((d) => d.wounded);
+
+  const deterrentCost = P.DETERRENT_COST_EGGS;
+  const secureCost = P.SECURE_COOP_COST_EGGS;
+  const treatCost = P.TREAT_COST_EGGS;
+  const floorMaxed = floor >= P.DEFENSE_FLOOR_CAP;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-black text-[#ffe9a8]">
+            <OwlIcon size={20} /> The Watch
+          </h2>
+          <button
+            onClick={onClose}
+            className="rounded p-1.5 text-[#9a8a6a] hover:bg-[#1f1812] hover:text-[#f5ecd8]"
+            aria-label="Close"
+          >
+            <CloseIcon size={14} />
+          </button>
+        </div>
+
+        {/* Threat status */}
+        <div
+          className={`mb-3 rounded-md px-3 py-2 text-xs ring-1 ${
+            threat?.phase === 'open'
+              ? 'bg-[#3a1c1c] text-[#ffd9d9] ring-[#e26d6d]'
+              : threat?.phase === 'incoming'
+                ? 'bg-[#3a2e16] text-[#ffe9a8] ring-[#e2b94f]'
+                : 'bg-[#1f2a1c] text-[#bfe8a8] ring-[#3a4a2c]'
+          }`}
+        >
+          {threat?.phase === 'open' ? (
+            <span className="font-bold">
+              {threat.def.name} hunting now — {Math.ceil(threat.seconds)}s left. Secure or be present.
+            </span>
+          ) : threat?.phase === 'incoming' ? (
+            <span className="font-bold">
+              {threat.def.name} incoming in {Math.ceil(threat.seconds)}s.
+            </span>
+          ) : (
+            <span>
+              All quiet. {PREDATOR_DEFS.map((d) => d.name).join(', ')} hunt in telegraphed windows —
+              you’ll always get a warning.
+            </span>
+          )}
+        </div>
+
+        <div className="mb-3 grid grid-cols-1 gap-1.5">
+          <StatRow
+            label="Protection floor"
+            value={`${floorPct}%`}
+            hint={`cap ${capPct}% · ${state.deterrents} built`}
+          />
+          <StatRow label="Secured breeders" value={`${securedCount} / ${slots}`} hint="excluded from attacks" />
+          <StatRow label="Wounded" value={`${wounded.length}`} hint={wounded.length ? 'treat before they escalate' : 'none'} />
+        </div>
+
+        {/* Build defenses */}
+        <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+            Build defenses
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => {
+                if (engine.buildDeterrent().ok) playPlace();
+              }}
+              disabled={eggs < deterrentCost || floorMaxed}
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-xs transition ${
+                eggs >= deterrentCost && !floorMaxed
+                  ? 'bg-[#2e3a26] text-[#bfe8a8] hover:bg-[#36422c]'
+                  : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+              }`}
+            >
+              <NetIcon size={18} />
+              <span className="flex-1">
+                <span className="font-bold">Deterrent</span>
+                <span className="block text-[10px] opacity-80">
+                  {floorMaxed
+                    ? `floor maxed at ${capPct}% — build secure coops instead`
+                    : `+${Math.round(P.DEFENSE_FLOOR_PER_DETERRENT * 100)}% protection floor (passive, offline-safe)`}
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1 font-bold text-[#ffe9a8]">
+                <EggIcon size={12} /> {deterrentCost}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                if (engine.buildSecureCoop().ok) playPlace();
+              }}
+              disabled={eggs < secureCost}
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-xs transition ${
+                eggs >= secureCost
+                  ? 'bg-[#26323a] text-[#a8d0e8] hover:bg-[#2e3c46]'
+                  : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+              }`}
+            >
+              <ShieldIcon size={18} />
+              <span className="flex-1">
+                <span className="font-bold">Secure Coop</span>
+                <span className="block text-[10px] opacity-80">
+                  +{P.SECURE_SLOTS_PER_COOP} secure slots — mark prize breeders safe in the Flock panel
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1 font-bold text-[#ffe9a8]">
+                <EggIcon size={12} /> {secureCost}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Wounded triage */}
+        {wounded.length > 0 && (
+          <div className="rounded-md bg-[#2a1818] px-3 py-2.5 ring-1 ring-[#5a2a2a]">
+            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#e8a3a3]">
+              <HealIcon size={13} /> Wounded — treat before they’re lost
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {wounded.map((d) => {
+                const left = Math.max(0, P.WOUND_ESCALATE_SEC - (d.woundElapsed ?? 0));
+                const frac = left / P.WOUND_ESCALATE_SEC;
+                return (
+                  <div key={d.id} className="rounded bg-[#171009] px-2.5 py-1.5">
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="text-[#c9b88f]">{d.sex}</span>
+                      <span className="text-[#7a6a4a]">{d.stage}</span>
+                      <span className="ml-auto tabular-nums text-[#e8a3a3]">{Math.ceil(left)}s to lose</span>
+                      <button
+                        onClick={() => {
+                          if (engine.treat(d.id).ok) playTend();
+                        }}
+                        disabled={eggs < treatCost}
+                        className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                          eggs >= treatCost
+                            ? 'bg-[#2e6b3a] text-[#dfffd6] hover:bg-[#367a44]'
+                            : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+                        }`}
+                        title={`Heal this duck (${treatCost} eggs)`}
+                      >
+                        Treat {treatCost}
+                      </button>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#3a1c1c]">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#e26d6d] to-[#e2b94f]"
+                        style={{ width: `${frac * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-3 text-[10px] leading-relaxed text-[#7a6a4a]">
+          Built deterrents protect even while you’re away. Being here during a window adds cover.
+          Securing a breeder takes it off the menu entirely. A wound only becomes permanent if left
+          untended — so every loss is one you could have prevented.
+        </div>
+      </div>
+    </div>
+  );
+}

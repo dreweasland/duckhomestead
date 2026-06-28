@@ -76,3 +76,18 @@ body {
   background: radial-gradient(ellipse at center, rgba(255, 240, 200, 0.9), rgba(207, 188, 255, 0.5) 60%, transparent 80%);
   animation: screen-flash 0.8s ease-out both;
 }
+
+/* Predator window OPEN: a steady danger pulse on the telegraph bar. */
+@keyframes predator-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.35);
+  }
+}
+
+.predator-pulse {
+  animation: predator-pulse 1s ease-in-out infinite;
+}
