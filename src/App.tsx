@@ -37,6 +37,12 @@ import { ModulesPanel } from './ui/ModulesPanel';
 import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
 import { StationPanel } from './ui/StationPanel';
 
+/** Combined width of the two columns at desktop: board box (MAX_BOARD_WIDTH +
+ *  p-2) + the gap-4 + the 300px side panel. The bottom build row / footer are
+ *  pinned to this so they line up with the right column's edge regardless of
+ *  their own content width (e.g. a long hint that would otherwise stretch it). */
+const COLS_WIDTH = MAX_BOARD_WIDTH + 16 + 16 + 300;
+
 /** Position the station popover near the click, clamped to the viewport; opens
  *  upward for clicks in the lower half so it never runs off the bottom. */
 function stationPopStyle(a: { x: number; y: number }): CSSProperties {
@@ -241,10 +247,13 @@ export default function App() {
           space for it so it never overlaps the zone tabs / HUD beneath it. */}
       {currentThreat(state) && <div aria-hidden className="h-12 md:h-8" />}
 
-      {/* Shrink-wrap to the two columns (board + side panel) so the full-width
-          build row below lines up exactly with the right column's edge, instead
-          of stretching to a wider max-width. */}
-      <div className="mx-auto flex w-fit max-w-full flex-col gap-4">
+      {/* Pin the column stack to the two columns' combined width (COLS_WIDTH) so
+          the full-width build row + footer line up exactly with the right
+          column's edge, and a long hint can't stretch the whole thing wider. */}
+      <div
+        className="mx-auto flex w-full max-w-full flex-col gap-4 md:w-[var(--cw)]"
+        style={{ '--cw': `${COLS_WIDTH}px` } as CSSProperties}
+      >
         <div className="flex flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas — the board. */}
         <div className="flex flex-col items-center gap-3">
