@@ -461,18 +461,25 @@ export const BALANCE = {
   },
 
   // ── Phase 4e: prestige (the meta loop) ──────────────────────────────
-  // Multiplier-only, clean slate. A champion-flock goal (Legacy Score) gates an
-  // explicit, confirmed reset that wipes the WHOLE run and grants legacy currency
-  // for permanent GLOBAL-SCALAR boosts. Boosts NEVER touch a nutrition requirement
-  // or any puzzle structure — same throughput-only guardrail as loot + vigor.
+  // Multiplier-only, clean slate. A CHAMPION-FLOCK goal gates an explicit,
+  // confirmed reset that wipes the WHOLE run and grants legacy currency for
+  // permanent GLOBAL-SCALAR boosts. Boosts NEVER touch a nutrition requirement or
+  // any puzzle structure — same throughput-only guardrail as loot + vigor.
+  //
+  // The goal is THREE concrete requirements, so it can't be brute-forced by raw
+  // headcount and the player can read exactly what's left:
+  //   1. all colours bred (collection mastery),
+  //   2. average flock vigor ≥ VIGOR_GATE (breeding mastery — needs real
+  //      selective breeding + culling, can't be faked with random ducks),
+  //   3. flock size ≥ the tier's target (which scales each prestige).
   PRESTIGE: {
-    /** Legacy Score = vigor·Σvigor + dexCompletion·(seen/total) + flockSize·heads. */
-    SCORE_WEIGHTS: { vigor: 1.0, dexCompletion: 50, flockSize: 5 },
-    /** First champion goal; each tier raises it by THRESHOLD_GROWTH. */
-    BASE_THRESHOLD: 500,
-    THRESHOLD_GROWTH: 1.6,
-    /** Legacy currency granted exactly at threshold, scaling with overshoot
-     *  (score/threshold)^EXP — push higher for more. */
+    /** Required average flock vigor (range 0.5–2.0; seed ≈ 1.0). A mastery bar. */
+    VIGOR_GATE: 1.5,
+    /** Flock-size target at tier 0; each tier multiplies it by SIZE_GROWTH. */
+    SIZE_BASE: 20,
+    SIZE_GROWTH: 1.4,
+    /** Legacy currency granted at exactly the size target (with the other two
+     *  requirements met), scaling with overshoot (size/target)^EXP. */
     CURRENCY_AT_THRESHOLD: 10,
     CURRENCY_OVERSHOOT_EXP: 0.8,
     /** Stackable global-scalar boosts. perLevel = fractional bump per level;

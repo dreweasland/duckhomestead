@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { BALANCE } from '../config/balance';
+import { useState, type ReactNode } from 'react';
 import type { GameEngine } from '../game/engine';
 import {
   BOOST_IDS,
@@ -7,18 +6,50 @@ import {
   boostLevel,
   boostMult,
   canPrestige,
-  currentThreshold,
-  legacyScore,
+  championGoal,
   prestigeCurrency,
-  thresholdProgress,
   type BoostId,
 } from '../game/prestige';
-import { COLORS, type GameState } from '../game/state';
+import { COLORS, type Color, type GameState } from '../game/state';
 import { playDing, playUpgrade } from '../audio/sfx';
-import { ColorSwatch } from './FlockPanel';
-import { CloseIcon, EggIcon, LegacyIcon } from './icons';
+import { ColorSwatch, COLOR_META } from './FlockPanel';
+import { CheckIcon, CloseIcon, DuckIcon, LegacyIcon } from './icons';
 
-const P = BALANCE.PRESTIGE;
+/** One champion requirement: icon, label, value, a progress bar, and met state. */
+function GoalRow({
+  icon,
+  label,
+  value,
+  progress,
+  met,
+  hint,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  progress: number;
+  met: boolean;
+  hint?: ReactNode;
+}) {
+  const color = met ? '#8fe388' : progress >= 0.66 ? '#e8c45a' : '#e8835a';
+  return (
+    <div className="mb-1.5">
+      <div className="flex items-center gap-1.5 text-[11px]">
+        <span className="flex w-4 justify-center" style={{ color }}>
+          {met ? <CheckIcon size={11} /> : icon}
+        </span>
+        <span className="text-[#c9b88f]">{label}</span>
+        <span className="ml-auto tabular-nums font-bold" style={{ color }}>
+          {value}
+        </span>
+      </div>
+      <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-[#0f0b07]">
+        <div className="h-full rounded-full transition-[width]" style={{ width: `${Math.round(progress * 100)}%`, background: color }} />
+      </div>
+      {hint && <div className="mt-0.5 pl-5 text-[9px]">{hint}</div>}
+    </div>
+  );
+}
 
 const BOOST_META: Record<BoostId, { label: string; blurb: string }> = {
   output: { label: 'Output', blurb: 'all station production' },
@@ -51,22 +82,9 @@ export function LegacyPanel({
   const [armed, setArmed] = useState(false);
   const [result, setResult] = useState<{ tier: number; granted: number } | null>(null);
 
-  const score = legacyScore(state);
-  const threshold = currentThreshold(state);
-  const progress = thresholdProgress(state);
+  const goal = championGoal(state);
   const ready = canPrestige(state);
   const grant = prestigeCurrency(state);
-  const pct = Math.round(progress * 100);
-
-  // Score breakdown (so the goal is legible).
-  const W = P.SCORE_WEIGHTS;
-  const vigorSum = state.ducks.reduce((a, d) => a + d.vigor, 0);
-  const dexFrac = state.dexSeen.length / COLORS.length;
-  const parts = [
-    { label: 'vigor', value: Math.round(W.vigor * vigorSum) },
-    { label: 'dex', value: Math.round(W.dexCompletion * dexFrac) },
-    { label: 'flock', value: Math.round(W.flockSize * state.ducks.length) },
-  ];
 
   const doPrestige = () => {
     if (!ready) return;
@@ -114,41 +132,56 @@ export function LegacyPanel({
           </div>
         )}
 
-        {/* Champion goal */}
+        {/* Champion goal — three concrete requirements (meet all three to prestige). */}
         <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">
-          <div className="mb-1 flex items-baseline justify-between">
+          <div className="mb-2 flex items-baseline justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
-              Champion flock
+              Champion flock — meet all three
             </span>
-            <span
-              className="text-sm font-bold tabular-nums"
-              style={{ color: ready ? '#8fe388' : '#e8c45a' }}
-            >
-              {pct}%
+            <span className="text-xs font-bold tabular-nums" style={{ color: ready ? '#8fe388' : '#e8c45a' }}>
+              {ready ? 'ready!' : `${Math.round(goal.readiness * 100)}%`}
             </span>
           </div>
-          <div className="mb-1 h-2.5 overflow-hidden rounded-full bg-[#0f0b07]">
-            <div
-              className="h-full rounded-full transition-[width]"
-              style={{
-                width: `${pct}%`,
-                background: ready ? '#8fe388' : 'linear-gradient(to right,#e2b94f,#e8c45a)',
-              }}
-            />
-          </div>
-          <div className="flex items-center justify-between text-[10px] text-[#9a8a6a]">
-            <span className="tabular-nums">
-              score {Math.round(score)} / {Math.round(threshold)}
-            </span>
-            <span className="tabular-nums text-[#7a6a4a]">
-              {parts.map((p, i) => (
-                <span key={p.label}>
-                  {i > 0 && ' + '}
-                  {p.value} {p.label}
+
+          {/* 1 — all colours bred */}
+          <GoalRow
+            icon={<span className="flex items-center gap-0.5">{COLORS.map((c) => (
+              <ColorSwatch key={c} color={c} size={10} />
+            ))}</span>}
+            label="All colours bred"
+            value={`${goal.colors.bred}/${goal.colors.total}`}
+            progress={goal.colors.progress}
+            met={goal.colors.met}
+            hint={
+              goal.colors.met ? undefined : (
+                <span className="text-[#7a6a4a]">
+                  still need{' '}
+                  {(COLORS as Color[])
+                    .filter((c) => !state.dexSeen.includes(c))
+                    .map((c) => COLOR_META[c].label)
+                    .join(', ')}
                 </span>
-              ))}
-            </span>
-          </div>
+              )
+            }
+          />
+          {/* 2 — average vigor */}
+          <GoalRow
+            icon={<span className="text-[#ffe9a8]">×</span>}
+            label="Average vigor"
+            value={`×${goal.vigor.value.toFixed(2)} / ×${goal.vigor.gate.toFixed(2)}`}
+            progress={goal.vigor.progress}
+            met={goal.vigor.met}
+            hint={goal.vigor.met ? undefined : <span className="text-[#7a6a4a]">breed up + cull the weak</span>}
+          />
+          {/* 3 — flock size (scales each tier) */}
+          <GoalRow
+            icon={<DuckIcon size={12} />}
+            label="Flock size"
+            value={`${goal.size.value} / ${goal.size.target}`}
+            progress={goal.size.progress}
+            met={goal.size.met}
+            hint={goal.size.met ? undefined : <span className="text-[#7a6a4a]">more coops + breeding</span>}
+          />
         </div>
 
         {/* Prestige action */}
@@ -164,7 +197,7 @@ export function LegacyPanel({
           }`}
         >
           {!ready
-            ? `Reach the champion goal first (${pct}%)`
+            ? `Meet the champion goal first (${Math.round(goal.readiness * 100)}%)`
             : armed
               ? 'Wipe the run? — flock, zones, everything. Confirm'
               : `Raise your Legacy · +${grant} legacy`}
@@ -232,10 +265,9 @@ export function LegacyPanel({
                       <ColorSwatch key={col} color={col} size={9} />
                     ))}
                   </span>
-                  <span className="tabular-nums text-[#c9b88f]">×{c.bestVigor.toFixed(2)} best</span>
-                  <span className="tabular-nums text-[#7a6a4a]">{c.flockSize} ducks</span>
-                  <span className="ml-auto inline-flex items-center gap-1 tabular-nums text-[#e2b94f]">
-                    <EggIcon size={10} /> {c.score}
+                  <span className="tabular-nums text-[#c9b88f]">×{c.meanVigor.toFixed(2)} avg</span>
+                  <span className="ml-auto inline-flex items-center gap-1 tabular-nums text-[#7a6a4a]">
+                    <DuckIcon size={10} /> {c.flockSize}
                   </span>
                   <span className="text-[9px] text-[#5a4d3a]">{fmtDate(c.timestamp)}</span>
                 </div>

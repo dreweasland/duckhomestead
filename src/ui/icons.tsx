@@ -225,6 +225,14 @@ export const ShellIcon = (p: PixProps) => (
   />
 );
 
+export const CheckIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor' }}
+    rows={['.....x', '....xx', 'x...x.', 'xx.xx.', '.xxx..', '..x...']}
+  />
+);
+
 export const CloseIcon = (p: PixProps) => (
   <Pix
     {...p}

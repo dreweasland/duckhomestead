@@ -13,7 +13,7 @@ import { zoneDef, type StationType } from './config/balance';
 import { IrrigationBoard } from './ui/IrrigationBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
-import { thresholdProgress } from './game/prestige';
+import { championReadiness } from './game/prestige';
 import { LegacyPanel, legacyReady } from './ui/LegacyPanel';
 import { defenseFloor, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
 import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
@@ -310,7 +310,7 @@ export default function App() {
               <span className="tabular-nums">
                 {legacyReady(state)
                   ? 'champion ready!'
-                  : `T${state.legacyTier} · ${Math.round(thresholdProgress(state) * 100)}%`}
+                  : `T${state.legacyTier} · ${Math.round(championReadiness(state) * 100)}%`}
               </span>
             </button>
           )}

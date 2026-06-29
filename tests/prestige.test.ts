@@ -9,8 +9,9 @@ import {
   type Module,
 } from '../src/game/state';
 import {
-  legacyScore,
-  currentThreshold,
+  championGoal,
+  meanVigor,
+  sizeTarget,
   canPrestige,
   prestigeCurrency,
   prestigeReset,
@@ -79,8 +80,8 @@ function messyRun(): GameState {
   s.legacyCurrency = 7;
   s.purchasedBoosts = { output: 3, eggValue: 1 };
   s.legacyHall = [
-    { tier: 1, score: 520, bestVigor: 1.5, flockSize: 10, colors: ['blue'], timestamp: 1 },
-    { tier: 2, score: 900, bestVigor: 1.7, flockSize: 14, colors: ['blue', 'black'], timestamp: 2 },
+    { tier: 1, meanVigor: 1.5, bestVigor: 1.6, flockSize: 10, colors: ['blue'], timestamp: 1 },
+    { tier: 2, meanVigor: 1.7, bestVigor: 1.8, flockSize: 14, colors: ['blue', 'black'], timestamp: 2 },
   ];
   return s;
 }
@@ -120,49 +121,66 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expect(zoneUnlocked(reset, 'pond')).toBe(false);
   });
 
-  it('preserves + grows the meta, and raises the next threshold', () => {
+  it('preserves + grows the meta, and raises the next size target', () => {
     const s = messyRun();
     const reset = prestigeReset(s, NOW);
     expect(reset.legacyTier).toBe(3);
     expect(reset.legacyCurrency).toBe(7 + prestigeCurrency(s));
     expect(reset.purchasedBoosts).toEqual({ output: 3, eggValue: 1 });
     expect(reset.legacyHall).toHaveLength(3);
-    expect(reset.legacyHall[2].score).toBe(Math.round(legacyScore(s)));
-    expect(currentThreshold(reset)).toBeCloseTo(currentThreshold(s) * BALANCE.PRESTIGE.THRESHOLD_GROWTH, 6);
+    expect(reset.legacyHall[2].meanVigor).toBeCloseTo(meanVigor(s), 6);
+    expect(sizeTarget(reset)).toBe(Math.round(sizeTarget(s) * BALANCE.PRESTIGE.SIZE_GROWTH));
   });
 });
 
-/** A flock engineered to clear the tier-0 threshold (500). */
+/** A flock that clears all three tier-0 champion requirements. */
 function championRun(): GameState {
   const s = initialState(0);
-  s.ducks = Array.from({ length: 90 }, (_, i) => duck(`c${i}`, 1.5));
+  // 30 ducks, mean vigor 1.7 (> gate 1.5), all colours bred.
+  s.ducks = Array.from({ length: 30 }, (_, i) => duck(`c${i}`, 1.7));
   s.dexSeen = ['black', 'blue', 'splash'];
   return s;
 }
 
-describe('Legacy Score + threshold + currency', () => {
-  it('score aggregates vigor + dex completion + flock size', () => {
+describe('champion goal: three concrete requirements', () => {
+  it('reports each requirement’s progress + met state', () => {
     const s = initialState(0);
-    s.ducks = [duck('a', 1.5), duck('b', 0.5)];
-    s.dexSeen = ['blue'];
-    const W = BALANCE.PRESTIGE.SCORE_WEIGHTS;
-    expect(legacyScore(s)).toBeCloseTo(W.vigor * 2.0 + W.dexCompletion * (1 / 3) + W.flockSize * 2, 6);
+    s.ducks = [duck('a', 1.5), duck('b', 0.5)]; // mean 1.0
+    s.dexSeen = ['blue']; // 1 of 3 colours
+    const g = championGoal(s);
+    expect(g.colors.bred).toBe(1);
+    expect(g.colors.met).toBe(false);
+    expect(g.vigor.value).toBeCloseTo(1.0, 6);
+    expect(g.vigor.met).toBe(false); // 1.0 < gate 1.5
+    expect(g.size.value).toBe(2);
+    expect(g.size.met).toBe(false); // 2 < target 20
+    expect(g.readiness).toBeLessThan(1);
   });
 
-  it('prestige is gated below the threshold, available at/above it', () => {
-    expect(canPrestige(initialState(0))).toBe(false); // empty run, score 0
-    expect(prestigeCurrency(initialState(0))).toBe(0);
+  it('CANNOT be brute-forced by flock size alone — vigor + colours still gate it', () => {
+    const s = initialState(0);
+    // A massive flock of mediocre, single-colour ducks: huge size, no mastery.
+    s.ducks = Array.from({ length: 500 }, (_, i) => duck(`b${i}`, 1.0));
+    s.dexSeen = ['blue'];
+    expect(championGoal(s).size.met).toBe(true); // size is trivially cleared...
+    expect(canPrestige(s)).toBe(false); // ...but vigor + colours block prestige
+    expect(prestigeCurrency(s)).toBe(0);
+  });
+
+  it('unlocks once all three are met; gated otherwise', () => {
+    expect(canPrestige(initialState(0))).toBe(false); // empty run
     const champ = championRun();
-    expect(legacyScore(champ)).toBeGreaterThanOrEqual(currentThreshold(champ));
+    const g = championGoal(champ);
+    expect(g.colors.met && g.vigor.met && g.size.met).toBe(true);
     expect(canPrestige(champ)).toBe(true);
   });
 
-  it('currency is ≥ the at-threshold grant and scales with overshoot', () => {
-    const champ = championRun();
-    const P = BALANCE.PRESTIGE;
-    const expected = Math.round(P.CURRENCY_AT_THRESHOLD * Math.pow(legacyScore(champ) / currentThreshold(champ), P.CURRENCY_OVERSHOOT_EXP));
+  it('currency is ≥ the base grant and scales with flock-size overshoot', () => {
+    const champ = championRun(); // 30 ducks vs target 20 → overshoot
+    const Pp = BALANCE.PRESTIGE;
+    const expected = Math.round(Pp.CURRENCY_AT_THRESHOLD * Math.pow(champ.ducks.length / sizeTarget(champ), Pp.CURRENCY_OVERSHOOT_EXP));
     expect(prestigeCurrency(champ)).toBe(expected);
-    expect(prestigeCurrency(champ)).toBeGreaterThanOrEqual(P.CURRENCY_AT_THRESHOLD);
+    expect(prestigeCurrency(champ)).toBeGreaterThanOrEqual(Pp.CURRENCY_AT_THRESHOLD);
   });
 });
 

@@ -289,8 +289,8 @@ export interface GameState {
 export interface ChampionSnapshot {
   /** The legacy tier this prestige earned. */
   tier: number;
-  /** Legacy Score at the moment of reset. */
-  score: number;
+  /** Average flock vigor at the moment of reset. */
+  meanVigor: number;
   /** Highest vigor in the flock. */
   bestVigor: number;
   flockSize: number;

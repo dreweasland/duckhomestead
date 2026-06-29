@@ -16,40 +16,81 @@ import { COLORS, initialState, type ChampionSnapshot, type GameState } from './s
  */
 
 const P = BALANCE.PRESTIGE;
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 export type BoostId = 'output' | 'stationSpeed' | 'eggValue';
 export const BOOST_IDS: BoostId[] = ['output', 'stationSpeed', 'eggValue'];
 
-// ── Legacy Score + threshold ─────────────────────────────────────────
-/** Live run-mastery aggregate: flock vigor + dex completion + flock size. */
-export function legacyScore(state: GameState): number {
-  const W = P.SCORE_WEIGHTS;
-  const vigorSum = state.ducks.reduce((a, d) => a + d.vigor, 0);
-  const dexCompletion = state.dexSeen.length / COLORS.length; // 0..1
-  return W.vigor * vigorSum + W.dexCompletion * dexCompletion + W.flockSize * state.ducks.length;
+// ── The champion goal: three concrete requirements ───────────────────
+/** Live average flock vigor (0 when there's no flock). The breeding-mastery axis. */
+export function meanVigor(state: GameState): number {
+  const n = state.ducks.length;
+  return n > 0 ? state.ducks.reduce((a, d) => a + d.vigor, 0) / n : 0;
 }
 
-/** The champion goal for the current tier (rises each prestige). */
-export function currentThreshold(state: GameState): number {
-  return P.BASE_THRESHOLD * Math.pow(P.THRESHOLD_GROWTH, state.legacyTier);
+/** Distinct colours bred this run (the dex). */
+export function colorsBred(state: GameState): number {
+  return state.dexSeen.length;
 }
 
-/** Fraction [0,1] of the way to the current champion goal (for the progress bar). */
-export function thresholdProgress(state: GameState): number {
-  return Math.min(1, legacyScore(state) / currentThreshold(state));
+/** True once every colour has been bred. */
+export function dexComplete(state: GameState): boolean {
+  return colorsBred(state) >= COLORS.length;
 }
 
-/** Prestige is gated: unavailable until the run reaches the champion goal. */
+/** The flock-size target for the current tier (rises each prestige). */
+export function sizeTarget(state: GameState): number {
+  return Math.round(P.SIZE_BASE * Math.pow(P.SIZE_GROWTH, state.legacyTier));
+}
+
+export interface ChampionReq {
+  /** 0..1 progress toward this requirement. */
+  progress: number;
+  met: boolean;
+}
+export interface ChampionGoal {
+  colors: ChampionReq & { bred: number; total: number };
+  vigor: ChampionReq & { value: number; gate: number };
+  size: ChampionReq & { value: number; target: number };
+  /** Overall readiness: 1 only when ALL three are met (the limiting requirement). */
+  readiness: number;
+}
+
+/** The full champion-goal status — what the UI renders and the gate reads. */
+export function championGoal(state: GameState): ChampionGoal {
+  const bred = colorsBred(state);
+  const total = COLORS.length;
+  const mv = meanVigor(state);
+  const size = state.ducks.length;
+  const target = sizeTarget(state);
+  const colors = { bred, total, progress: clamp01(bred / total), met: bred >= total };
+  const vigor = { value: mv, gate: P.VIGOR_GATE, progress: clamp01(mv / P.VIGOR_GATE), met: mv >= P.VIGOR_GATE };
+  const sz = { value: size, target, progress: clamp01(size / target), met: size >= target };
+  return {
+    colors,
+    vigor,
+    size: sz,
+    readiness: Math.min(colors.progress, vigor.progress, sz.progress),
+  };
+}
+
+/** Prestige is gated: unavailable until ALL three champion requirements are met. */
 export function canPrestige(state: GameState): boolean {
-  return legacyScore(state) >= currentThreshold(state);
+  const g = championGoal(state);
+  return g.colors.met && g.vigor.met && g.size.met;
 }
 
-/** Legacy currency this run would grant — scales with overshoot past threshold. */
+/** Overall readiness [0,1] toward the champion goal (1 ⇒ ready). */
+export function championReadiness(state: GameState): number {
+  return championGoal(state).readiness;
+}
+
+/** Legacy currency this run would grant — scales with how far the flock overshoots
+ *  the size target (the requirements must all be met first). */
 export function prestigeCurrency(state: GameState): number {
-  const score = legacyScore(state);
-  const threshold = currentThreshold(state);
-  if (score < threshold) return 0;
-  return Math.round(P.CURRENCY_AT_THRESHOLD * Math.pow(score / threshold, P.CURRENCY_OVERSHOOT_EXP));
+  if (!canPrestige(state)) return 0;
+  const over = state.ducks.length / sizeTarget(state); // ≥ 1
+  return Math.round(P.CURRENCY_AT_THRESHOLD * Math.pow(over, P.CURRENCY_OVERSHOOT_EXP));
 }
 
 // ── Boosts (global scalars) ──────────────────────────────────────────
@@ -79,7 +120,7 @@ export const eggValueBoostMult = (state: GameState): number => boostMult(state, 
 export function championSnapshot(state: GameState, now: number): ChampionSnapshot {
   return {
     tier: state.legacyTier + 1,
-    score: Math.round(legacyScore(state)),
+    meanVigor: meanVigor(state),
     bestVigor: state.ducks.reduce((m, d) => Math.max(m, d.vigor), 0),
     flockSize: state.ducks.length,
     colors: [...state.dexSeen],
