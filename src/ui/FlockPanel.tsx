@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { colorOdds, slotOdds, targetMatch } from '../game/genetics';
+import { colorOdds, goodGeneCount, layMult, slotOdds, targetMatch, woundResistChance } from '../game/genetics';
 import { COLORS, coopCapacity, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
@@ -67,6 +67,18 @@ function qualityLabel(d: Duck, target: Gene[]): string {
 }
 
 const GENE_ORDER: Gene[] = ['L', 'V', 'H', 'D'];
+
+/** Flock-browser sort keys (all but `new` read the genome). */
+type SortKey = 'match' | 'good' | 'lay' | 'hardy' | 'new';
+const SORT_LABEL: Record<SortKey, string> = {
+  match: 'Target match',
+  good: 'Good genes',
+  lay: 'Lay',
+  hardy: 'Hardy',
+  new: 'Newest',
+};
+/** Numeric tail of a duck id (e.g. "d12" → 12) for the "Newest" sort. */
+const idNum = (d: Duck): number => parseInt(d.id.replace(/^\D+/, ''), 10) || 0;
 
 /**
  * The in-game crossbreed calculator: a 4×N grid of per-slot offspring gene odds
@@ -348,28 +360,60 @@ export function FlockPanel({
   // in stage → sex → vigor order.
   const colorCounts: Record<Color, number> = { black: 0, blue: 0, splash: 0 };
   for (const d of state.ducks) colorCounts[phenotype(d.genotype)]++;
-  const [colorTab, setColorTab] = useState<Color>(
+  const [colorTab, setColorTab] = useState<'all' | Color>(
     () => [...COLORS].sort((a, b) => colorCounts[b] - colorCounts[a])[0] ?? 'blue',
   );
+  const inTab = (d: Duck) => colorTab === 'all' || phenotype(d.genotype) === colorTab;
   // Cross-cutting filters (compose with the color tab): sex and life stage.
   const [sexFilter, setSexFilter] = useState<'all' | Duck['sex']>('all');
   const [stageFilter, setStageFilter] = useState<'all' | Duck['stage']>('all');
+  // Genome browser (the scale tooling): sort by a genome stat, and query for a
+  // gene-in-slot. Both read the genome, so they act on READ ducks; an unread
+  // duck sinks to the bottom of a genome sort and never matches a gene query.
+  const [sortKey, setSortKey] = useState<SortKey>('match');
+  const [querySlot, setQuerySlot] = useState<number>(-1); // -1 = any slot
+  const [queryGene, setQueryGene] = useState<Gene | 'any'>('any');
   // Bulk-release cutoff: release READ ducks whose match-to-target is below this
   // (an unread duck is never bulk-culled — you can't judge a "?"). Defaults to
   // half the slots. Two-click confirm via armedBulk.
   const SLOTS = target.length;
   const [cullQuality, setCullQuality] = useState<number>(Math.ceil(SLOTS / 2));
   const [armedBulk, setArmedBulk] = useState(false);
-  const shown = ducks.filter(
-    (d) =>
-      phenotype(d.genotype) === colorTab &&
-      (sexFilter === 'all' || d.sex === sexFilter) &&
-      (stageFilter === 'all' || d.stage === stageFilter),
-  );
+
+  const geneQueryActive = queryGene !== 'any';
+  const matchesGeneQuery = (d: Duck): boolean => {
+    if (!geneQueryActive) return true;
+    if (!d.genomeKnown) return false;
+    return querySlot >= 0 ? d.genome[querySlot] === queryGene : d.genome.includes(queryGene);
+  };
+  const sortStat: Record<SortKey, (d: Duck) => number> = {
+    match: (d) => targetMatch(d.genome, target),
+    good: (d) => goodGeneCount(d.genome),
+    lay: (d) => layMult(d.genome),
+    hardy: (d) => woundResistChance(d.genome),
+    new: (d) => idNum(d),
+  };
+  const shown = ducks
+    .filter(
+      (d) =>
+        inTab(d) &&
+        (sexFilter === 'all' || d.sex === sexFilter) &&
+        (stageFilter === 'all' || d.stage === stageFilter) &&
+        matchesGeneQuery(d),
+    )
+    .sort((a, b) => {
+      // 'new' reads ids (always known); genome stats sink unread ducks last.
+      if (sortKey !== 'new') {
+        const ka = a.genomeKnown ? 0 : 1;
+        const kb = b.genomeKnown ? 0 : 1;
+        if (ka !== kb) return ka - kb;
+      }
+      return sortStat[sortKey](b) - sortStat[sortKey](a);
+    });
   // Faceted counts: each filter row's badges reflect the OTHER active filter (and
   // the color tab), so the badge on the selected option always equals the number
   // of rows shown.
-  const inColor = ducks.filter((d) => phenotype(d.genotype) === colorTab);
+  const inColor = ducks.filter(inTab);
   const matchesSex = (d: Duck) => sexFilter === 'all' || d.sex === sexFilter;
   const matchesStage = (d: Duck) => stageFilter === 'all' || d.stage === stageFilter;
   const sexPool = inColor.filter(matchesStage); // counts for the sex row
@@ -404,8 +448,18 @@ export function FlockPanel({
           </div>
         ) : (
           <>
-            {/* Color tabs — also the dex: undiscovered colors read dimmed. */}
+            {/* Color tabs — also the dex: undiscovered colors read dimmed. "All"
+                spans the whole flock so the genome sort/query can browse it. */}
             <div className="mb-2 flex gap-1">
+              <button
+                onClick={() => setColorTab('all')}
+                title={`All colours — ${state.ducks.length} in flock`}
+                className={`flex items-center justify-center rounded-md px-2 py-1.5 text-xs font-bold transition ${
+                  colorTab === 'all' ? 'bg-[#3a2e22] text-[#f5ecd8] ring-1 ring-[#5a4a32]' : 'bg-[#1f1812] text-[#9a8a6a] hover:bg-[#33271c]'
+                }`}
+              >
+                All
+              </button>
               {COLORS.map((c) => {
                 const active = c === colorTab;
                 const seen = state.dexSeen.includes(c);
@@ -447,6 +501,50 @@ export function FlockPanel({
                   { value: 'duckling', label: 'Duckling', count: stageCount('duckling') },
                 ]}
               />
+            </div>
+
+            {/* Genome browser: sort by a genome stat + query for a gene-in-slot —
+                the scale tooling for min/maxing hundreds of ducks (no spreadsheet). */}
+            <div className="mb-2 flex items-center gap-1.5 rounded-md bg-[#1f1812] px-2.5 py-1.5">
+              <span className="text-[10px] text-[#9a8a6a]">Sort</span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                className="rounded bg-[#2a2018] px-1.5 py-1 text-[11px] text-[#f5ecd8]"
+              >
+                {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+                  <option key={k} value={k}>
+                    {SORT_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+              <span className="ml-auto text-[10px] text-[#9a8a6a]">Gene</span>
+              <select
+                value={queryGene}
+                onChange={(e) => setQueryGene(e.target.value as Gene | 'any')}
+                className="rounded bg-[#2a2018] px-1.5 py-1 text-[11px] text-[#f5ecd8]"
+              >
+                <option value="any">any</option>
+                {GENE_ORDER.map((g) => (
+                  <option key={g} value={g}>
+                    {g} · {GENE_META[g].label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[10px] text-[#9a8a6a]">in</span>
+              <select
+                value={querySlot}
+                onChange={(e) => setQuerySlot(Number(e.target.value))}
+                disabled={!geneQueryActive}
+                className="rounded bg-[#2a2018] px-1.5 py-1 text-[11px] text-[#f5ecd8] disabled:opacity-40"
+              >
+                <option value={-1}>any slot</option>
+                {Array.from({ length: SLOTS }, (_, i) => (
+                  <option key={i} value={i}>
+                    slot {i + 1}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Bulk release: cull the SHOWN set (current filters) whose match-to-
@@ -519,7 +617,7 @@ export function FlockPanel({
 
             {shown.length === 0 ? (
               <div className="py-6 text-center text-sm text-[#9a8a6a]">
-                {inColor.length === 0
+                {inColor.length === 0 && colorTab !== 'all'
                   ? `No ${COLOR_META[colorTab].label.toLowerCase()} ducks yet.`
                   : 'No ducks match these filters.'}
               </div>
@@ -534,6 +632,7 @@ export function FlockPanel({
                         d.wounded ? 'bg-[#2a1818] ring-1 ring-[#5a2a2a]' : 'bg-[#1f1812]'
                       }`}
                     >
+                      <ColorSwatch color={phenotype(d.genotype)} size={10} />
                       <span className="w-9 text-[#c9b88f]">{d.sex}</span>
                       <span className="w-16 text-[#9a8a6a]">
                         {STAGE_LABEL[d.stage]}
