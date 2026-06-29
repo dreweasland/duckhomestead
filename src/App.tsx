@@ -461,19 +461,6 @@ export default function App() {
               )}
             </div>
           )}
-          {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
-          <button
-            onClick={() => {
-              if (window.confirm('Wipe this homestead and start over?')) {
-                engine.reset();
-                setSelectedId(null);
-                setBuildType(null);
-              }
-            }}
-            className="self-start text-[10px] text-[#6a5a3a] underline hover:text-[#9a8a6a]"
-          >
-            New homestead (reset save)
-          </button>
         </div>
         </div>
 
@@ -484,6 +471,21 @@ export default function App() {
             <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
           </div>
         )}
+
+        {/* Dev tools + reset sit at the very bottom, under the build palette. */}
+        {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
+        <button
+          onClick={() => {
+            if (window.confirm('Wipe this homestead and start over?')) {
+              engine.reset();
+              setSelectedId(null);
+              setBuildType(null);
+            }
+          }}
+          className="self-start text-[10px] text-[#6a5a3a] underline hover:text-[#9a8a6a]"
+        >
+          New homestead (reset save)
+        </button>
       </div>
     </div>
   );
