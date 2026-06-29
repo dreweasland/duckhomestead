@@ -453,19 +453,27 @@ export const BALANCE = {
   // The goal is THREE concrete requirements, so it can't be brute-forced by raw
   // headcount and the player can read exactly what's left:
   //   1. all colours bred (collection mastery),
-  //   2. average flock vigor ≥ VIGOR_GATE (breeding mastery — needs real
-  //      selective breeding + culling, can't be faked with random ducks),
+  //   2. average flock vigor ≥ the tier's vigor gate (breeding mastery — needs
+  //      real selective breeding + culling, and the gate RISES each prestige),
   //   3. flock size ≥ the tier's target (which scales each prestige).
   PRESTIGE: {
-    /** Required average flock vigor (range 0.5–2.0; seed ≈ 1.0). A mastery bar. */
-    VIGOR_GATE: 1.5,
-    /** Flock-size target at tier 0; each tier multiplies it by SIZE_GROWTH. */
-    SIZE_BASE: 20,
-    SIZE_GROWTH: 1.4,
-    /** Legacy currency granted at exactly the size target (with the other two
-     *  requirements met), scaling with overshoot (size/target)^EXP. */
+    /** Required average flock vigor (range 0.5–2.0; seed ≈ 1.0). A mastery bar
+     *  that RISES each tier: gate(tier) = min(MAX, BASE + PER_TIER·tier). Capped
+     *  below the 2.0 ceiling so it always stays reachable. */
+    VIGOR_GATE_BASE: 1.5,
+    VIGOR_GATE_PER_TIER: 0.05,
+    VIGOR_GATE_MAX: 1.9,
+    /** Flock-size target at tier 0; each tier multiplies it by SIZE_GROWTH.
+     *  Tuned to be a real grind, not a formality (≈50, 75, 113, 169, …). */
+    SIZE_BASE: 50,
+    SIZE_GROWTH: 1.5,
+    /** Legacy currency = CURRENCY_AT_THRESHOLD scaled by BOTH overshoots:
+     *  (size/target)^OVERSHOOT_EXP × (meanVigor/gate)^VIGOR_EXP — so a
+     *  championship flock out-earns a merely-bigger one (both ratios are ≥ 1
+     *  once the requirements are met). */
     CURRENCY_AT_THRESHOLD: 10,
     CURRENCY_OVERSHOOT_EXP: 0.8,
+    CURRENCY_VIGOR_EXP: 1.5,
     /** Stackable global-scalar boosts. perLevel = fractional bump per level;
      *  cost for level L = round(baseCost · costGrowth^L). */
     BOOSTS: {

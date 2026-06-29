@@ -12,6 +12,7 @@ import {
   championGoal,
   meanVigor,
   sizeTarget,
+  vigorGate,
   canPrestige,
   prestigeCurrency,
   prestigeReset,
@@ -135,15 +136,20 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expect(reset.purchasedBoosts).toEqual({ output: 3, eggValue: 1 });
     expect(reset.legacyHall).toHaveLength(3);
     expect(reset.legacyHall[2].meanVigor).toBeCloseTo(meanVigor(s), 6);
-    expect(sizeTarget(reset)).toBe(Math.round(sizeTarget(s) * BALANCE.PRESTIGE.SIZE_GROWTH));
+    // The next tier's target is strictly larger (rounding makes the exact value
+    // the formula at the new tier, not a re-round of the old one).
+    expect(sizeTarget(reset)).toBeGreaterThan(sizeTarget(s));
+    expect(sizeTarget(reset)).toBe(
+      Math.round(BALANCE.PRESTIGE.SIZE_BASE * BALANCE.PRESTIGE.SIZE_GROWTH ** reset.legacyTier),
+    );
   });
 });
 
 /** A flock that clears all three tier-0 champion requirements. */
 function championRun(): GameState {
   const s = initialState(0);
-  // 30 ducks, mean vigor 1.7 (> gate 1.5), all colours bred.
-  s.ducks = Array.from({ length: 30 }, (_, i) => duck(`c${i}`, 1.7));
+  // 60 ducks (> tier-0 target 50), mean vigor 1.7 (> tier-0 gate 1.5), all colours.
+  s.ducks = Array.from({ length: 60 }, (_, i) => duck(`c${i}`, 1.7));
   s.dexSeen = ['black', 'blue', 'splash'];
   return s;
 }
@@ -159,7 +165,7 @@ describe('champion goal: three concrete requirements', () => {
     expect(g.vigor.value).toBeCloseTo(1.0, 6);
     expect(g.vigor.met).toBe(false); // 1.0 < gate 1.5
     expect(g.size.value).toBe(2);
-    expect(g.size.met).toBe(false); // 2 < target 20
+    expect(g.size.met).toBe(false); // 2 < target 50
     expect(g.readiness).toBeLessThan(1);
   });
 
@@ -181,12 +187,46 @@ describe('champion goal: three concrete requirements', () => {
     expect(canPrestige(champ)).toBe(true);
   });
 
-  it('currency is ≥ the base grant and scales with flock-size overshoot', () => {
-    const champ = championRun(); // 30 ducks vs target 20 → overshoot
+  it('currency is ≥ the base grant and scales with BOTH size and vigor overshoot', () => {
+    const champ = championRun(); // 60 ducks vs target 50, vigor 1.7 vs gate 1.5
     const Pp = BALANCE.PRESTIGE;
-    const expected = Math.round(Pp.CURRENCY_AT_THRESHOLD * Math.pow(champ.ducks.length / sizeTarget(champ), Pp.CURRENCY_OVERSHOOT_EXP));
+    const expected = Math.round(
+      Pp.CURRENCY_AT_THRESHOLD *
+        Math.pow(champ.ducks.length / sizeTarget(champ), Pp.CURRENCY_OVERSHOOT_EXP) *
+        Math.pow(meanVigor(champ) / vigorGate(champ), Pp.CURRENCY_VIGOR_EXP),
+    );
     expect(prestigeCurrency(champ)).toBe(expected);
     expect(prestigeCurrency(champ)).toBeGreaterThanOrEqual(Pp.CURRENCY_AT_THRESHOLD);
+  });
+
+  it('a higher-vigor flock out-earns a merely-bigger one (vigor now pays)', () => {
+    const lo = championRun(); // vigor 1.7
+    const hi = championRun();
+    hi.ducks = hi.ducks.map((d) => ({ ...d, vigor: 2.0 })); // same size, championship vigor
+    expect(prestigeCurrency(hi)).toBeGreaterThan(prestigeCurrency(lo));
+  });
+
+  it('the vigor gate rises each tier, capped below the ceiling', () => {
+    const Pp = BALANCE.PRESTIGE;
+    const t0 = { ...initialState(0), legacyTier: 0 };
+    const t1 = { ...initialState(0), legacyTier: 1 };
+    expect(vigorGate(t1)).toBeGreaterThan(vigorGate(t0));
+    expect(championGoal(t1).vigor.gate).toBe(vigorGate(t1)); // the goal reads the tiered gate
+    const tHigh = { ...initialState(0), legacyTier: 99 };
+    expect(vigorGate(tHigh)).toBe(Pp.VIGOR_GATE_MAX); // capped, always reachable
+    expect(vigorGate(tHigh)).toBeLessThan(BALANCE.BREEDING.VIGOR_CEILING);
+  });
+
+  it('a flock that clears tier 0 can FAIL the higher tier-1 vigor gate', () => {
+    // mean vigor 1.52: clears tier-0 gate 1.5, but not tier-1's 1.55.
+    const mk = (tier: number) => {
+      const s = { ...initialState(0), legacyTier: tier };
+      s.ducks = Array.from({ length: 200 }, (_, i) => duck(`v${i}`, 1.52));
+      s.dexSeen = ['black', 'blue', 'splash'];
+      return s;
+    };
+    expect(championGoal(mk(0)).vigor.met).toBe(true);
+    expect(championGoal(mk(1)).vigor.met).toBe(false);
   });
 });
 
