@@ -399,6 +399,30 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
   return done(true);
 }
 
+// ── Gene Reader (reveals genomes passively / in bulk) ─────────────────
+/**
+ * Build the gene-reader. One-time purchase: it immediately reads the WHOLE
+ * current flock (in bulk) and, from then on, every newly hatched/acquired duck
+ * auto-reads on arrival (see breeding.ts). NEVER a per-duck click — reading is
+ * the passive gate to deliberate min/maxing; phone-it-in pairing (off visible
+ * colour) works without it.
+ */
+export function buildGeneReader(state: GameState): ActionResult<{ revealed: number }> {
+  if (state.geneReader) return fail('Gene reader already built');
+  const cost = BALANCE.GENOME.READER_COST_EGGS;
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.geneReader = true;
+  let revealed = 0;
+  for (const d of state.ducks) {
+    if (!d.genomeKnown) {
+      d.genomeKnown = true;
+      revealed += 1;
+    }
+  }
+  return done({ revealed });
+}
+
 // ── Dose Brewer's Yeast (active-only intervention; clears a leg debuff) ──
 export interface DoseResult {
   xp: XpResult;

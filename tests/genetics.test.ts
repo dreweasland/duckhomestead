@@ -8,6 +8,7 @@ import {
   layMult,
   maturationMult,
   recordColor,
+  slotOdds,
   targetMatch,
   woundResistChance,
 } from '../src/game/genetics';
@@ -129,6 +130,21 @@ describe('crossbreeding: position-linked + dominance-weighted + mutation', () =>
     // hatch). Force mutation every slot (mutation rng 0) to a non-D gene.
     const child = breedGenome(g('DDDDDD'), g('DDDDDD'), seq([0.5, 0, 0.0]));
     expect(child.some((x) => x !== 'D')).toBe(true);
+  });
+
+  it('slotOdds is a valid per-slot distribution that mirrors breedGenome', () => {
+    const odds = slotOdds(g('LLLLLL'), g('DDDDDD'));
+    expect(odds).toHaveLength(6);
+    for (const dist of odds) {
+      const sum = dist.L + dist.V + dist.H + dist.D;
+      expect(sum).toBeCloseTo(1, 6);
+    }
+    // L (dom 3) vs D (dom 1): P(L) = (1-m)·3/4 + m·1/4.
+    const m = BALANCE.GENOME.MUTATION_CHANCE;
+    expect(odds[0].L).toBeCloseTo((1 - m) * 0.75 + m * 0.25, 6);
+    expect(odds[0].D).toBeCloseTo((1 - m) * 0.25 + m * 0.25, 6);
+    // and V/H only reachable by mutation here.
+    expect(odds[0].V).toBeCloseTo(m * 0.25, 6);
   });
 
   it('combining COMPLEMENTARY parents can beat BOTH (the assembly puzzle)', () => {

@@ -2,6 +2,7 @@ import { BALANCE, type StationType } from '../config/balance';
 import {
   autoFillRack,
   buildDeterrent,
+  buildGeneReader,
   buildSecureCoop,
   repairDeterrents,
   collectAll,
@@ -410,6 +411,12 @@ export class GameEngine {
   }
   unpair(pairId: string): ActionResult<unknown> {
     const r = removePair(this.state, pairId);
+    this.notify();
+    return r;
+  }
+  /** Build the gene-reader: reveals the whole flock now + auto-reads new ducks. */
+  buildGeneReader(): ActionResult<{ revealed: number }> {
+    const r = buildGeneReader(this.state);
     this.notify();
     return r;
   }

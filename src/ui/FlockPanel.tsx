@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { colorOdds, targetMatch } from '../game/genetics';
+import { colorOdds, slotOdds, targetMatch } from '../game/genetics';
 import { COLORS, coopCapacity, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
@@ -64,6 +64,59 @@ export function GenomeTiles({
 /** Compact quality read for a duck: matches-to-target when known, else "?". */
 function qualityLabel(d: Duck, target: Gene[]): string {
   return d.genomeKnown ? `${targetMatch(d.genome, target)}/${target.length}` : '?';
+}
+
+const GENE_ORDER: Gene[] = ['L', 'V', 'H', 'D'];
+
+/**
+ * The in-game crossbreed calculator: a 4×N grid of per-slot offspring gene odds
+ * for a selected pair. Rows are genes (L/V/H/D), columns are genome slots; each
+ * cell is the probability that slot lands that gene, shaded by likelihood. A
+ * slot's target gene is ringed so you can read progress-to-target at a glance.
+ */
+function OddsPreview({ a, b, target }: { a: Duck; b: Duck; target: Gene[] }) {
+  if (!a.genomeKnown || !b.genomeKnown) {
+    return (
+      <div className="mt-1 text-[10px] text-[#7a6a4a]">
+        Build a Gene Reader to preview this cross’s gene odds.
+      </div>
+    );
+  }
+  const odds = slotOdds(a.genome, b.genome);
+  return (
+    <div className="mt-1.5">
+      <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+        Offspring odds (per slot)
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {GENE_ORDER.map((gene) => (
+          <div key={gene} className="flex items-center gap-0.5">
+            <span className="w-7 text-[9px] font-bold" style={{ color: GENE_META[gene].color }}>
+              {gene}
+            </span>
+            {odds.map((dist, i) => {
+              const p = dist[gene];
+              const isTarget = target[i] === gene;
+              return (
+                <span
+                  key={i}
+                  className="flex h-4 flex-1 items-center justify-center rounded-[2px] text-[8px] tabular-nums"
+                  title={`Slot ${i + 1}: ${Math.round(p * 100)}% ${GENE_META[gene].label}`}
+                  style={{
+                    background: `color-mix(in srgb, ${GENE_META[gene].color} ${Math.round(p * 100)}%, #171009)`,
+                    color: p > 0.5 ? '#171009' : '#9a8a6a',
+                    boxShadow: isTarget ? 'inset 0 0 0 1px #ffe9a8' : undefined,
+                  }}
+                >
+                  {p >= 0.005 ? Math.round(p * 100) : ''}
+                </span>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const STAGE_LABEL: Record<Duck['stage'], string> = {
@@ -136,10 +189,31 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
   const hens = avail('hen');
   const byId = (id: string) => state.ducks.find((d) => d.id === id);
 
+  const readerCost = BALANCE.GENOME.READER_COST_EGGS;
   return (
     <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2">
-      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
-        Breeding
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">Breeding</span>
+        {state.geneReader ? (
+          <span className="rounded bg-[#1a2a1a] px-1.5 py-0.5 text-[9px] font-bold text-[#8fe388]" title="Genomes are read automatically for the whole flock and every new duck.">
+            Gene Reader active
+          </span>
+        ) : (
+          <button
+            onClick={() => {
+              if (engine.buildGeneReader().ok) playPlace();
+            }}
+            disabled={state.resources.eggs < readerCost}
+            title={`Reveal every duck's hidden genome — now and on every future hatch (${readerCost} eggs)`}
+            className={`rounded px-1.5 py-0.5 text-[9px] font-bold transition ${
+              state.resources.eggs >= readerCost
+                ? 'bg-[#3a2e22] text-[#ffe9a8] hover:bg-[#4a3a2a]'
+                : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+            }`}
+          >
+            Build Gene Reader · {readerCost}
+          </button>
+        )}
       </div>
       {state.breedingPairs.map((p) => {
         const dr = byId(p.drakeId);
@@ -175,6 +249,7 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
               clutch {Math.ceil(next)}s
               {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
             </div>
+            <OddsPreview a={dr} b={he} target={target} />
           </div>
         );
       })}
@@ -227,6 +302,16 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
           Need an unpaired adult drake and hen to start a pair.
         </div>
       )}
+      {/* Crossbreed-odds preview for the candidate pair (the in-game calculator). */}
+      {(() => {
+        const dr = byId(drakeId);
+        const he = byId(henId);
+        return dr && he ? (
+          <div className="mt-1.5 rounded bg-[#171009] px-2 py-1.5">
+            <OddsPreview a={dr} b={he} target={target} />
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 }

@@ -105,6 +105,34 @@ export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random): Genom
   return out;
 }
 
+/**
+ * Per-slot offspring gene probabilities for a cross — the in-game crossbreed
+ * calculator. For each slot, returns P(gene) over {L,V,H,D} combining the
+ * dominance-weighted parent pick with the per-slot mutation smear. Mirrors
+ * breedGenome exactly, so the preview never lies. Both parents' genomes must be
+ * known to the caller (a "?" genome can't be previewed).
+ */
+export function slotOdds(a: Genome, b: Genome): Record<Gene, number>[] {
+  const dom = G.DOMINANCE;
+  const m = G.MUTATION_CHANCE;
+  const genes = G.GENES;
+  const out: Record<Gene, number>[] = [];
+  for (let i = 0; i < a.length; i++) {
+    const ga = a[i];
+    const gb = b[i];
+    const wa = dom[ga] ?? 1;
+    const wb = dom[gb] ?? 1;
+    const pa = wa / (wa + wb);
+    const pb = wb / (wa + wb);
+    const dist: Record<Gene, number> = { L: 0, V: 0, H: 0, D: 0 };
+    dist[ga] += (1 - m) * pa; // parent a wins this slot (no mutation)
+    dist[gb] += (1 - m) * pb; // parent b wins this slot (no mutation)
+    for (const gn of genes) dist[gn] += m / genes.length; // mutation: uniform
+    out.push(dist);
+  }
+  return out;
+}
+
 // ── Colour locus (Bl) — unchanged; the dex survives ──────────────────
 /** Mendelian: a parent passes one of its two alleles at random. */
 export function inheritAllele(g: Genotype, rng: Rng = Math.random): Allele {

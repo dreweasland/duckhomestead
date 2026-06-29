@@ -10,7 +10,7 @@ import {
   type Genotype,
 } from '../src/game/state';
 import { AXES } from '../src/game/state';
-import { placeStation } from '../src/game/actions';
+import { buildGeneReader, createPair, placeStation } from '../src/game/actions';
 import { serialize, deserialize } from '../src/game/save';
 import { layMult } from '../src/game/genetics';
 import { build, fullSetup, stockAll, run, setHens, FLAT_GENOME, genome } from './helpers';
@@ -100,6 +100,41 @@ describe('GUARDRAIL: genome & flock drive output/demand, never the nutrition mat
     run(setHens(stockAll(fullSetup()), 4, genome('LLLLLL')), 120);
     expect(JSON.stringify(BALANCE.NUTRITION.INGREDIENT)).toBe(matrix);
     expect(JSON.stringify(BALANCE.NUTRITION.REQUIREMENT)).toBe(req);
+  });
+});
+
+describe('gene reader: reveals genomes passively / in bulk (never per-duck)', () => {
+  it('builds once, costs eggs, and reveals the WHOLE current flock at once', () => {
+    const s = build({ coop: 1 }); // seeded flock, genomes hidden
+    expect(s.ducks.every((d) => !d.genomeKnown)).toBe(true);
+    s.resources.eggs = BALANCE.GENOME.READER_COST_EGGS;
+    const r = buildGeneReader(s);
+    expect(r.ok).toBe(true);
+    expect(s.geneReader).toBe(true);
+    expect(s.resources.eggs).toBe(0);
+    expect(s.ducks.every((d) => d.genomeKnown)).toBe(true); // bulk reveal
+    // a second build is rejected
+    expect(buildGeneReader(s).ok).toBe(false);
+  });
+
+  it('rejects the build when eggs are short', () => {
+    const s = build({ coop: 1 });
+    s.resources.eggs = BALANCE.GENOME.READER_COST_EGGS - 1;
+    expect(buildGeneReader(s).ok).toBe(false);
+    expect(s.geneReader).toBe(false);
+  });
+
+  it('once built, every newly hatched duck auto-reads on arrival', () => {
+    const s = stockAll(build({ coop: 2 }));
+    s.resources.eggs = 1e7;
+    buildGeneReader(s);
+    const drake = s.ducks.find((d) => d.sex === 'drake')!;
+    const hen = s.ducks.find((d) => d.sex === 'hen')!;
+    createPair(s, drake.id, hen.id);
+    run(s, 300); // a clutch hatches
+    const offspring = s.ducks.filter((d) => d.id !== drake.id && d.id !== hen.id);
+    expect(offspring.length).toBeGreaterThan(0);
+    expect(offspring.every((d) => d.genomeKnown)).toBe(true);
   });
 });
 
