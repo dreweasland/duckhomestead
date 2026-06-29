@@ -41,17 +41,19 @@ describe('breeding loop end to end', () => {
     expect(offspring.some((d) => d.stage === 'adult')).toBe(true); // matured fully
   });
 
-  it('offspring carry a 6-slot genome inherited from the parents', () => {
+  it('offspring carry a full 6-slot genome inherited from the parents', () => {
     const s = stockAll(build({ coop: 2 }));
     const { drakeId, henId } = pairFlock(s, ['Bl', 'bl'], genome('LLLHHH'));
     createPair(s, drakeId, henId);
     run(s, 300);
     const offspring = s.ducks.filter((d) => d.id !== 'D' && d.id !== 'H');
     expect(offspring.length).toBeGreaterThan(0);
-    // Both parents are LLLHHH, so every offspring slot must be L or H (no mutation
-    // here would be rare; the placeholder cross has no mutation in Step 1).
     expect(offspring.every((d) => d.genome.length === BALANCE.GENOME.SLOTS)).toBe(true);
-    expect(offspring.every((d) => d.genome.every((g) => g === 'L' || g === 'H'))).toBe(true);
+    // Both parents are LLLHHH; mutation aside, slots come from L/H — the vast
+    // majority of inherited slots should be one of the parents' genes.
+    const slots = offspring.flatMap((d) => d.genome);
+    const fromParents = slots.filter((g) => g === 'L' || g === 'H').length;
+    expect(fromParents / slots.length).toBeGreaterThan(0.8);
   });
 
   it('offspring genotype comes from the parents (Splash×Splash breeds true)', () => {

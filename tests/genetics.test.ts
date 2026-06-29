@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import {
+  breedGenome,
   breedGenotype,
   goodGeneCount,
   inheritAllele,
@@ -96,6 +97,53 @@ describe('genome-derived stats (the profile, provably NOT one scalar)', () => {
     expect(goodGeneCount(g('LVHDDD'))).toBe(3);
     expect(targetMatch(g('LLLLLL'), g('LLLLLL'))).toBe(6);
     expect(targetMatch(g('LLLDDD'), g('LLLLLL'))).toBe(3);
+  });
+});
+
+describe('crossbreeding: position-linked + dominance-weighted + mutation', () => {
+  it('is position-linked: each offspring slot comes from a parent slot i', () => {
+    // rng [choice, mutation] per slot. choice 0 → always parent a; mutation 0.99
+    // → never mutate. So offspring == parent a, slot for slot.
+    const a = g('LVHDLV');
+    const b = g('DDDDDD');
+    expect(breedGenome(a, b, seq([0, 0.99]))).toEqual(a);
+    // choice 0.99 → parent b wins every slot.
+    expect(breedGenome(a, b, seq([0.99, 0.99]))).toEqual(b);
+  });
+
+  it('dominance: a good gene out-passes a Dud at a contested slot', () => {
+    // Cross all-L vs all-D: each slot is L (dom 3) vs D (dom 1) → P(L) ≈ 3/4.
+    let lWins = 0;
+    const N = 20000;
+    for (let i = 0; i < N; i++) {
+      const child = breedGenome(g('LLLLLL'), g('DDDDDD'));
+      lWins += child.filter((x) => x === 'L').length;
+    }
+    const pL = lWins / (N * 6);
+    expect(pL).toBeGreaterThan(0.68); // ~0.73 after the small mutation smear
+    expect(pL).toBeLessThan(0.78);
+  });
+
+  it('mutation: an offspring slot can become a gene neither parent has', () => {
+    // Two all-Dud parents: only mutation can introduce a non-D gene (the escape
+    // hatch). Force mutation every slot (mutation rng 0) to a non-D gene.
+    const child = breedGenome(g('DDDDDD'), g('DDDDDD'), seq([0.5, 0, 0.0]));
+    expect(child.some((x) => x !== 'D')).toBe(true);
+  });
+
+  it('combining COMPLEMENTARY parents can beat BOTH (the assembly puzzle)', () => {
+    // drake strong in the first 3 slots, hen strong in the last 3. Position-linked
+    // inheritance + dominance means an offspring can collect all 6 good genes —
+    // richer than either parent (each only has 3).
+    const drake = g('LLLDDD');
+    const hen = g('DDDLLL');
+    let best = 0;
+    for (let i = 0; i < 400; i++) {
+      best = Math.max(best, goodGeneCount(breedGenome(drake, hen)));
+    }
+    expect(goodGeneCount(drake)).toBe(3);
+    expect(goodGeneCount(hen)).toBe(3);
+    expect(best).toBeGreaterThan(3); // an offspring richer than either parent
   });
 });
 

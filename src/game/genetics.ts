@@ -76,16 +76,32 @@ export function isGodClone(genome: Genome, target: Genome): boolean {
 
 // ── Inheritance ──────────────────────────────────────────────────────
 /**
- * Cross two genomes into an offspring genome. Position-linked: offspring slot i
- * comes from one parent's slot i.
- *
- * STEP 1 PLACEHOLDER: each slot is taken from a parent at random (50/50), no
- * dominance weighting and no mutation yet. Step 2 replaces this with the
- * dominance-weighted + per-slot-mutation cross (the real assembly puzzle).
+ * Cross two genomes into an offspring genome — the assembly puzzle. Three rules:
+ *   1. POSITION-LINKED: offspring slot i inherits from one parent's slot i (never
+ *      a reshuffle), so you build a god clone by pairing parents each strong in
+ *      DIFFERENT slots.
+ *   2. DOMINANCE-WEIGHTED: which parent wins slot i is a weighted coin — a good
+ *      gene (DOMINANCE) is likelier to pass than a Dud, so the cross is plannable
+ *      (pairing complementary parents reliably lifts the offspring).
+ *   3. PER-SLOT MUTATION: a small chance the slot is replaced by a uniformly
+ *      random gene — the occasional upgrade, and the escape hatch from a flock of
+ *      two-Dud parents.
  */
 export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random): Genome {
+  const dom = G.DOMINANCE;
+  const genes = G.GENES;
   const out: Genome = [];
-  for (let i = 0; i < a.length; i++) out.push(rng() < 0.5 ? a[i] : b[i]);
+  for (let i = 0; i < a.length; i++) {
+    const ga = a[i];
+    const gb = b[i];
+    const wa = dom[ga] ?? 1;
+    const wb = dom[gb] ?? 1;
+    let gene: Gene = rng() * (wa + wb) < wa ? ga : gb;
+    if (rng() < G.MUTATION_CHANCE) {
+      gene = (genes[Math.floor(rng() * genes.length)] as Gene) ?? gene;
+    }
+    out.push(gene);
+  }
   return out;
 }
 
