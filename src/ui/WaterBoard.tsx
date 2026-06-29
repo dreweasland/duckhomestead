@@ -120,6 +120,7 @@ function WaterHelp({
   onClose: () => void;
   starter: { isFlow: boolean; cost: number; canAfford: boolean; alreadyBuilt: boolean; onPlace: () => void };
 }) {
+  const isFlow = starter.isFlow;
   const Swatch = ({ color }: { color: string }) => (
     <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: color }} />
   );
@@ -145,55 +146,73 @@ function WaterHelp({
           lethal.
         </p>
 
-        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
-          The Pond — layout
-        </div>
-        <div className="mb-3 space-y-1.5">
-          {FEAT_TYPES.map((t) => (
-            <div key={t} className="flex items-start gap-2 text-[11px] text-[#c4dae6]">
-              <Swatch color={FEAT_META[t].color} />
-              <span>
-                <b style={{ color: FEAT_META[t].color }}>{FEAT_META[t].label}</b>{' '}
-                <span className="text-[#7a9aa8]">({W.FEATURES[t].costEggs} eggs)</span> — {FEAT_EFFECT[t]}
-              </span>
+        {!isFlow ? (
+          // ── The Pond tab: layout only (circulation comes later) ──
+          <>
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
+              The Pond — pieces
             </div>
-          ))}
-        </div>
+            <div className="mb-3 space-y-1.5">
+              {FEAT_TYPES.map((t) => (
+                <div key={t} className="flex items-start gap-2 text-[11px] text-[#c4dae6]">
+                  <Swatch color={FEAT_META[t].color} />
+                  <span>
+                    <b style={{ color: FEAT_META[t].color }}>{FEAT_META[t].label}</b>{' '}
+                    <span className="text-[#7a9aa8]">({W.FEATURES[t].costEggs} eggs)</span> — {FEAT_EFFECT[t]}
+                  </span>
+                </div>
+              ))}
+            </div>
 
-        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
-          Waterworks — circulation
-        </div>
-        <div className="mb-3 space-y-1.5">
-          {FLOW_TYPES.map((t) => (
-            <div key={t} className="flex items-start gap-2 text-[11px] text-[#c4dae6]">
-              <Swatch color={FLOW_META[t].color} />
-              <span>
-                <b style={{ color: FLOW_META[t].color }}>{FLOW_META[t].label}</b>{' '}
-                <span className="text-[#7a9aa8]">({W.FLOW[t].costEggs} eggs)</span> — {FLOW_EFFECT[t]}
-              </span>
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
+              An ideal starter
             </div>
-          ))}
-        </div>
+            <div className="flex flex-col items-center gap-1">
+              <MiniGrid features={EXAMPLE_FEATURES} />
+              <div className="text-center text-[11px] leading-snug text-[#7a9aa8]">
+                A spring with bathing pools around it, plant beds tucked between to lift them.
+              </div>
+            </div>
+            <p className="mt-3 rounded-md bg-[#13202a] px-3 py-2 text-[10px] leading-relaxed text-[#7a9aa8]">
+              Later, at a higher rank, <b className="text-[#a8d0e8]">Waterworks</b> unlocks a
+              circulation layer here — as your flock grows it fouls the pond, and circulation keeps it
+              fresh. Nothing to do about it yet; just build a good pond.
+            </p>
+          </>
+        ) : (
+          // ── The Waterworks tab: circulation only ──
+          <>
+            <p className="mb-3 rounded-md bg-[#13202a] px-3 py-2 text-[10px] leading-relaxed text-[#7a9aa8]">
+              Your flock now fouls the pond faster than it stays fresh. Build the pond's water on{' '}
+              <b className="text-[#a8d0e8]">The Pond</b> tab; here you keep it circulating.
+            </p>
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
+              Waterworks — pieces
+            </div>
+            <div className="mb-3 space-y-1.5">
+              {FLOW_TYPES.map((t) => (
+                <div key={t} className="flex items-start gap-2 text-[11px] text-[#c4dae6]">
+                  <Swatch color={FLOW_META[t].color} />
+                  <span>
+                    <b style={{ color: FLOW_META[t].color }}>{FLOW_META[t].label}</b>{' '}
+                    <span className="text-[#7a9aa8]">({W.FLOW[t].costEggs} eggs)</span> — {FLOW_EFFECT[t]}
+                  </span>
+                </div>
+              ))}
+            </div>
 
-        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
-          An ideal starter
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col items-center gap-1">
-            <MiniGrid features={EXAMPLE_FEATURES} />
-            <div className="text-center text-[10px] leading-snug text-[#7a9aa8]">
-              <b className="text-[#a8d0e8]">1. Pond:</b> a spring with pools around it, plant beds
-              tucked between to lift them.
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
+              An ideal layout
             </div>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <MiniGrid features={EXAMPLE_FEATURES} flow={EXAMPLE_FLOW} />
-            <div className="text-center text-[10px] leading-snug text-[#7a9aa8]">
-              <b className="text-[#a8d0e8]">2. Waterworks:</b> intake → fountain → outflow across the
-              middle (they sit on the features). One fountain keeps it all fresh.
+            <div className="flex flex-col items-center gap-1">
+              <MiniGrid features={EXAMPLE_FEATURES} flow={EXAMPLE_FLOW} />
+              <div className="text-center text-[11px] leading-snug text-[#7a9aa8]">
+                Intake → fountain → outflow across the middle (they sit on the pond features). One
+                fountain keeps the whole pond fresh.
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {/* One-tap: drop the example for the tab you're on (charges eggs). */}
         {!starter.alreadyBuilt && (
