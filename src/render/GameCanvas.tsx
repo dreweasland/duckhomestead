@@ -67,9 +67,9 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
     let disposed = false;
     const app = new Application();
     const cleanups: Array<() => void> = [];
-    // The blocked region (Yard pond) is rendered as animated water; other zones
-    // have none. Generic future zones with a non-pond blocked region would need
-    // their own visual, but for 4b only the Yard is blocked.
+    // A zone's `blocked` region is rendered as animated water with a shore (and
+    // ducks swim in it) — fully generic over zones. The Yard's decorative pond
+    // and the Pond zone's body of water (4d) both use this same path.
     const blocked = zone.blocked;
     const inBlocked = (gx: number, gy: number) =>
       !!blocked && gx >= blocked.x && gx < blocked.x + blocked.w && gy >= blocked.y && gy < blocked.y + blocked.h;

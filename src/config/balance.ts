@@ -240,6 +240,10 @@ export const BALANCE = {
       rankRequired: 16,
       eggCost: 5000,
       tileRegionSize: { width: 6, height: 8 },
+      /** A real body of water dominates the zone (rendered as animated water by
+       *  the generic `blocked` path), leaving a 1-tile shore ring to build on —
+       *  so "The Pond" actually reads as a pond, not just more land. */
+      waterRegion: { x: 1, y: 1, w: 4, h: 6 },
     },
   },
 
@@ -587,6 +591,8 @@ export const ZONE_DEFS: ZoneDef[] = [
     id: 'pond',
     name: 'The Pond',
     grid: BALANCE.ZONES.POND.tileRegionSize,
+    // The pond's body of water (non-buildable, rendered as animated water).
+    blocked: BALANCE.ZONES.POND.waterRegion,
     unlock: {
       rankRequired: BALANCE.ZONES.POND.rankRequired,
       eggCost: BALANCE.ZONES.POND.eggCost,
