@@ -79,6 +79,11 @@ export function BuildBar({ state, buildType, onPick }: Props) {
           ? `Click an empty tile to place a ${STATION_DEFS[buildType].label} — or click an existing ${STATION_DEFS[buildType].label} to upgrade it. Click the button again to cancel.`
           : 'Click a tile to build. Click a station to select, double-click to tend, drag to move.'}
       </div>
+      <div className="rounded-md bg-[#241c14] px-2.5 py-1.5 text-[10px] text-[#9a8a6a]">
+        <span className="font-bold text-[#e2b94f]">Upgrades:</span> click a built station to open its
+        controls and upgrade it — each level raises that station&rsquo;s output (cost climbs per
+        level). Or, with a build tool selected above, click a matching station to upgrade it in place.
+      </div>
     </div>
   );
 }
