@@ -4,5 +4,15 @@ dist
 .DS_Store
 docs/
 
+# TS incremental build cache
+*.tsbuildinfo
+
 # Asset working dir (raw Kenney pack + bake scripts); baked sprites live in public/
 .asset-src/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
