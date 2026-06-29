@@ -20,6 +20,7 @@ import {
   buyBoost,
   boostMult,
 } from '../src/game/prestige';
+import { deserialize } from '../src/game/save';
 import { build, fullSetup, stockAll, setHens, run } from './helpers';
 
 const NOW = 1_700_000_000_000;
@@ -200,6 +201,23 @@ describe('legacy boosts are stackable global scalars with escalating cost', () =
     s.legacyCurrency = 0;
     expect(buyBoost(s, 'eggValue')).toBeNull();
     expect(s.purchasedBoosts.eggValue ?? 0).toBe(0);
+  });
+});
+
+describe('back-compat: legacy Hall entries migrate from the old `score` field', () => {
+  it('an old hall entry (score, no meanVigor) loads with meanVigor defaulted', () => {
+    const legacy = JSON.stringify({
+      version: 1,
+      resources: { eggs: 1 },
+      stations: [],
+      legacyTier: 2,
+      legacyHall: [{ tier: 1, score: 620, bestVigor: 1.7, flockSize: 30, colors: ['blue', 'black'], timestamp: 5 }],
+    });
+    const r = deserialize(legacy, 0);
+    expect(r.legacyHall).toHaveLength(1);
+    expect(r.legacyHall[0].meanVigor).toBe(0); // no live data to derive — defaults, doesn't crash
+    expect(typeof r.legacyHall[0].meanVigor).toBe('number');
+    expect(r.legacyHall[0].flockSize).toBe(30);
   });
 });
 

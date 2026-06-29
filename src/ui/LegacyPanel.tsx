@@ -261,13 +261,13 @@ export function LegacyPanel({
                     <LegacyIcon size={12} /> T{c.tier}
                   </span>
                   <span className="flex items-center gap-0.5">
-                    {c.colors.map((col) => (
+                    {(c.colors ?? []).map((col) => (
                       <ColorSwatch key={col} color={col} size={9} />
                     ))}
                   </span>
-                  <span className="tabular-nums text-[#c9b88f]">×{c.meanVigor.toFixed(2)} avg</span>
+                  <span className="tabular-nums text-[#c9b88f]">×{(c.meanVigor ?? 0).toFixed(2)} avg</span>
                   <span className="ml-auto inline-flex items-center gap-1 tabular-nums text-[#7a6a4a]">
-                    <DuckIcon size={10} /> {c.flockSize}
+                    <DuckIcon size={10} /> {c.flockSize ?? 0}
                   </span>
                   <span className="text-[9px] text-[#5a4d3a]">{fmtDate(c.timestamp)}</span>
                 </div>

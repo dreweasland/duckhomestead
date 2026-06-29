@@ -76,7 +76,16 @@ export function deserialize(raw: string, now: number): GameState {
       legacyTier: parsed.legacyTier ?? 0,
       legacyCurrency: parsed.legacyCurrency ?? 0,
       purchasedBoosts: { ...(parsed.purchasedBoosts ?? {}) },
-      legacyHall: parsed.legacyHall ?? [],
+      // Champion-goal rework: hall entries used to store `score`, now `meanVigor`.
+      // Normalise old entries (no live data to derive from → 0) so the Hall renders.
+      legacyHall: (parsed.legacyHall ?? []).map((c) => ({
+        tier: c.tier,
+        meanVigor: typeof c.meanVigor === 'number' ? c.meanVigor : 0,
+        bestVigor: c.bestVigor ?? 0,
+        flockSize: c.flockSize ?? 0,
+        colors: c.colors ?? [],
+        timestamp: c.timestamp ?? 0,
+      })),
       // Pre-4c saves (and any not-yet-introduced save) keep the first-contact
       // grace: predators won't resolve their first window until the player is
       // back online to see them. So a returning player is never first-exposed
