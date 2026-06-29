@@ -45,7 +45,7 @@ function flock(n: number): GameState {
   s.ducks = Array.from({ length: n }, (_, i): Duck => ({
     id: `d${i}`,
     genotype: ['bl', 'bl'] as Genotype,
-    vigor: 1,
+    genome: ['D', 'D', 'D', 'D', 'D', 'D'],
     sex: i % 2 === 0 ? 'hen' : 'drake',
     stage: 'adult',
     ageTicks: 0,

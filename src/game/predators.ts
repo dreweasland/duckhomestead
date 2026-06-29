@@ -6,6 +6,7 @@ import {
   type PredatorEvent,
   type PredatorState,
 } from './state';
+import { woundResistChance } from './genetics';
 import { waterWoundMult } from './water';
 
 const P = BALANCE.PREDATORS;
@@ -176,6 +177,10 @@ function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, r
     removeDuck(state, target.id);
     return;
   }
+
+  // Resilience: a Hardy (H-gene) duck has a chance to shrug off the wound
+  // entirely. Throughput-only — it can't reduce a requirement, just survive a hit.
+  if (rng() < woundResistChance(target.genome)) return;
 
   target.wounded = true;
   target.woundElapsed = 0;

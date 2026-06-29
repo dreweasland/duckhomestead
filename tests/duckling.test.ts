@@ -7,7 +7,7 @@ import { build, fullSetup, stockAll, run, setHens } from './helpers';
 
 const B = BALANCE.BREEDING;
 let n = 0;
-const duckling = (): Duck => ({ id: `k${n++}`, genotype: ['Bl', 'bl'], vigor: 1, sex: 'hen', stage: 'duckling', ageTicks: 0 });
+const duckling = (): Duck => ({ id: `k${n++}`, genotype: ['Bl', 'bl'], genome: ['D', 'D', 'D', 'D', 'D', 'D'], sex: 'hen', stage: 'duckling', ageTicks: 0 });
 
 describe('duckling ration gates maturation', () => {
   it('matureRate is full when fed, near the floor when starved', () => {

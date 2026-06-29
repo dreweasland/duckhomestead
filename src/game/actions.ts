@@ -349,10 +349,9 @@ export function rerollModule(
 
 // ── Breeding pairs + culling (the selection pressure) ─────────────────
 /**
- * Release a duck from the flock — the selection lever. Removing low-vigor birds
- * frees housing AND raises the live population mean, which lifts the breeding
- * target so the flock walks toward the vigor ceiling. Also drops any pair the
- * duck belonged to.
+ * Release a duck from the flock — the selection lever. Removing weak-genome birds
+ * frees housing AND raises the live mean genome quality, which is what the player
+ * steers toward the god-clone target. Also drops any pair the duck belonged to.
  */
 export function cullDuck(state: GameState, duckId: string): ActionResult<unknown> {
   const idx = state.ducks.findIndex((d) => d.id === duckId);

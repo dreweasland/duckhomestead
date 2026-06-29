@@ -1,5 +1,5 @@
 import { BALANCE } from '../config/balance';
-import { breedGenotype, breedVigor, populationMeanVigor, recordColor } from './genetics';
+import { breedGenome, breedGenotype, maturationMult, recordColor } from './genetics';
 import { coopCapacity, phenotype, type Duck, type GameState } from './state';
 
 const B = BALANCE.BREEDING;
@@ -31,7 +31,6 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
     if (pair.clutchProgress > B.CLUTCH_INTERVAL_S) pair.clutchProgress = B.CLUTCH_INTERVAL_S; // cap if queue full
 
     // Incubate; hatch into ducklings when housing allows.
-    const popMean = populationMeanVigor(state);
     for (let i = pair.incubating.length - 1; i >= 0; i--) {
       pair.incubating[i] += step;
       if (pair.incubating[i] < B.INCUBATE_S) continue;
@@ -43,7 +42,10 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
       const duckling: Duck = {
         id: `d${state.nextDuckId++}`,
         genotype,
-        vigor: breedVigor(drake.vigor, hen.vigor, popMean),
+        genome: breedGenome(drake.genome, hen.genome),
+        // A built gene-reader auto-reads every new duck (passive/in bulk) — never
+        // a per-duck click. Without it the genome stays hidden ("?").
+        genomeKnown: state.geneReader,
         sex: Math.random() < 0.5 ? 'drake' : 'hen',
         stage: 'duckling',
         ageTicks: 0,
@@ -56,10 +58,11 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
     }
   }
 
-  // ── Maturation: duckling -> juvenile -> adult (matureRate gates the speed) ──
+  // ── Maturation: duckling -> juvenile -> adult (matureRate gates the speed,
+  //    the duck's own V genes — maturationMult — speed it up). ──
   for (const d of state.ducks) {
     if (d.stage === 'adult') continue;
-    d.ageTicks += step * matureRate;
+    d.ageTicks += step * matureRate * maturationMult(d.genome);
     if (d.stage === 'duckling' && d.ageTicks >= B.MATURE_DUCKLING_S) {
       d.stage = 'juvenile';
       d.ageTicks = 0;

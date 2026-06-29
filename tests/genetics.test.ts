@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { breedGenotype, inheritAllele, recordColor } from '../src/game/genetics';
-import { phenotype, type Color, type Genotype } from '../src/game/state';
+import { BALANCE } from '../src/config/balance';
+import {
+  breedGenotype,
+  goodGeneCount,
+  inheritAllele,
+  layMult,
+  maturationMult,
+  recordColor,
+  targetMatch,
+  woundResistChance,
+} from '../src/game/genetics';
+import { phenotype, type Color, type Gene, type Genotype } from '../src/game/state';
 import { initialState } from '../src/game/state';
+
+const g = (s: string): Gene[] => s.split('') as Gene[];
 
 /** Deterministic rng cycling through a fixed sequence. */
 function seq(values: number[]): () => number {
@@ -50,6 +62,40 @@ describe('Mendelian inheritance', () => {
   it('a specific allele pass is reproducible from the rng', () => {
     // first parent passes allele[0]=Bl (rng<.5), second passes allele[1]=bl (rng>=.5)
     expect(breedGenotype(['Bl', 'bl'], ['Bl', 'bl'], seq([0.1, 0.9]))).toEqual(['Bl', 'bl']);
+  });
+});
+
+describe('genome-derived stats (the profile, provably NOT one scalar)', () => {
+  it('L drives egg output; all-Dud is the ×1.0 floor', () => {
+    expect(layMult(g('DDDDDD'))).toBeCloseTo(1.0, 6);
+    expect(layMult(g('LLLLLL'))).toBeGreaterThan(layMult(g('VVVVVV')));
+    expect(layMult(g('HHHHHH'))).toBeCloseTo(1.0, 6); // Hardy adds no output
+  });
+
+  it('V drives maturation speed; L and H do not', () => {
+    expect(maturationMult(g('VVVVVV'))).toBeGreaterThan(1);
+    expect(maturationMult(g('LLLLLL'))).toBe(1);
+    expect(maturationMult(g('HHHHHH'))).toBe(1);
+  });
+
+  it('H drives wound resistance (capped); L and V do not', () => {
+    expect(woundResistChance(g('HHHHHH'))).toBeGreaterThan(0);
+    expect(woundResistChance(g('HHHHHH'))).toBeLessThanOrEqual(BALANCE.GENOME.WOUND_RESIST_CAP);
+    expect(woundResistChance(g('LLLLLL'))).toBe(0);
+    expect(woundResistChance(g('VVVVVV'))).toBe(0);
+  });
+
+  it('"best duck" depends on the goal — there is no single ranking', () => {
+    const layGod = g('LLLLLL');
+    const tank = g('HHHHHH');
+    expect(layMult(layGod)).toBeGreaterThan(layMult(tank)); // best layer
+    expect(woundResistChance(tank)).toBeGreaterThan(woundResistChance(layGod)); // best survivor
+  });
+
+  it('goodGeneCount + targetMatch read the profile', () => {
+    expect(goodGeneCount(g('LVHDDD'))).toBe(3);
+    expect(targetMatch(g('LLLLLL'), g('LLLLLL'))).toBe(6);
+    expect(targetMatch(g('LLLDDD'), g('LLLLLL'))).toBe(3);
   });
 });
 

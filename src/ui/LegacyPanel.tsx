@@ -164,14 +164,14 @@ export function LegacyPanel({
               )
             }
           />
-          {/* 2 — average vigor */}
+          {/* 2 — average genome quality (mean slots matching the god-clone target) */}
           <GoalRow
-            icon={<span className="text-[#ffe9a8]">×</span>}
-            label="Average vigor"
-            value={`×${goal.vigor.value.toFixed(2)} / ×${goal.vigor.gate.toFixed(2)}`}
-            progress={goal.vigor.progress}
-            met={goal.vigor.met}
-            hint={goal.vigor.met ? undefined : <span className="text-[#7a6a4a]">breed up + cull the weak</span>}
+            icon={<span className="text-[#ffe9a8]">⌬</span>}
+            label="Genome quality"
+            value={`${goal.quality.value.toFixed(2)} / ${goal.quality.gate.toFixed(2)}`}
+            progress={goal.quality.progress}
+            met={goal.quality.met}
+            hint={goal.quality.met ? undefined : <span className="text-[#7a6a4a]">crossbreed toward the target + cull the weak</span>}
           />
           {/* 3 — flock size (scales each tier) */}
           <GoalRow
@@ -204,13 +204,13 @@ export function LegacyPanel({
         </button>
         {ready && (
           <div className="mb-1 text-center text-[10px] text-[#8fae6a]">
-            Payout scales with overshoot of BOTH the size target and the vigor gate — a bigger,
-            higher-vigor flock earns more.
+            Payout scales with overshoot of BOTH the size target and the quality gate — a bigger,
+            higher-quality flock earns more.
           </div>
         )}
         <div className="mb-3 text-center text-[10px] text-[#7a6a4a]">
           Prestige wipes the entire run (flock, eggs, stations, zones re-lock) for permanent boosts.
-          Only your legacy + boosts persist. The size target and vigor gate both rise each tier.
+          Only your legacy + boosts persist. The size target and quality gate both rise each tier.
         </div>
 
         {/* Legacy shop */}
@@ -271,7 +271,7 @@ export function LegacyPanel({
                       <ColorSwatch key={col} color={col} size={9} />
                     ))}
                   </span>
-                  <span className="tabular-nums text-[#c9b88f]">×{(c.meanVigor ?? 0).toFixed(2)} avg</span>
+                  <span className="tabular-nums text-[#c9b88f]">{(c.meanQuality ?? 0).toFixed(2)} avg</span>
                   <span className="ml-auto inline-flex items-center gap-1 tabular-nums text-[#7a6a4a]">
                     <DuckIcon size={10} /> {c.flockSize ?? 0}
                   </span>

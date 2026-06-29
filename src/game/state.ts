@@ -116,11 +116,22 @@ export const COLORS: Color[] = ['black', 'blue', 'splash'];
 export type Sex = 'drake' | 'hen';
 export type Stage = 'duckling' | 'juvenile' | 'adult';
 
+// ── Breeding rework: the hidden 6-gene genome ────────────────────────
+/** A single gene: Lay, Vigor, Hardy, or Dud. */
+export type Gene = 'L' | 'V' | 'H' | 'D';
+export const GENES: Gene[] = ['L', 'V', 'H', 'D'];
+/** A duck's heritable quality: GENOME.SLOTS genes, position-linked. */
+export type Genome = Gene[];
+
 export interface Duck {
   id: string;
   genotype: Genotype;
-  /** Heritable egg-output multiplier (throughput only). */
-  vigor: number;
+  /** Heritable quality (throughput only) — drives stats via the gene profile.
+   *  Replaces the old vigor scalar. See game/genetics.ts. */
+  genome: Genome;
+  /** Whether this duck's genome has been read (gene-reader). Hidden ("?") until
+   *  true; phone-it-in pairing works off visible colour without ever reading. */
+  genomeKnown?: boolean;
   sex: Sex;
   stage: Stage;
   /** Seconds accrued in the current life stage (drives maturation). */
@@ -231,6 +242,13 @@ export interface GameState {
   breedingPairs: BreedingPair[];
   /** Monotonic id counter for pairs. */
   nextPairId: number;
+  /** The god-clone target profile the player steers toward (length GENOME.SLOTS).
+   *  Drives genome-quality progress + the Legacy Score. */
+  genomeTarget: Genome;
+  /** Whether the gene-reader is built (reveals genomes passively/in bulk). */
+  geneReader: boolean;
+  /** Transient: god-clone hatches this tick (drained by the engine for DINGs). */
+  pendingGodClone?: number;
   /** Colors ever produced (the dex) — drives first-of-color DINGs. */
   dexSeen: Color[];
   /** Transient: colors discovered this tick, drained by the engine for DINGs. */
@@ -287,10 +305,10 @@ export interface GameState {
 export interface ChampionSnapshot {
   /** The legacy tier this prestige earned. */
   tier: number;
-  /** Average flock vigor at the moment of reset. */
-  meanVigor: number;
-  /** Highest vigor in the flock. */
-  bestVigor: number;
+  /** Average flock genome quality (mean slots matching target) at reset. */
+  meanQuality: number;
+  /** Best genome quality in the flock (most slots matching target). */
+  bestQuality: number;
   flockSize: number;
   /** Colors the flock had achieved (the dex at reset). */
   colors: Color[];
@@ -427,6 +445,8 @@ export function initialState(now: number): GameState {
     nextDuckId: 1,
     breedingPairs: [],
     nextPairId: 1,
+    genomeTarget: [...BALANCE.GENOME.DEFAULT_TARGET],
+    geneReader: false,
     dexSeen: [],
     zones: initialZones(),
     pond: initialPond(),
@@ -443,17 +463,39 @@ export function initialState(now: number): GameState {
   };
 }
 
+/** Roll one seed-flock genome: each slot a gene drawn from the Dud-leaning seed
+ *  weights, so a fresh flock is middling with real room to breed up. */
+function rollSeedGenome(): Genome {
+  const w = BALANCE.GENOME.SEED_GENE_WEIGHTS;
+  const total = GENES.reduce((a, g) => a + (w[g] ?? 0), 0);
+  const genome: Genome = [];
+  for (let i = 0; i < BALANCE.GENOME.SLOTS; i++) {
+    let r = Math.random() * total;
+    let pick: Gene = GENES[GENES.length - 1];
+    for (const g of GENES) {
+      r -= w[g] ?? 0;
+      if (r < 0) {
+        pick = g;
+        break;
+      }
+    }
+    genome.push(pick);
+  }
+  return genome;
+}
+
 /**
  * Seed the starting flock into the first coop: a few Blue carriers (Bl/bl) so
- * the player can breed out all three colors, mid vigor. Mutates state.
+ * the player can breed out all three colors, with a mixed (middling) genome.
+ * Mutates state.
  */
 export function seedFlock(state: GameState): void {
   const B = BALANCE.BREEDING;
-  const [lo, hi] = B.VIGOR_SEED_RANGE;
   const make = (sex: Sex): Duck => ({
     id: `d${state.nextDuckId++}`,
     genotype: ['Bl', 'bl'],
-    vigor: lo + Math.random() * (hi - lo),
+    genome: rollSeedGenome(),
+    genomeKnown: false, // hidden until a gene-reader is built
     sex,
     stage: 'adult',
     ageTicks: 0,

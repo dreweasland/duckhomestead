@@ -12,7 +12,8 @@ import {
 import { AXES } from '../src/game/state';
 import { placeStation } from '../src/game/actions';
 import { serialize, deserialize } from '../src/game/save';
-import { build, fullSetup, stockAll, run, setHens } from './helpers';
+import { layMult } from '../src/game/genetics';
+import { build, fullSetup, stockAll, run, setHens, FLAT_GENOME, genome } from './helpers';
 
 describe('Bl-locus phenotype', () => {
   it('maps blue-allele count to color', () => {
@@ -61,15 +62,15 @@ describe('adult selectors', () => {
     const s = build({ coop: 1 }); // seeded: 1 drake + 2 hens, all adult
     expect(adultDucks(s).length).toBe(3);
     expect(adultLayers(s).length).toBe(2);
-    s.ducks.push({ id: 'x', genotype: ['bl', 'bl'] as Genotype, vigor: 1, sex: 'hen', stage: 'duckling', ageTicks: 0 });
+    s.ducks.push({ id: 'x', genotype: ['bl', 'bl'] as Genotype, genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'duckling', ageTicks: 0 });
     expect(adultLayers(s).length).toBe(2); // ducklings don't lay
   });
 });
 
-describe('GUARDRAIL: vigor & flock drive output/demand, never the nutrition math', () => {
-  it('vigor scales egg output but leaves requirement + throttle identical', () => {
-    const lo = setHens(stockAll(fullSetup()), 2, 1.0);
-    const hi = setHens(stockAll(fullSetup()), 2, 2.0);
+describe('GUARDRAIL: genome & flock drive output/demand, never the nutrition math', () => {
+  it('genome layMult scales egg output but leaves requirement + throttle identical', () => {
+    const lo = setHens(stockAll(fullSetup()), 2, FLAT_GENOME); // layMult 1.0
+    const hi = setHens(stockAll(fullSetup()), 2, genome('LLLLLL')); // layMult 1.72
     run(lo, 200);
     run(hi, 200);
     expect(hi.nutrition!.requirement).toEqual(lo.nutrition!.requirement); // same demand
@@ -78,7 +79,9 @@ describe('GUARDRAIL: vigor & flock drive output/demand, never the nutrition math
     const hi0 = hi.resources.eggs;
     run(lo, 60);
     run(hi, 60);
-    expect((hi.resources.eggs - hi0) / (lo.resources.eggs - lo0)).toBeCloseTo(2, 1); // ~2x lay
+    // Lay ratio tracks the genome layMult ratio exactly — output only, no nutrition shift.
+    const expected = layMult(genome('LLLLLL')) / layMult(FLAT_GENOME);
+    expect((hi.resources.eggs - hi0) / (lo.resources.eggs - lo0)).toBeCloseTo(expected, 1);
   });
 
   it('layer requirement scales with adult-duck count (not coops)', () => {
@@ -94,7 +97,7 @@ describe('GUARDRAIL: vigor & flock drive output/demand, never the nutrition math
   it('never mutates the nutrition matrix / requirement constants', () => {
     const matrix = JSON.stringify(BALANCE.NUTRITION.INGREDIENT);
     const req = JSON.stringify(BALANCE.NUTRITION.REQUIREMENT);
-    run(setHens(stockAll(fullSetup()), 4, 2.0), 120);
+    run(setHens(stockAll(fullSetup()), 4, genome('LLLLLL')), 120);
     expect(JSON.stringify(BALANCE.NUTRITION.INGREDIENT)).toBe(matrix);
     expect(JSON.stringify(BALANCE.NUTRITION.REQUIREMENT)).toBe(req);
   });
@@ -103,7 +106,7 @@ describe('GUARDRAIL: vigor & flock drive output/demand, never the nutrition math
 describe('save round-trip', () => {
   it('preserves the flock + dex + id counter', () => {
     const s = build({ coop: 1 });
-    s.ducks[0].vigor = 1.37;
+    s.ducks[0].genome = genome('LVHDLV');
     s.ducks[0].genotype = ['Bl', 'Bl'];
     const r = deserialize(serialize(s), 0);
     expect(r.ducks).toEqual(s.ducks);

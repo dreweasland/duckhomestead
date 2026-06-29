@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
+import { layMult } from './genetics';
 import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { waterConditionMult } from './water';
 import { eggValueBoostMult } from './prestige';
@@ -146,15 +147,16 @@ function layNutritionTail(
   coopCycle: number,
   step: number,
 ): void {
-  // Lay eggs: sum over adult hens of base × VIGOR × nutrition throttle × leg
-  // debuff × predator wound, then × the flock-wide eggOutput module bonus. Vigor,
-  // modules, and the wound penalty multiply OUTPUT only — never the f(axis)/
-  // requirement math above. (Phase 4c: a wounded hen lays at WOUND_OUTPUT_MULT.)
+  // Lay eggs: sum over adult hens of base × GENOME layMult × nutrition throttle ×
+  // leg debuff × predator wound, then × the flock-wide eggOutput module bonus.
+  // The genome (via layMult), modules, and the wound penalty multiply OUTPUT only
+  // — never the f(axis)/requirement math above. (Phase 4c: a wounded hen lays at
+  // WOUND_OUTPUT_MULT.)
   let flockRate = 0; // eggs per second from the whole laying flock
   for (const hen of layers) {
     const debuff = hen.debuffed ? N.DEBUFF_COOP_OUTPUT_MULT : 1;
     const wound = hen.wounded ? BALANCE.PREDATORS.WOUND_OUTPUT_MULT : 1;
-    flockRate += (BALANCE.COOP.eggPerCycle / coopCycle) * hen.vigor * debuff * wound;
+    flockRate += (BALANCE.COOP.eggPerCycle / coopCycle) * layMult(hen.genome) * debuff * wound;
   }
   const eggModuleMult = eggOutputMult(state); // rack eggOutput modules buff the flock
   // Phase 4e: the legacy eggValue boost is a uniform scalar on eggs laid (never

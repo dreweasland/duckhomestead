@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { colorOdds, expectedVigor, populationMeanVigor } from '../game/genetics';
-import { COLORS, coopCapacity, phenotype, secureCapacity, type Color, type Duck, type GameState } from '../game/state';
+import { colorOdds, targetMatch } from '../game/genetics';
+import { COLORS, coopCapacity, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, HealIcon, ShieldIcon, WoundIcon } from './icons';
@@ -12,6 +12,59 @@ export const COLOR_META: Record<Color, { label: string; swatch: string }> = {
   blue: { label: 'Blue', swatch: '#5b7a9d' },
   splash: { label: 'Splash', swatch: '#aebed2' },
 };
+
+/** Per-gene display: Lay / Vigor / Hardy / Dud. */
+export const GENE_META: Record<Gene, { label: string; color: string }> = {
+  L: { label: 'Lay', color: '#8fe388' },
+  V: { label: 'Vigor', color: '#e8c45a' },
+  H: { label: 'Hardy', color: '#7fb8e8' },
+  D: { label: 'Dud', color: '#6a5a4a' },
+};
+
+/**
+ * The 6-slot genome as a strip of gene tiles. Hidden ("?") until the duck's
+ * genome has been read; a slot matching the god-clone target gets a ring.
+ */
+export function GenomeTiles({
+  duck,
+  target,
+  size = 14,
+}: {
+  duck: Duck;
+  target?: Gene[];
+  size?: number;
+}) {
+  const known = !!duck.genomeKnown;
+  return (
+    <span className="inline-flex gap-0.5">
+      {duck.genome.map((g, i) => {
+        const hit = known && target && target[i] === g;
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center justify-center rounded-[2px] font-bold leading-none"
+            style={{
+              width: size,
+              height: size,
+              fontSize: size - 5,
+              background: known ? GENE_META[g].color : '#2a2018',
+              color: known ? '#171009' : '#6a5a3a',
+              boxShadow: hit ? '0 0 0 1.5px #ffe9a8' : undefined,
+            }}
+            title={known ? GENE_META[g].label : 'Unread — build a Gene Reader'}
+          >
+            {known ? g : '?'}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** Compact quality read for a duck: matches-to-target when known, else "?". */
+function qualityLabel(d: Duck, target: Gene[]): string {
+  return d.genomeKnown ? `${targetMatch(d.genome, target)}/${target.length}` : '?';
+}
 
 const STAGE_LABEL: Record<Duck['stage'], string> = {
   duckling: 'duckling',
@@ -69,6 +122,7 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
   const [drakeId, setDrakeId] = useState('');
   const [henId, setHenId] = useState('');
   const B = BALANCE.BREEDING;
+  const target = state.genomeTarget;
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
   const avail = (sex: Duck['sex']) =>
     state.ducks
@@ -76,7 +130,7 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
       .sort(
         (a, b) =>
           COLORS.indexOf(phenotype(a.genotype)) - COLORS.indexOf(phenotype(b.genotype)) ||
-          b.vigor - a.vigor,
+          targetMatch(b.genome, target) - targetMatch(a.genome, target),
       );
   const drakes = avail('drake');
   const hens = avail('hen');
@@ -93,25 +147,15 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
         if (!dr || !he) return null;
         const next = Math.max(0, B.CLUTCH_INTERVAL_S - p.clutchProgress);
         const soonest = p.incubating.length ? Math.max(0, B.INCUBATE_S - Math.max(...p.incubating)) : 0;
-        // Expected offspring vigor (regression toward the live flock mean) so the
-        // player can see whether this cross lifts or drags the line.
-        const popMean = populationMeanVigor(state);
-        const exp = expectedVigor(dr.vigor, he.vigor, popMean);
-        const lifts = exp >= popMean;
         const odds = colorOdds(dr.genotype, he.genotype);
         return (
           <div key={p.id} className="mb-1.5 rounded bg-[#171009] px-2 py-1.5">
             <div className="flex items-center gap-1.5 text-[11px]">
               <ColorSwatch color={phenotype(dr.genotype)} size={11} />
-              <span className="text-[#9a8a6a]">{dr.sex}</span>
-              <span className="tabular-nums text-[#ffe9a8]">×{dr.vigor.toFixed(2)}</span>
+              <GenomeTiles duck={dr} target={target} size={12} />
               <span className="text-[#5a4d3a]">·</span>
               <ColorSwatch color={phenotype(he.genotype)} size={11} />
-              <span className="text-[#9a8a6a]">{he.sex}</span>
-              <span className="tabular-nums text-[#ffe9a8]">×{he.vigor.toFixed(2)}</span>
-              <span className="ml-1 text-[#7a6a4a]" title={`Expected offspring vigor, regressing toward the flock mean of ×${popMean.toFixed(2)}`}>
-                → <span className="tabular-nums font-bold" style={{ color: lifts ? '#8fe388' : '#e8a35a' }}>~×{exp.toFixed(2)}</span>
-              </span>
+              <GenomeTiles duck={he} target={target} size={12} />
               <button
                 onClick={() => engine.unpair(p.id)}
                 className="ml-auto rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
@@ -144,7 +188,7 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
             <option value="">drake…</option>
             {drakes.map((d) => (
               <option key={d.id} value={d.id}>
-                {phenotype(d.genotype)} ×{d.vigor.toFixed(2)}
+                {phenotype(d.genotype)} · {qualityLabel(d, target)}
               </option>
             ))}
           </select>
@@ -156,7 +200,7 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
             <option value="">hen…</option>
             {hens.map((d) => (
               <option key={d.id} value={d.id}>
-                {phenotype(d.genotype)} ×{d.vigor.toFixed(2)}
+                {phenotype(d.genotype)} · {qualityLabel(d, target)}
               </option>
             ))}
           </select>
@@ -197,8 +241,9 @@ export function FlockPanel({
   onClose: () => void;
 }) {
   const [armedCull, setArmedCull] = useState<string | null>(null);
+  const target = state.genomeTarget;
   // Sort: color (dex order) → stage (adults, then juveniles, then ducklings) →
-  // sex (drakes, then hens) → vigor (best first within each group).
+  // sex (drakes, then hens) → genome quality (best match-to-target first).
   const colorRank = (d: Duck) => COLORS.indexOf(phenotype(d.genotype));
   const sexRank: Record<Duck['sex'], number> = { drake: 0, hen: 1 };
   const ducks = [...state.ducks].sort(
@@ -206,7 +251,7 @@ export function FlockPanel({
       colorRank(a) - colorRank(b) ||
       stageRank[a.stage] - stageRank[b.stage] ||
       sexRank[a.sex] - sexRank[b.sex] ||
-      b.vigor - a.vigor,
+      targetMatch(b.genome, target) - targetMatch(a.genome, target),
   );
   const cap = coopCapacity(state);
   const slotsTotal = secureCapacity(state);
@@ -224,13 +269,11 @@ export function FlockPanel({
   // Cross-cutting filters (compose with the color tab): sex and life stage.
   const [sexFilter, setSexFilter] = useState<'all' | Duck['sex']>('all');
   const [stageFilter, setStageFilter] = useState<'all' | Duck['stage']>('all');
-  // Bulk-release cutoff (vigor), defaulting to the flock mean — the classic
-  // "cull below average" selection move. Two-click confirm via armedBulk.
-  const popMean = populationMeanVigor(state);
-  const [cullVigor, setCullVigor] = useState<number>(() => {
-    const m = populationMeanVigor(state);
-    return Math.round((Number.isFinite(m) && m > 0 ? m : 1) * 100) / 100;
-  });
+  // Bulk-release cutoff: release READ ducks whose match-to-target is below this
+  // (an unread duck is never bulk-culled — you can't judge a "?"). Defaults to
+  // half the slots. Two-click confirm via armedBulk.
+  const SLOTS = target.length;
+  const [cullQuality, setCullQuality] = useState<number>(Math.ceil(SLOTS / 2));
   const [armedBulk, setArmedBulk] = useState(false);
   const shown = ducks.filter(
     (d) =>
@@ -321,34 +364,39 @@ export function FlockPanel({
               />
             </div>
 
-            {/* Bulk release: cull the SHOWN set (current filters) below a vigor
-                cutoff in one sweep. Protects secured (prize) + paired (in-use)
-                birds — use the per-row release for those. */}
+            {/* Bulk release: cull the SHOWN set (current filters) whose match-to-
+                target is below the cutoff, in one sweep. Only READ ducks are
+                eligible (an unread "?" can't be judged). Protects secured (prize)
+                + paired (in-use) birds — use the per-row release for those. */}
             {shown.length > 0 && (() => {
               const isPaired = (id: string) =>
                 state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
-              const eligible = shown.filter((d) => !d.secured && !isPaired(d.id) && d.vigor < cullVigor);
+              const eligible = shown.filter(
+                (d) =>
+                  !d.secured &&
+                  !isPaired(d.id) &&
+                  d.genomeKnown &&
+                  targetMatch(d.genome, target) < cullQuality,
+              );
               const n = eligible.length;
-              const VF = BALANCE.BREEDING.VIGOR_FLOOR;
-              const VC = BALANCE.BREEDING.VIGOR_CEILING;
               const step = (delta: number) =>
-                setCullVigor((v) => Math.max(VF, Math.min(VC, Math.round((v + delta) * 100) / 100)));
+                setCullQuality((v) => Math.max(0, Math.min(SLOTS, v + delta)));
               return (
                 <div className="mb-2 rounded-md bg-[#1f1812] px-2.5 py-2">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-[#9a8a6a]">Release shown under</span>
+                    <span className="text-[10px] text-[#9a8a6a]">Release read under</span>
                     <button
-                      onClick={() => step(-0.01)}
+                      onClick={() => step(-1)}
                       className="rounded bg-[#2a2018] px-1.5 py-0.5 text-sm font-bold leading-none text-[#c9b88f] hover:bg-[#33271c]"
                       aria-label="Lower cutoff"
                     >
                       −
                     </button>
                     <span className="w-11 text-center tabular-nums text-xs font-bold text-[#ffe9a8]">
-                      ×{cullVigor.toFixed(2)}
+                      {cullQuality}/{SLOTS}
                     </span>
                     <button
-                      onClick={() => step(0.01)}
+                      onClick={() => step(1)}
                       className="rounded bg-[#2a2018] px-1.5 py-0.5 text-sm font-bold leading-none text-[#c9b88f] hover:bg-[#33271c]"
                       aria-label="Raise cutoff"
                     >
@@ -378,7 +426,7 @@ export function FlockPanel({
                     </button>
                   </div>
                   <div className="mt-1 text-[9px] text-[#7a6a4a]">
-                    flock mean ×{popMean.toFixed(2)} · keeps secured + paired birds
+                    matches the {target.map((g) => g).join('')} target · keeps secured + paired birds
                   </div>
                 </div>
               );
@@ -432,7 +480,15 @@ export function FlockPanel({
                           <WoundIcon size={11} />
                         </span>
                       )}
-                      <span className="ml-auto tabular-nums text-[#ffe9a8]">×{d.vigor.toFixed(2)}</span>
+                      <span className="ml-auto flex items-center gap-1.5">
+                        <GenomeTiles duck={d} target={target} size={13} />
+                        <span
+                          className="tabular-nums text-[#ffe9a8]"
+                          title={d.genomeKnown ? `${targetMatch(d.genome, target)} of ${target.length} slots match the target` : 'Unread genome'}
+                        >
+                          {qualityLabel(d, target)}
+                        </span>
+                      </span>
                       {d.wounded && (
                         <button
                           onClick={() => {
@@ -484,7 +540,7 @@ export function FlockPanel({
                             ? 'bg-[#d95f5f] text-[#fff4d6]'
                             : 'text-[#7a5a5a] hover:bg-[#33271c] hover:text-[#b06a6a]'
                         }`}
-                        title="Release this duck (frees housing, raises the flock's vigor mean)"
+                        title="Release this duck (frees housing, raises the flock's mean genome quality)"
                       >
                         {armedCull === d.id ? 'sure?' : 'release'}
                       </button>

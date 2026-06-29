@@ -1,4 +1,5 @@
 import { BALANCE } from '../config/balance';
+import { targetMatch } from './genetics';
 import { COLORS, initialState, type ChampionSnapshot, type GameState } from './state';
 
 /**
@@ -22,10 +23,12 @@ export type BoostId = 'output' | 'stationSpeed' | 'eggValue';
 export const BOOST_IDS: BoostId[] = ['output', 'stationSpeed', 'eggValue'];
 
 // ── The champion goal: three concrete requirements ───────────────────
-/** Live average flock vigor (0 when there's no flock). The breeding-mastery axis. */
-export function meanVigor(state: GameState): number {
+/** Live average flock GENOME QUALITY = mean slots matching the god-clone target
+ *  (0..GENOME.SLOTS; 0 when there's no flock). The breeding-mastery axis. */
+export function meanQuality(state: GameState): number {
   const n = state.ducks.length;
-  return n > 0 ? state.ducks.reduce((a, d) => a + d.vigor, 0) / n : 0;
+  if (n === 0) return 0;
+  return state.ducks.reduce((a, d) => a + targetMatch(d.genome, state.genomeTarget), 0) / n;
 }
 
 /** Distinct colours bred this run (the dex). */
@@ -43,10 +46,10 @@ export function sizeTarget(state: GameState): number {
   return Math.round(P.SIZE_BASE * Math.pow(P.SIZE_GROWTH, state.legacyTier));
 }
 
-/** The average-vigor gate for the current tier — RISES each prestige (breeding
- *  mastery escalates), capped below the 2.0 ceiling so it stays reachable. */
-export function vigorGate(state: GameState): number {
-  return Math.min(P.VIGOR_GATE_MAX, P.VIGOR_GATE_BASE + P.VIGOR_GATE_PER_TIER * state.legacyTier);
+/** The genome-quality gate for the current tier — RISES each prestige (breeding
+ *  mastery escalates), capped below the perfect 6 so it stays reachable. */
+export function qualityGate(state: GameState): number {
+  return Math.min(P.QUALITY_GATE_MAX, P.QUALITY_GATE_BASE + P.QUALITY_GATE_PER_TIER * state.legacyTier);
 }
 
 export interface ChampionReq {
@@ -56,7 +59,7 @@ export interface ChampionReq {
 }
 export interface ChampionGoal {
   colors: ChampionReq & { bred: number; total: number };
-  vigor: ChampionReq & { value: number; gate: number };
+  quality: ChampionReq & { value: number; gate: number };
   size: ChampionReq & { value: number; target: number };
   /** Overall readiness: 1 only when ALL three are met (the limiting requirement). */
   readiness: number;
@@ -66,25 +69,25 @@ export interface ChampionGoal {
 export function championGoal(state: GameState): ChampionGoal {
   const bred = colorsBred(state);
   const total = COLORS.length;
-  const mv = meanVigor(state);
+  const mq = meanQuality(state);
   const size = state.ducks.length;
   const target = sizeTarget(state);
-  const gate = vigorGate(state);
+  const gate = qualityGate(state);
   const colors = { bred, total, progress: clamp01(bred / total), met: bred >= total };
-  const vigor = { value: mv, gate, progress: clamp01(mv / gate), met: mv >= gate };
+  const quality = { value: mq, gate, progress: clamp01(mq / gate), met: mq >= gate };
   const sz = { value: size, target, progress: clamp01(size / target), met: size >= target };
   return {
     colors,
-    vigor,
+    quality,
     size: sz,
-    readiness: Math.min(colors.progress, vigor.progress, sz.progress),
+    readiness: Math.min(colors.progress, quality.progress, sz.progress),
   };
 }
 
 /** Prestige is gated: unavailable until ALL three champion requirements are met. */
 export function canPrestige(state: GameState): boolean {
   const g = championGoal(state);
-  return g.colors.met && g.vigor.met && g.size.met;
+  return g.colors.met && g.quality.met && g.size.met;
 }
 
 /** Overall readiness [0,1] toward the champion goal (1 ⇒ ready). */
@@ -98,11 +101,11 @@ export function championReadiness(state: GameState): number {
 export function prestigeCurrency(state: GameState): number {
   if (!canPrestige(state)) return 0;
   const sizeOver = state.ducks.length / sizeTarget(state); // ≥ 1 (size met)
-  const vigorOver = meanVigor(state) / vigorGate(state); // ≥ 1 (vigor met)
+  const qualityOver = meanQuality(state) / qualityGate(state); // ≥ 1 (quality met)
   return Math.round(
     P.CURRENCY_AT_THRESHOLD *
       Math.pow(sizeOver, P.CURRENCY_OVERSHOOT_EXP) *
-      Math.pow(vigorOver, P.CURRENCY_VIGOR_EXP),
+      Math.pow(qualityOver, P.CURRENCY_QUALITY_EXP),
   );
 }
 
@@ -133,8 +136,8 @@ export const eggValueBoostMult = (state: GameState): number => boostMult(state, 
 export function championSnapshot(state: GameState, now: number): ChampionSnapshot {
   return {
     tier: state.legacyTier + 1,
-    meanVigor: meanVigor(state),
-    bestVigor: state.ducks.reduce((m, d) => Math.max(m, d.vigor), 0),
+    meanQuality: meanQuality(state),
+    bestQuality: state.ducks.reduce((m, d) => Math.max(m, targetMatch(d.genome, state.genomeTarget)), 0),
     flockSize: state.ducks.length,
     colors: [...state.dexSeen],
     timestamp: now,
