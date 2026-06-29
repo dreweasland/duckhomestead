@@ -7,6 +7,7 @@ import { outputBoostMult, speedBoostMult } from './prestige';
 import { runNutrition, runDucklingNutrition } from './nutrition';
 import { runBreeding } from './breeding';
 import { runPredators } from './predators';
+import { runIrrigation } from './irrigation';
 
 export type SimMode = 'online' | 'offline';
 
@@ -138,6 +139,10 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
 
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
   runBreeding(state, dt * rateMult, matureRate);
+
+  // Back Pasture irrigation: grow the cash crop on watered plots, drift toward
+  // the upkeep floor, auto-harvest to EGGS (online & offline; never XP/nutrition).
+  runIrrigation(state, dt, rateMult);
 
   // Predators (Phase 4c): window scheduling, attack rolls, wound escalation.
   // Wall-clock danger — advanced by the RAW dt, never the offline rate-scaled

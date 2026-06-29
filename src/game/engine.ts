@@ -34,6 +34,7 @@ import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
+import { setValveKnob, tendPasture, toggleChannel } from './irrigation';
 import {
   buyBoost as buyBoostAction,
   canPrestige,
@@ -454,6 +455,26 @@ export class GameEngine {
     const r = buildWaterFeature(this.state);
     this.notify();
     return r;
+  }
+
+  // ── Pasture irrigation ─────────────────────────────────────────────
+  /** Toggle an irrigation channel cell (lay/erase). */
+  toggleChannel(x: number, y: number): boolean {
+    const changed = toggleChannel(this.state, x, y);
+    if (changed) this.notify();
+    return changed;
+  }
+  /** Set a valve cell's split knob (0..1). */
+  setValveKnob(x: number, y: number, knob: number): boolean {
+    const ok = setValveKnob(this.state, x, y, knob);
+    if (ok) this.notify();
+    return ok;
+  }
+  /** Tend the pasture: clear silt/weeds, restoring output to peak. */
+  tendPasture(): boolean {
+    const ok = tendPasture(this.state);
+    this.notify();
+    return ok;
   }
   /** Mark/unmark a duck as secured (excluded from predator targeting). */
   setSecured(duckId: string, secured: boolean): ActionResult<unknown> {
