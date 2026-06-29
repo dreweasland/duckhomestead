@@ -38,6 +38,7 @@ export function DevPanel({ engine, state }: { engine: GameEngine; state: GameSta
         <Btn onClick={oneRank}>+1 rank (DING)</Btn>
         <Btn onClick={toRank5}>Jump to Rank {BALANCE.MILESTONE_AUTOHAUL_RANK}</Btn>
         <Btn onClick={() => engine.devClearCooldowns()}>Tend ready</Btn>
+        <Btn onClick={() => engine.devOpenPredatorWindow()}>Open owl window</Btn>
       </div>
     </div>
   );

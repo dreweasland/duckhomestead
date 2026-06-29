@@ -3,6 +3,7 @@ import {
   playAttack,
   playCollect,
   playDing,
+  playDive,
   playLoot,
   playPlace,
   playTend,
@@ -35,6 +36,7 @@ import { TendIcon } from './ui/icons';
 import { LootBanner } from './ui/LootBanner';
 import { ModulesPanel } from './ui/ModulesPanel';
 import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
+import { OwlAttack } from './ui/OwlAttack';
 import { StationBar } from './ui/StationBar';
 
 /** Per-browser flag: the first-run welcome pop-up shows once, then never again. */
@@ -92,7 +94,9 @@ export default function App() {
     () =>
       engine.onPredator((e) => {
         if (e.kind === 'introduced') return; // the milestone DING covers first contact
-        if (e.kind === 'incoming' || e.kind === 'open') playThreat();
+        if (e.kind === 'scared') return; // the scare's own whoosh plays at the click
+        if (e.kind === 'winding') playDive(); // the owl commits a dive — scare it!
+        else if (e.kind === 'incoming' || e.kind === 'open') playThreat();
         else playAttack();
       }),
     [engine],
@@ -292,6 +296,11 @@ export default function App() {
         <div className="flex flex-col items-center gap-3">
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
           <div className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
+            {/* The interactive owl swoops over the board during an open window —
+                click it to scare the dive off before it lands. Overlays the board
+                (and the ambient flock) but lets board clicks pass through except
+                on the owl itself. */}
+            <OwlAttack engine={engine} state={state} />
             {/* Status pills tuck into the board's empty top headroom (the canvas
                 reserves space there) — present, but adding no height. Yard only:
                 Auto-Haul / Tend-All are station/tending milestones, irrelevant on

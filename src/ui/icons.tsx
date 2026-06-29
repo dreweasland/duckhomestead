@@ -291,6 +291,27 @@ export const OwlIcon = (p: PixProps) => (
   />
 );
 
+/** The owl mid-dive — talons out, eyes locked on. Used for the interactive
+ *  swoop overlay during an open window. Wider than the face-only OwlIcon so the
+ *  spread wings + dropped talons read as an attack in progress. */
+export const SwoopOwlIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ b: '#6b5a44', d: '#4a3d2c', y: '#ffd24a', k: '#1a1410', o: '#d98a3a' }}
+    rows={[
+      '...b...b...',
+      '..dbbbbbd..',
+      '.d.yybyy.d.',
+      'd..ykbky..d',
+      '.d.bbobb.d.',
+      '..dbbbbbd..',
+      '....bbb....',
+      '....o.o....',
+      '...o.o.o...',
+    ]}
+  />
+);
+
 /** Protection floor / deterrent netting — a woven mesh. */
 export const NetIcon = (p: PixProps) => (
   <Pix

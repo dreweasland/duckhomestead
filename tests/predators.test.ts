@@ -14,6 +14,8 @@ import {
   predatorsActive,
   incoming,
   windowOpen,
+  activeStrike,
+  scareOff,
 } from '../src/game/predators';
 import { waterWoundMult } from '../src/game/water';
 import {
@@ -237,6 +239,86 @@ describe('a landed attack wounds (it does not kill)', () => {
 
   it('weights ducklings over adults as targets', () => {
     expect(P.TARGET_WEIGHTS.duckling).toBeGreaterThan(P.TARGET_WEIGHTS.adult);
+  });
+});
+
+describe('the interactive owl — telegraphed strikes you can scare off (online)', () => {
+  // The first staggered attack moment of an open window.
+  const firstAttackAt = OWL.windowDurationSec / (OWL.attacksPerWindow + 1);
+
+  it('online, an attack opens a SCAREABLE dive (a wind-up) instead of landing at once', () => {
+    const s = flock(4);
+    openWindow(s);
+    runPredators(s, firstAttackAt, { mode: 'online', rng: always });
+    // A dive is in flight, telegraphed — but nothing has landed yet.
+    const strike = activeStrike(s);
+    expect(strike).not.toBeNull();
+    expect(strike!.predatorId).toBe('owl');
+    expect(strike!.strike.windupRemaining).toBeCloseTo(P.STRIKE_WINDUP_SEC, 6);
+    expect(events(s).some((e) => e.kind === 'winding')).toBe(true);
+    expect(s.ducks.every((d) => !d.wounded)).toBe(true);
+  });
+
+  it('a dive left alone lands when its wind-up expires', () => {
+    const s = flock(4);
+    openWindow(s);
+    runPredators(s, firstAttackAt, { mode: 'online', rng: always });
+    const target = activeStrike(s)!.strike.targetId;
+    runPredators(s, P.STRIKE_WINDUP_SEC + 0.1, { mode: 'online', rng: always });
+    expect(activeStrike(s)).toBeNull(); // resolved + cleared
+    expect(s.ducks.find((d) => d.id === target)!.wounded).toBe(true);
+    expect(events(s).some((e) => e.kind === 'wound')).toBe(true);
+  });
+
+  it('SCARING the owl mid-dive foils the strike entirely (the active "be present" save)', () => {
+    const s = flock(4);
+    openWindow(s);
+    runPredators(s, firstAttackAt, { mode: 'online', rng: always });
+    const target = activeStrike(s)!.strike.targetId;
+
+    const saved = scareOff(s, 'owl');
+    expect(saved).toBe(target);
+    expect(activeStrike(s)).toBeNull();
+    expect(events(s).some((e) => e.kind === 'scared')).toBe(true);
+
+    // Even with every roll set to land, the scared duck takes no wound.
+    runPredators(s, P.STRIKE_WINDUP_SEC + 5, { mode: 'online', rng: always });
+    expect(s.ducks.find((d) => d.id === target)!.wounded).not.toBe(true);
+  });
+
+  it('a target secured/treated DURING the dive slips away (the strike fizzles)', () => {
+    const s = flock(4);
+    s.resources.eggs = 1e6;
+    buildSecureCoop(s);
+    openWindow(s);
+    runPredators(s, firstAttackAt, { mode: 'online', rng: always });
+    const target = activeStrike(s)!.strike.targetId;
+    // Secure the very duck being dived on, mid-wind-up.
+    expect(setSecured(s, target, true).ok).toBe(true);
+    runPredators(s, P.STRIKE_WINDUP_SEC + 0.1, { mode: 'online', rng: always });
+    expect(s.ducks.find((d) => d.id === target)!.wounded).not.toBe(true);
+  });
+
+  it('scareOff is a no-op (returns null) when no dive is in flight', () => {
+    const s = flock(4);
+    expect(scareOff(s, 'owl')).toBeNull();
+  });
+
+  it('offline catch-up never telegraphs — attacks resolve immediately (no scare possible)', () => {
+    const s = flock(4);
+    openWindow(s);
+    runPredators(s, firstAttackAt, { mode: 'offline', rng: always });
+    expect(activeStrike(s)).toBeNull();
+    expect(s.ducks.filter((d) => d.wounded)).toHaveLength(1);
+  });
+
+  it('a stale in-flight dive does not survive a save round-trip (online-only feedback)', () => {
+    const s = flock(4);
+    openWindow(s);
+    runPredators(s, firstAttackAt, { mode: 'online', rng: always });
+    expect(activeStrike(s)).not.toBeNull();
+    const restored = deserialize(serialize(s), 0);
+    expect(activeStrike(restored)).toBeNull();
   });
 });
 

@@ -100,8 +100,15 @@ export function deserialize(raw: string, now: number): GameState {
       },
       // Phase 4c predators: pre-4c saves load with no windows in flight, no
       // deterrents, and no secure coops. Merge so a partial saved map still has
-      // every known predator present; drop any stale transient events.
-      predators: { ...base.predators, ...(parsed.predators ?? {}) },
+      // every known predator present; drop any stale transient events and any
+      // in-flight telegraphed strike (online-only runtime feedback — a fresh
+      // window will come; a returning player is never mid-dive on load).
+      predators: Object.fromEntries(
+        Object.entries({ ...base.predators, ...(parsed.predators ?? {}) }).map(([id, ps]) => [
+          id,
+          { ...ps, strike: undefined },
+        ]),
+      ),
       deterrents: parsed.deterrents ?? 0,
       deterrentIntegrity: parsed.deterrentIntegrity ?? 1,
       secureCoops: parsed.secureCoops ?? 0,
