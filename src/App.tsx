@@ -198,6 +198,10 @@ export default function App() {
       {watchOpen && <WatchPanel engine={engine} state={state} onClose={() => setWatchOpen(false)} />}
       {legacyOpen && <LegacyPanel engine={engine} state={state} onClose={() => setLegacyOpen(false)} />}
 
+      {/* The predator telegraph is pinned (fixed) to the very top; reserve flow
+          space for it so it never overlaps the zone tabs / HUD beneath it. */}
+      {currentThreat(state) && <div aria-hidden className="h-12 md:h-8" />}
+
       <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas + the station box directly under it (close to the tiles). */}
         <div className="flex flex-col items-center gap-3">
