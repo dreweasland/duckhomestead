@@ -100,10 +100,6 @@ function PhenoBands({ genome, width = 22 }: { genome: Gene[]; width?: number }) 
   );
 }
 
-/** Coarse band code for a text context (e.g. a <select> option): "Lay4 Vig1 Hdy2". */
-function bandCode(genome: Gene[]): string {
-  return PHENO_AXES.map((a) => `${AXIS_META[a].abbr}${axisTier(genome, a)}`).join(' ');
-}
 
 const GENE_ORDER: Gene[] = ['L', 'V', 'H', 'D'];
 
@@ -224,23 +220,26 @@ export function ColorSwatch({ color, size = 14 }: { color: Color; size?: number 
   );
 }
 
-/** Pick-a-pair + active-pair status. */
-function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
-  const [drakeId, setDrakeId] = useState('');
-  const [henId, setHenId] = useState('');
+/** Active-pair status + new-pair builder. Drake/hen are picked by tapping rows in
+ *  the flock list below (selection lives in FlockPanel and is passed in here). */
+function Breeding({
+  engine,
+  state,
+  mateDrakeId,
+  mateHenId,
+  setMateDrakeId,
+  setMateHenId,
+}: {
+  engine: GameEngine;
+  state: GameState;
+  mateDrakeId: string;
+  mateHenId: string;
+  setMateDrakeId: (id: string) => void;
+  setMateHenId: (id: string) => void;
+}) {
   const B = BALANCE.BREEDING;
   const target = state.genomeTarget;
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
-  const avail = (sex: Duck['sex']) =>
-    state.ducks
-      .filter((d) => d.sex === sex && d.stage === 'adult' && !paired(d.id) && !d.wounded)
-      .sort(
-        (a, b) =>
-          COLORS.indexOf(phenotype(a.genotype)) - COLORS.indexOf(phenotype(b.genotype)) ||
-          targetMatch(b.genome, target) - targetMatch(a.genome, target),
-      );
-  const drakes = avail('drake');
-  const hens = avail('hen');
   const byId = (id: string) => state.ducks.find((d) => d.id === id);
 
   const readerCost = BALANCE.GENOME.READER_COST_EGGS;
@@ -347,66 +346,71 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
           </div>
         );
       })}
-      {drakes.length > 0 && hens.length > 0 ? (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <select
-            value={drakeId}
-            onChange={(e) => setDrakeId(e.target.value)}
-            className="flex-1 rounded bg-[#2a2018] px-1.5 py-1 text-[11px]"
-          >
-            <option value="">drake…</option>
-            {drakes.map((d) => (
-              <option key={d.id} value={d.id}>
-                {phenotype(d.genotype)} · {bandCode(d.genome)}
-                {d.genomeKnown ? ` · ${qualityLabel(d, target)}` : ''}
-              </option>
-            ))}
-          </select>
-          <select
-            value={henId}
-            onChange={(e) => setHenId(e.target.value)}
-            className="flex-1 rounded bg-[#2a2018] px-1.5 py-1 text-[11px]"
-          >
-            <option value="">hen…</option>
-            {hens.map((d) => (
-              <option key={d.id} value={d.id}>
-                {phenotype(d.genotype)} · {bandCode(d.genome)}
-                {d.genomeKnown ? ` · ${qualityLabel(d, target)}` : ''}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => {
-              if (engine.pair(drakeId, henId).ok) {
-                playPlace();
-                setDrakeId('');
-                setHenId('');
-              }
-            }}
-            disabled={!drakeId || !henId}
-            className={`rounded px-2 py-1 text-[11px] font-bold ${
-              drakeId && henId
-                ? 'bg-[#6b4f9e] text-[#fff4d6] hover:bg-[#7a5cae]'
-                : 'cursor-not-allowed bg-[#2a2018] text-[#6a5a3a]'
-            }`}
-          >
-            Pair
-          </button>
-        </div>
-      ) : (
-        <div className="mt-1 text-[10px] text-[#7a6a4a]">
-          Need an unpaired adult drake and hen to start a pair.
-        </div>
-      )}
-      {/* Crossbreed-odds preview for the candidate pair (the in-game calculator). */}
+      {/* New-pair builder: drake + hen are chosen by tapping rows in the flock
+          list below. A slot shows the picked duck (with a clear ×) or a prompt. */}
       {(() => {
-        const dr = byId(drakeId);
-        const he = byId(henId);
-        return dr && he ? (
-          <div className="mt-1.5 rounded bg-[#171009] px-2 py-1.5">
-            <OddsPreview a={dr} b={he} target={target} />
+        const dr = byId(mateDrakeId);
+        const he = byId(mateHenId);
+        const slot = (label: string, duck: Duck | undefined, clear: () => void) => (
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded bg-[#2a2018] px-2 py-1.5">
+            {duck ? (
+              <>
+                <ColorSwatch color={phenotype(duck.genotype)} size={11} />
+                <PhenoBands genome={duck.genome} width={16} />
+                <GenomeTiles duck={duck} target={target} size={11} />
+                <button
+                  onClick={clear}
+                  className="ml-auto rounded px-1 text-[12px] leading-none text-[#9a8a6a] hover:bg-[#33271c] hover:text-[#e0c98a]"
+                  title="Clear this pick"
+                >
+                  ×
+                </button>
+              </>
+            ) : (
+              <span className="text-[10px] text-[#7a6a4a]">tap a {label} below</span>
+            )}
           </div>
-        ) : null;
+        );
+        // Pure validity check (must mirror createPair's guards — never call
+        // engine.pair to test, it would actually create the pair).
+        const eligible = (d: Duck | undefined, sex: Duck['sex']) =>
+          !!d && d.sex === sex && d.stage === 'adult' && !paired(d.id);
+        const canPair = eligible(dr, 'drake') && eligible(he, 'hen');
+        return (
+          <div className="mt-1.5">
+            <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+              New pair
+            </div>
+            <div className="flex items-center gap-1.5">
+              {slot('drake', dr, () => setMateDrakeId(''))}
+              {slot('hen', he, () => setMateHenId(''))}
+              <button
+                onClick={() => {
+                  if (engine.pair(mateDrakeId, mateHenId).ok) {
+                    playPlace();
+                    setMateDrakeId('');
+                    setMateHenId('');
+                  }
+                }}
+                disabled={!canPair}
+                title={canPair ? 'Start this breeding pair' : 'Pick an unpaired adult drake and hen from the list'}
+                className={`rounded px-3 py-2 text-[11px] font-bold ${
+                  canPair
+                    ? 'bg-[#6b4f9e] text-[#fff4d6] hover:bg-[#7a5cae]'
+                    : 'cursor-not-allowed bg-[#2a2018] text-[#6a5a3a]'
+                }`}
+              >
+                Pair
+              </button>
+            </div>
+            {/* Crossbreed-odds preview for the candidate pair (the in-game calculator). */}
+            {dr && he && (
+              <div className="mt-1.5 rounded bg-[#171009] px-2 py-1.5">
+                <OddsPreview a={dr} b={he} target={target} />
+              </div>
+            )}
+          </div>
+        );
       })()}
     </div>
   );
@@ -422,6 +426,9 @@ export function FlockPanel({
   onClose: () => void;
 }) {
   const [armedCull, setArmedCull] = useState<string | null>(null);
+  // New-pair selection: drake + hen are picked by tapping rows in the list below.
+  const [mateDrakeId, setMateDrakeId] = useState('');
+  const [mateHenId, setMateHenId] = useState('');
   const target = state.genomeTarget;
   // Sort: color (dex order) → stage (adults, then juveniles, then ducklings) →
   // sex (drakes, then hens) → genome quality (best match-to-target first).
@@ -527,7 +534,16 @@ export function FlockPanel({
           </div>
         </div>
 
-        {state.ducks.length > 0 && <Breeding engine={engine} state={state} />}
+        {state.ducks.length > 0 && (
+          <Breeding
+            engine={engine}
+            state={state}
+            mateDrakeId={mateDrakeId}
+            mateHenId={mateHenId}
+            setMateDrakeId={setMateDrakeId}
+            setMateHenId={setMateHenId}
+          />
+        )}
 
         {state.ducks.length === 0 ? (
           <div className="py-6 text-center text-sm text-[#9a8a6a]">
@@ -712,11 +728,18 @@ export function FlockPanel({
               <div className="flex flex-col gap-1">
                 {shown.map((d) => {
                   const canSecure = d.secured || slotsUsed < slotsTotal;
+                  const isPaired = state.breedingPairs.some((p) => p.drakeId === d.id || p.henId === d.id);
+                  const picked = d.id === mateDrakeId || d.id === mateHenId;
+                  const canPick = d.stage === 'adult' && !d.wounded && !isPaired;
                   return (
                     <div
                       key={d.id}
                       className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] ${
-                        d.wounded ? 'bg-[#2a1818] ring-1 ring-[#5a2a2a]' : 'bg-[#1f1812]'
+                        picked
+                          ? 'bg-[#241d33] ring-1 ring-[#6b4f9e]'
+                          : d.wounded
+                            ? 'bg-[#2a1818] ring-1 ring-[#5a2a2a]'
+                            : 'bg-[#1f1812]'
                       }`}
                     >
                       <ColorSwatch color={phenotype(d.genotype)} size={10} />
@@ -777,6 +800,26 @@ export function FlockPanel({
                           <HealIcon size={12} />
                         </button>
                       )}
+                      {isPaired ? (
+                        <span className="rounded px-1 py-0.5 text-[10px] font-bold text-[#9a86c0]" title="Already in a breeding pair">
+                          paired
+                        </span>
+                      ) : canPick ? (
+                        <button
+                          onClick={() => {
+                            if (d.sex === 'drake') setMateDrakeId(picked ? '' : d.id);
+                            else setMateHenId(picked ? '' : d.id);
+                          }}
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
+                            picked
+                              ? 'bg-[#6b4f9e] text-[#fff4d6]'
+                              : 'text-[#9a86c0] hover:bg-[#33271c] hover:text-[#b9a6e0]'
+                          }`}
+                          title={picked ? 'Picked for a new pair — tap to unpick' : `Pick this ${d.sex} for a new breeding pair`}
+                        >
+                          {picked ? 'picked' : 'breed'}
+                        </button>
+                      ) : null}
                       <button
                         onClick={() => engine.setSecured(d.id, !d.secured)}
                         disabled={!canSecure}
