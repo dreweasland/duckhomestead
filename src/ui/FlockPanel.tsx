@@ -338,7 +338,7 @@ export function FlockPanel({
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] text-[#9a8a6a]">Release shown under</span>
                     <button
-                      onClick={() => step(-0.05)}
+                      onClick={() => step(-0.01)}
                       className="rounded bg-[#2a2018] px-1.5 py-0.5 text-sm font-bold leading-none text-[#c9b88f] hover:bg-[#33271c]"
                       aria-label="Lower cutoff"
                     >
@@ -348,7 +348,7 @@ export function FlockPanel({
                       ×{cullVigor.toFixed(2)}
                     </span>
                     <button
-                      onClick={() => step(0.05)}
+                      onClick={() => step(0.01)}
                       className="rounded bg-[#2a2018] px-1.5 py-0.5 text-sm font-bold leading-none text-[#c9b88f] hover:bg-[#33271c]"
                       aria-label="Raise cutoff"
                     >
