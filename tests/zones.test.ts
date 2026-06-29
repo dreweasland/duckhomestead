@@ -18,24 +18,24 @@ describe('zone model', () => {
 
   it('refuses to build in a locked zone; allows it once unlocked', () => {
     const s = build({});
-    expect(placeStation(s, 'coop', 0, 0, 'backPasture').ok).toBe(false); // locked
-    s.zones.backPasture.unlocked = true;
-    expect(placeStation(s, 'coop', 0, 0, 'backPasture').ok).toBe(true);
+    expect(placeStation(s, 'coop', 0, 0, 'pond').ok).toBe(false); // locked
+    s.zones.pond.unlocked = true;
+    expect(placeStation(s, 'coop', 0, 0, 'pond').ok).toBe(true);
   });
 
   it('bounds placement to the zone’s own grid', () => {
     const s = build({});
-    s.zones.backPasture.unlocked = true;
-    const g = ZONE_DEFS.find((z) => z.id === 'backPasture')!.grid;
-    expect(placeStation(s, 'plot', g.width, 0, 'backPasture').ok).toBe(false); // out of bounds
-    expect(placeStation(s, 'plot', g.width - 1, g.height - 1, 'backPasture').ok).toBe(true);
+    s.zones.pond.unlocked = true;
+    const g = ZONE_DEFS.find((z) => z.id === 'pond')!.grid;
+    expect(placeStation(s, 'plot', g.width, 0, 'pond').ok).toBe(false); // out of bounds
+    expect(placeStation(s, 'plot', g.width - 1, g.height - 1, 'pond').ok).toBe(true);
   });
 
-  it('pasture coops add housing and lay into the ONE shared storage', () => {
-    // Yard has the feed chain; the coop lives in the pasture (housing relief).
+  it('build-zone coops add housing and lay into the ONE shared storage', () => {
+    // Yard has the feed chain; the coop lives in the pond zone (housing relief).
     const s = build({ plot: 1, mill: 1 });
-    s.zones.backPasture.unlocked = true;
-    expect(placeStation(s, 'coop', 1, 1, 'backPasture').ok).toBe(true);
+    s.zones.pond.unlocked = true;
+    expect(placeStation(s, 'coop', 0, 0, 'pond').ok).toBe(true);
     expect(coopCapacity(s)).toBeGreaterThan(0); // counts coops across zones
     expect(s.ducks.length).toBeGreaterThan(0); // first coop seeded the flock
     stockAll(s);
@@ -43,16 +43,22 @@ describe('zone model', () => {
     run(s, 60);
     expect(s.resources.eggs).toBeGreaterThan(before); // shared storage filled
   });
+
+  it('the pasture is an irrigation farm, not build space (rejects placement)', () => {
+    const s = build({});
+    s.zones.backPasture.unlocked = true;
+    expect(placeStation(s, 'coop', 0, 0, 'backPasture').ok).toBe(false);
+  });
 });
 
 describe('save back-compat', () => {
   it('round-trips zones + station zoneId', () => {
     const s = build({ plot: 1 });
-    s.zones.backPasture.unlocked = true;
-    placeStation(s, 'coop', 2, 2, 'backPasture');
+    s.zones.pond.unlocked = true;
+    placeStation(s, 'coop', 0, 0, 'pond'); // (0,0) is shore, outside the water region
     const r = deserialize(serialize(s), 0);
-    expect(r.zones.backPasture.unlocked).toBe(true);
-    expect(r.stations.find((st) => st.type === 'coop')?.zoneId).toBe('backPasture');
+    expect(r.zones.pond.unlocked).toBe(true);
+    expect(r.stations.find((st) => st.type === 'coop')?.zoneId).toBe('pond');
   });
 
   it('defaults a pre-4b save to Yard-only, stations in the Yard', () => {

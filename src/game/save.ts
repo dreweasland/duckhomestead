@@ -50,8 +50,17 @@ export function deserialize(raw: string, now: number): GameState {
       nextPairId: parsed.nextPairId ?? 1,
       dexSeen: parsed.dexSeen ?? [],
       // Phase 4b zones: pre-4b saves get the default (Yard-only unlocked); merge
-      // so a partial saved zone map still has every known zone present.
+      // so a partial saved zone map still has every known zone present. (The old
+      // per-zone `forageProgress` field, if present, is simply ignored.)
       zones: { ...base.zones, ...(parsed.zones ?? {}) },
+      // Phase 4b REWORK: the pasture is now an irrigation puzzle. Pre-rework saves
+      // (forage era) have no `irrigation` block → initialise it; crop is normalised
+      // to the current plot count so a layout/plot-count change can't dangle.
+      irrigation: {
+        channels: parsed.irrigation?.channels ?? {},
+        crop: base.irrigation.crop.map((_, i) => parsed.irrigation?.crop?.[i] ?? 0),
+        health: typeof parsed.irrigation?.health === 'number' ? parsed.irrigation.health : 1,
+      },
       // Phase 4c predators: pre-4c saves load with no windows in flight, no
       // deterrents, and no secure coops. Merge so a partial saved map still has
       // every known predator present; drop any stale transient events.

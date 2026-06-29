@@ -266,8 +266,8 @@ export class GameEngine {
     const r = unlockZoneAction(this.state, zoneId);
     if (r.ok) {
       const def = zoneDef(zoneId);
-      const description = def?.forage
-        ? 'New buildable space — and free-range forage now drips energy into storage.'
+      const description = def?.irrigation
+        ? 'An irrigation farm! Lay channels to route the water supply to your crop plots, hit each plot’s sweet-spot, and harvest a cash crop for eggs.'
         : def?.water
           ? 'New buildable space — and a big jump in water access (deeper flock condition + more time to treat wounds). Build water features to keep it ahead of the flock.'
           : 'New buildable space for more coops and stations.';

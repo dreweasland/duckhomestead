@@ -63,6 +63,7 @@ export function placeStation(
   const zone = zoneDef(zoneId);
   if (!zone) return fail('No such zone');
   if (!zoneUnlocked(state, zoneId)) return fail('Zone locked');
+  if (zone.irrigation) return fail('The pasture is an irrigation farm, not build space');
   if (x < 0 || y < 0 || x >= zone.grid.width || y >= zone.grid.height) {
     return fail('Out of bounds');
   }
@@ -136,7 +137,7 @@ export function unlockZone(state: GameState, zoneId: string): ActionResult<{ nam
   if (state.rank < zone.unlock.rankRequired) return fail(`Reach Rank ${zone.unlock.rankRequired}`);
   if (state.resources.eggs < zone.unlock.eggCost) return fail(`Need ${zone.unlock.eggCost} eggs`);
   state.resources.eggs -= zone.unlock.eggCost;
-  (state.zones[zoneId] ??= { unlocked: false, forageProgress: 0 }).unlocked = true;
+  (state.zones[zoneId] ??= { unlocked: false }).unlocked = true;
   return done({ name: zone.name });
 }
 

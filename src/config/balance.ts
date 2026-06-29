@@ -218,22 +218,13 @@ export const BALANCE = {
 
   // ── Phase 4b: zones (data-driven; see ZONE_DEFS below) ──────────────
   ZONES: {
-    /** The first zone beyond the always-unlocked Yard. */
+    /** The first zone beyond the always-unlocked Yard. Its signature is the
+     *  irrigation flow puzzle (see BALANCE.PASTURE); the unlock gate stays here. */
     BACK_PASTURE: {
       rankRequired: 15, // gate against the rank curve — tune
-      eggCost: 2000, // the big egg sink — also re-paid each prestige run, so kept modest
-      tileRegionSize: { width: 6, height: 8 }, // added buildable space
-    },
-    /**
-     * Free-range forage: a fixed-rate node that drips the ENERGY axis only into
-     * shared storage (never protein/niacin/calcium — energy was never the
-     * bottleneck, so a passive trickle can't trivialize the puzzle). NON-scaling
-     * by design, so it's self-diminishing: real relief when the pasture unlocks,
-     * a rounding error once the flock/economy grows.
-     */
-    FORAGE: {
-      energyPerCycle: 2, // flat energy yield — must not scale with anything
-      cycleSeconds: 4,
+      eggCost: 2000, // the egg sink — also re-paid each prestige run, so kept modest
+      /** The irrigation board's grid (NOT build space — it's a dedicated puzzle area). */
+      tileRegionSize: { width: 7, height: 7 },
     },
     /** The Pond (Phase 4d): second unlockable zone; its signature is water access. */
     POND: {
@@ -245,6 +236,36 @@ export const BALANCE = {
        *  so "The Pond" actually reads as a pond, not just more land. */
       waterRegion: { x: 1, y: 1, w: 4, h: 6 },
     },
+  },
+
+  // ── Phase 4b REWORK: the Back Pasture irrigation flow puzzle ────────
+  // A self-contained side-system: route a fixed water supply through a channel
+  // network (tree from the source; valves split at branches) to land each fixed
+  // plot in its water SWEET-SPOT, growing a cash crop sold for EGGS. Currency
+  // only — it NEVER produces or touches a nutrition axis. Layout is solved once
+  // and holds; a separate "health" drift coasts output peak→floor over time and a
+  // self-paced tend restores it (active-engine / idle-floor — neglect costs
+  // upside, never progress, never zero).
+  PASTURE: {
+    /** Fixed inlet + fixed crop plots on the 7×7 board (local tile coords). */
+    SOURCE: { x: 3, y: 0 },
+    PLOTS: [
+      { x: 1, y: 6 },
+      { x: 3, y: 6 },
+      { x: 5, y: 6 },
+      { x: 0, y: 3 },
+      { x: 6, y: 3 },
+      { x: 3, y: 3 },
+    ],
+    SOURCE_FLOW: 12, // total water units to distribute through the network
+    PLOT_IDEAL_BAND: [1.5, 2.5] as [number, number], // flow per plot for max yield
+    PLOT_OVERWATER_FALLOFF: 0.6, // yield mult when fully waterlogged (above the band)
+    CROP_GROW_SEC: 30, // an ideal-water plot fills one harvestable crop unit this fast
+    CROP_SELL_EGGS: 25, // eggs per harvested crop unit (tune vs the core economy)
+    DRIFT_TO_FLOOR_SEC: 600, // a neglected pasture reaches the upkeep floor this slowly
+    UPKEEP_FLOOR: 0.45, // neglected output never drops below ~45% of peak (never zero)
+    TEND_RESTORE: 1.0, // a tend pass restores health fully (back to peak)
+    TEND_COST_EGGS: 0, // upkeep is effort, not a tax
   },
 
   // ── Phase 4d: water access (the pond's signature) ───────────────────
@@ -563,15 +584,11 @@ export const STATION_ORDER: StationType[] = [
 
 // ── Phase 4b: data-driven zones ──────────────────────────────────────
 /**
- * A zone is buildable space. Adding a new one (the pond, a far field, …) is a
- * new entry in ZONE_DEFS — NOT new code: the unlock flow, placement, rendering,
- * and forage all iterate these defs. The Yard is zone 0 and always unlocked.
+ * A zone is space with a signature. Adding one (the pond, a far field, …) is a
+ * new entry in ZONE_DEFS — NOT new code: the unlock flow, placement, and
+ * rendering iterate these defs. The Yard is zone 0 and always unlocked. A zone's
+ * signature payload is `water` (the pond) or `irrigation` (the back pasture).
  */
-export interface ForageDef {
-  /** Flat energy per cycle into shared storage. ENERGY axis only; non-scaling. */
-  energyPerCycle: number;
-  cycleSeconds: number;
-}
 /** A zone's contribution to structural water capacity (Phase 4d). Present on the
  *  yard (baseline) and the pond (the big jump); a future water zone is just config. */
 export interface WaterDef {
@@ -586,10 +603,11 @@ export interface ZoneDef {
   blocked?: { x: number; y: number; w: number; h: number };
   /** Double-gated unlock. Absent ⇒ always unlocked (the Yard). */
   unlock?: { rankRequired: number; eggCost: number };
-  /** Signature node that activates on unlock (the pasture's free-range forage). */
-  forage?: ForageDef;
   /** Water capacity this zone provides while unlocked (the pond's signature). */
   water?: WaterDef;
+  /** Marks this zone as the irrigation puzzle (the back pasture's signature) —
+   *  its grid is the irrigation board, not build space. */
+  irrigation?: boolean;
 }
 
 export const ZONE_DEFS: ZoneDef[] = [
@@ -609,7 +627,7 @@ export const ZONE_DEFS: ZoneDef[] = [
       rankRequired: BALANCE.ZONES.BACK_PASTURE.rankRequired,
       eggCost: BALANCE.ZONES.BACK_PASTURE.eggCost,
     },
-    forage: BALANCE.ZONES.FORAGE,
+    irrigation: true,
   },
   {
     id: 'pond',

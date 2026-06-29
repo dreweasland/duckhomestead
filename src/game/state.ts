@@ -241,6 +241,8 @@ export interface GameState {
   // ── Phase 4b: zones ──
   /** Per-zone dynamic state, keyed by zone id (defs live in config/balance). */
   zones: Record<string, ZoneState>;
+  /** The back pasture's irrigation flow puzzle (its signature; see game/irrigation). */
+  irrigation: Irrigation;
 
   // ── Phase 4c: predators (the risk layer) ──
   /** Per-predator window/schedule state, keyed by predator id (defs in config). */
@@ -352,16 +354,37 @@ export function defenseFloor(state: GameState): number {
 /** Mutable per-zone state (the static shape lives in ZONE_DEFS). */
 export interface ZoneState {
   unlocked: boolean;
-  /** Seconds accrued toward the next forage cycle (signature node). */
-  forageProgress: number;
 }
 
 /** Fresh zone state from the defs: a zone starts unlocked iff it has no gate. */
 export function initialZones(): Record<string, ZoneState> {
   const zones: Record<string, ZoneState> = {};
-  for (const def of ZONE_DEFS) zones[def.id] = { unlocked: !def.unlock, forageProgress: 0 };
+  for (const def of ZONE_DEFS) zones[def.id] = { unlocked: !def.unlock };
   return zones;
 }
+
+// ── Phase 4b REWORK: the pasture irrigation flow puzzle ──────────────
+/**
+ * Irrigation network state. The source + plot positions are fixed config
+ * (BALANCE.PASTURE); this holds the player's laid channels, per-plot crop, and
+ * the upkeep `health` (1 = freshly tended/peak; drifts toward the floor).
+ */
+export interface Irrigation {
+  /** Laid channel cells keyed "x,y"; the value is the junction knob (0..1, split
+   *  bias used only where the cell branches). Presence of the key = channel laid. */
+  channels: Record<string, number>;
+  /** Accumulated harvestable crop per plot (parallel to BALANCE.PASTURE.PLOTS). */
+  crop: number[];
+  /** Upkeep health 0..1 (1 = peak/tended, drifts toward 0 = the floor fraction). */
+  health: number;
+}
+
+export function initialIrrigation(): Irrigation {
+  return { channels: {}, crop: BALANCE.PASTURE.PLOTS.map(() => 0), health: 1 };
+}
+
+/** Cell key helper for the irrigation grid. */
+export const cellKey = (x: number, y: number): string => `${x},${y}`;
 
 export function initialResources(): Resources {
   return { corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, forage: 0, pellets: 0, eggs: 0 };
@@ -393,6 +416,7 @@ export function initialState(now: number): GameState {
     nextPairId: 1,
     dexSeen: [],
     zones: initialZones(),
+    irrigation: initialIrrigation(),
     predators: initialPredators(),
     deterrents: 0,
     deterrentIntegrity: 1,
