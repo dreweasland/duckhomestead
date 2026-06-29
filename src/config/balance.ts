@@ -221,7 +221,7 @@ export const BALANCE = {
     /** The first zone beyond the always-unlocked Yard. */
     BACK_PASTURE: {
       rankRequired: 15, // gate against the rank curve — tune
-      eggCost: 4000, // the big egg sink — tune to feel like a real milestone
+      eggCost: 2000, // the big egg sink — also re-paid each prestige run, so kept modest
       tileRegionSize: { width: 6, height: 8 }, // added buildable space
     },
     /**
@@ -238,7 +238,7 @@ export const BALANCE = {
     /** The Pond (Phase 4d): second unlockable zone; its signature is water access. */
     POND: {
       rankRequired: 16,
-      eggCost: 5000,
+      eggCost: 2500,
       tileRegionSize: { width: 6, height: 8 },
       /** A real body of water dominates the zone (rendered as animated water by
        *  the generic `blocked` path), leaving a 1-tile shore ring to build on —
