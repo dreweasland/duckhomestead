@@ -10,7 +10,7 @@ import {
   playUpgrade,
 } from './audio/sfx';
 import { zoneDef, type StationType } from './config/balance';
-import { IrrigationBoard } from './ui/IrrigationBoard';
+import { WaterBoard } from './ui/WaterBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
 import { championReadiness } from './game/prestige';
@@ -217,20 +217,31 @@ export default function App() {
                   </div>
                 }
               >
-                {zoneDef(activeZone)?.irrigation && zoneUnlocked(state, activeZone) ? (
-                  // The pasture is the irrigation puzzle, not a build grid.
-                  <IrrigationBoard engine={engine} state={state} />
-                ) : (
-                  <GameCanvas
-                    key={activeZone}
-                    engine={engine}
-                    selectedId={selectedId}
-                    zoneId={activeZone}
-                    unlocked={zoneUnlocked(state, activeZone)}
-                    buildType={buildType}
-                    onTileClick={onTileClick}
-                  />
-                )}
+                {(() => {
+                  const zd = zoneDef(activeZone);
+                  // The water canvases (Pond layout / Waterworks circulation) are
+                  // dedicated puzzle surfaces, not build grids.
+                  if ((zd?.pondLayout || zd?.waterworks) && zoneUnlocked(state, activeZone)) {
+                    return (
+                      <WaterBoard
+                        engine={engine}
+                        state={state}
+                        mode={zd.waterworks ? 'circulation' : 'layout'}
+                      />
+                    );
+                  }
+                  return (
+                    <GameCanvas
+                      key={activeZone}
+                      engine={engine}
+                      selectedId={selectedId}
+                      zoneId={activeZone}
+                      unlocked={zoneUnlocked(state, activeZone)}
+                      buildType={buildType}
+                      onTileClick={onTileClick}
+                    />
+                  );
+                })()}
               </ErrorBoundary>
             </div>
           </div>

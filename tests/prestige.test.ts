@@ -67,15 +67,20 @@ function messyRun(): GameState {
   s.nextPairId = 5;
   s.dexSeen = ['black', 'blue', 'splash'];
   s.zones = {
-    yard: { unlocked: true, forageProgress: 0 },
-    backPasture: { unlocked: true, forageProgress: 7 },
-    pond: { unlocked: true, forageProgress: 0 },
+    yard: { unlocked: true },
+    backPasture: { unlocked: true },
+    pond: { unlocked: true },
+  };
+  // A messy water canvas (features + circulation + fouled freshness) must wipe.
+  s.pond = {
+    features: [{ x: 0, y: 0, type: 'deepZone' }],
+    flow: [{ x: 1, y: 0, type: 'fountain' }],
+    freshness: { '0,0': 0.5 },
   };
   s.predators = { owl: { timeToNextWindow: 50, windowRemaining: 12, windowElapsed: 3, attacksFired: 1 } };
   s.deterrents = 4;
   s.deterrentIntegrity = 0.55;
   s.secureCoops = 2;
-  s.waterFeatures = 3;
   s.predatorsIntroduced = true;
   s.legacyTier = 2;
   s.legacyCurrency = 7;
@@ -111,7 +116,7 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expect(reset.rack).toEqual([]); // no module on a removed station
     expect(reset.inventory).toEqual([]);
     expect(reset.deterrents).toBe(0);
-    expect(reset.waterFeatures).toBe(0);
+    expect(reset.pond).toEqual({ features: [], flow: [], freshness: {} }); // water canvas wiped
     expect(reset.secureCoops).toBe(0);
     expect(reset.dust).toBe(0);
     expect(reset.rank).toBe(1);

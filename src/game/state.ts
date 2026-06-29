@@ -95,8 +95,6 @@ export interface NutritionState {
   /** Mill-capacity scaling on feed throughput (1 = enough mills). */
   feedScale: number;
   hasMill: boolean;
-  /** Energy/s supplied passively by free-range forage this tick (Phase 4b). */
-  forageEnergy?: number;
 }
 
 /** Derived duckling-ration snapshot (gates maturation speed). */
@@ -241,8 +239,12 @@ export interface GameState {
   // ── Phase 4b: zones ──
   /** Per-zone dynamic state, keyed by zone id (defs live in config/balance). */
   zones: Record<string, ZoneState>;
-  /** The back pasture's irrigation flow puzzle (its signature; see game/irrigation). */
-  irrigation: Irrigation;
+
+  // ── THE WATER SYSTEM: one shared canvas, two staged unlocks ──
+  /** The Pond layout features + the Waterworks circulation features + per-feature
+   *  freshness. Drives flock WELLNESS ONLY (provision → condition + wound timer);
+   *  never income, never a nutrition axis. See game/pond.ts + game/water.ts. */
+  pond: PondState;
 
   // ── Phase 4c: predators (the risk layer) ──
   /** Per-predator window/schedule state, keyed by predator id (defs in config). */
@@ -253,11 +255,7 @@ export interface GameState {
    *  + breaches; restored by the Repair action. The defense upkeep loop. */
   deterrentIntegrity: number;
 
-  // ── Phase 4d: water access ──
-  /** Built water features (count) — each adds WATER.FEATURE_CAPACITY to the
-   *  homestead's structural water capacity. Yard baseline + pond base come from
-   *  zone defs; this is the player's scaling lever. Structural, never consumed. */
-  waterFeatures: number;
+  // ── Phase 4c: secure housing ──
   /** Built Secure Coops (count) — each adds SECURE_SLOTS_PER_COOP secure slots. */
   secureCoops: number;
   /** First-contact grace: predators only ever resolve their first window once the
@@ -363,27 +361,42 @@ export function initialZones(): Record<string, ZoneState> {
   return zones;
 }
 
-// ── Phase 4b REWORK: the pasture irrigation flow puzzle ──────────────
+// ── THE WATER SYSTEM: the shared pond canvas ─────────────────────────
+/** Stage 1 (Pond) provision features — arrangement drives `layoutBase`. */
+export type PondFeatureType = 'spring' | 'bathingPool' | 'plantBed' | 'deepZone';
+/** Stage 2 (Waterworks) circulation features — coverage drives `circulationHealth`. */
+export type FlowFeatureType = 'intake' | 'fountain' | 'outflow';
+
+export interface PondFeature {
+  x: number;
+  y: number;
+  type: PondFeatureType;
+}
+export interface FlowFeature {
+  x: number;
+  y: number;
+  type: FlowFeatureType;
+}
+
 /**
- * Irrigation network state. The source + plot positions are fixed config
- * (BALANCE.PASTURE); this holds the player's laid channels, per-plot crop, and
- * the upkeep `health` (1 = freshly tended/peak; drifts toward the floor).
+ * The water canvas state. Both zone tabs edit the SAME coordinate space:
+ * `features` is the Pond layout (provision); `flow` is the Waterworks
+ * circulation (coverage). `freshness` is the ONE upkeep accumulator — per
+ * provision-feature 0..1 (1 = fresh/peak), pushed down by fouling and held up
+ * by circulation coverage. No income, no nutrition axis, ever.
  */
-export interface Irrigation {
-  /** Laid channel cells keyed "x,y"; the value is the junction knob (0..1, split
-   *  bias used only where the cell branches). Presence of the key = channel laid. */
-  channels: Record<string, number>;
-  /** Accumulated harvestable crop per plot (parallel to BALANCE.PASTURE.PLOTS). */
-  crop: number[];
-  /** Upkeep health 0..1 (1 = peak/tended, drifts toward 0 = the floor fraction). */
-  health: number;
+export interface PondState {
+  features: PondFeature[];
+  flow: FlowFeature[];
+  /** Per provision-feature freshness 0..1, keyed "x,y". */
+  freshness: Record<string, number>;
 }
 
-export function initialIrrigation(): Irrigation {
-  return { channels: {}, crop: BALANCE.PASTURE.PLOTS.map(() => 0), health: 1 };
+export function initialPond(): PondState {
+  return { features: [], flow: [], freshness: {} };
 }
 
-/** Cell key helper for the irrigation grid. */
+/** Cell key helper for the water canvas (and the legacy irrigation grid). */
 export const cellKey = (x: number, y: number): string => `${x},${y}`;
 
 export function initialResources(): Resources {
@@ -416,12 +429,11 @@ export function initialState(now: number): GameState {
     nextPairId: 1,
     dexSeen: [],
     zones: initialZones(),
-    irrigation: initialIrrigation(),
+    pond: initialPond(),
     predators: initialPredators(),
     deterrents: 0,
     deterrentIntegrity: 1,
     secureCoops: 0,
-    waterFeatures: 0,
     predatorsIntroduced: false,
     legacyTier: 0,
     legacyCurrency: 0,

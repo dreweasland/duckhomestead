@@ -53,13 +53,14 @@ export function deserialize(raw: string, now: number): GameState {
       // so a partial saved zone map still has every known zone present. (The old
       // per-zone `forageProgress` field, if present, is simply ignored.)
       zones: { ...base.zones, ...(parsed.zones ?? {}) },
-      // Phase 4b REWORK: the pasture is now an irrigation puzzle. Pre-rework saves
-      // (forage era) have no `irrigation` block → initialise it; crop is normalised
-      // to the current plot count so a layout/plot-count change can't dangle.
-      irrigation: {
-        channels: parsed.irrigation?.channels ?? {},
-        crop: base.irrigation.crop.map((_, i) => parsed.irrigation?.crop?.[i] ?? 0),
-        health: typeof parsed.irrigation?.health === 'number' ? parsed.irrigation.health : 1,
+      // THE WATER SYSTEM: pre-rework saves (the irrigation-farm / water-capacity /
+      // forage era) have no `pond` block → start empty (pond unbuilt, both stages
+      // locked/empty as appropriate). Merge so a partial saved pond still has all
+      // three sub-fields. Old `irrigation`/`waterFeatures`/`forage` are dropped.
+      pond: {
+        features: parsed.pond?.features ?? [],
+        flow: parsed.pond?.flow ?? [],
+        freshness: parsed.pond?.freshness ?? {},
       },
       // Phase 4c predators: pre-4c saves load with no windows in flight, no
       // deterrents, and no secure coops. Merge so a partial saved map still has
@@ -68,9 +69,6 @@ export function deserialize(raw: string, now: number): GameState {
       deterrents: parsed.deterrents ?? 0,
       deterrentIntegrity: parsed.deterrentIntegrity ?? 1,
       secureCoops: parsed.secureCoops ?? 0,
-      // Phase 4d water: pre-4d saves load with no water features (yard baseline
-      // only) and the pond locked (its zone entry is merged in via `zones` above).
-      waterFeatures: parsed.waterFeatures ?? 0,
       // Phase 4e prestige meta — persists across resets; pre-4e saves load at
       // tier 0 with no currency/boosts/hall.
       legacyTier: parsed.legacyTier ?? 0,

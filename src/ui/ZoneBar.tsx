@@ -62,11 +62,11 @@ export function ZoneUnlockCard({
         <LockIcon size={14} /> {zone.name} — locked
       </div>
       <p className="mx-auto mt-1 max-w-xs text-[11px] text-[#9a8a6a]">
-        {zone.irrigation
-          ? 'An irrigation farm: route a limited water supply through channels to your crop plots, hit each plot’s sweet-spot, and sell the harvest for eggs.'
-          : 'New buildable space for more coops and stations.'}
-        {zone.water &&
-          ' Its water access deepens flock condition and buys more time to treat wounds — and you can build water features to scale it.'}
+        {zone.pondLayout
+          ? 'The Pond: arrange springs, bathing pools, plant beds and a deep zone so a thoughtful layout gives your flock far more water — deepening flock condition and buying more time to treat wounds.'
+          : zone.waterworks
+            ? 'Waterworks: a growing flock fouls the pond faster. Route intake → fountains → outflow to keep it circulating, or its provision coasts toward a floor.'
+            : 'New buildable space for more coops and stations.'}
       </p>
 
       <div className="mt-3 flex items-center justify-center gap-4 text-xs">
