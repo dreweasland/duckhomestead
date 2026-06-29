@@ -439,6 +439,30 @@ export const BALANCE = {
     SEED_HENS: 2,
   },
 
+  // ── Phase 4e: prestige (the meta loop) ──────────────────────────────
+  // Multiplier-only, clean slate. A champion-flock goal (Legacy Score) gates an
+  // explicit, confirmed reset that wipes the WHOLE run and grants legacy currency
+  // for permanent GLOBAL-SCALAR boosts. Boosts NEVER touch a nutrition requirement
+  // or any puzzle structure — same throughput-only guardrail as loot + vigor.
+  PRESTIGE: {
+    /** Legacy Score = vigor·Σvigor + dexCompletion·(seen/total) + flockSize·heads. */
+    SCORE_WEIGHTS: { vigor: 1.0, dexCompletion: 50, flockSize: 5 },
+    /** First champion goal; each tier raises it by THRESHOLD_GROWTH. */
+    BASE_THRESHOLD: 500,
+    THRESHOLD_GROWTH: 1.6,
+    /** Legacy currency granted exactly at threshold, scaling with overshoot
+     *  (score/threshold)^EXP — push higher for more. */
+    CURRENCY_AT_THRESHOLD: 10,
+    CURRENCY_OVERSHOOT_EXP: 0.8,
+    /** Stackable global-scalar boosts. perLevel = fractional bump per level;
+     *  cost for level L = round(baseCost · costGrowth^L). */
+    BOOSTS: {
+      output: { perLevel: 0.05, baseCost: 5, costGrowth: 1.5 }, // +5% station output / level
+      stationSpeed: { perLevel: 0.05, baseCost: 5, costGrowth: 1.5 }, // +5% cycle speed / level
+      eggValue: { perLevel: 0.08, baseCost: 8, costGrowth: 1.6 }, // +8% eggs laid / level
+    } as Record<string, { perLevel: number; baseCost: number; costGrowth: number }>,
+  },
+
   // ── Simulation ──────────────────────────────────────────────────────
   /** Fixed-timestep rate for the sim loop. Render is decoupled (rAF). */
   TICKS_PER_SECOND: 10,

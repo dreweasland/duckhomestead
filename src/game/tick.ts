@@ -3,6 +3,7 @@ import type { Resource } from './state';
 import type { GameState, Station } from './state';
 import { UPGRADE_OUTPUT } from './actions';
 import { cycleMult, yieldMult } from './loot';
+import { outputBoostMult, speedBoostMult } from './prestige';
 import { runNutrition, runDucklingNutrition } from './nutrition';
 import { runBreeding } from './breeding';
 import { runPredators } from './predators';
@@ -27,7 +28,9 @@ export interface TickOptions {
 /** Effective output of a station per cycle for a given resource (level + rack yield). */
 function stationOutput(state: GameState, station: Station, resource: Resource): number {
   const base = STATION_DEFS[station.type].outputs[resource] ?? 0;
-  return base * UPGRADE_OUTPUT(station.level) * yieldMult(state);
+  // Phase 4e: the legacy `output` boost is a uniform top-level scalar on all
+  // station output, alongside level + rack yield. Throughput only.
+  return base * UPGRADE_OUTPUT(station.level) * yieldMult(state) * outputBoostMult(state);
 }
 
 /**
@@ -118,8 +121,10 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     // runNutrition below, not the generic producer path.
     if (station.type === 'mill' || station.type === 'coop') continue;
 
-    // Rack speed modules shorten the effective cycle for every producer.
-    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleMult(state);
+    // Rack speed modules + the legacy stationSpeed boost shorten every producer's
+    // cycle (the boost divides cycle time — a global top-level rate scalar).
+    const cycleSeconds =
+      (STATION_DEFS[station.type].cycleSeconds * cycleMult(state)) / speedBoostMult(state);
     station.cycleProgress += dt * rateMult;
 
     // Run as many cycles as progress allows. If inputs are missing, cap

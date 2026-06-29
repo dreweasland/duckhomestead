@@ -268,8 +268,34 @@ export interface GameState {
    *  + SFX) and aggregated by offline catch-up. Never serialized meaningfully. */
   pendingPredatorEvents?: PredatorEvent[];
 
+  // ── Phase 4e: prestige (META — the ONLY state that survives a reset) ──
+  /** Times prestiged. Drives the current Legacy Score threshold. */
+  legacyTier: number;
+  /** Spendable legacy currency (earned at prestige, spent in the legacy shop). */
+  legacyCurrency: number;
+  /** Purchased global-scalar boost levels, keyed by boost id. */
+  purchasedBoosts: Record<string, number>;
+  /** Memorial snapshots of each champion flock that earned a prestige (display only). */
+  legacyHall: ChampionSnapshot[];
+
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
+}
+
+/** A frozen record of the champion flock that earned a prestige. No mechanical
+ *  effect — the Legacy Hall sendoff for a wiped flock. */
+export interface ChampionSnapshot {
+  /** The legacy tier this prestige earned. */
+  tier: number;
+  /** Legacy Score at the moment of reset. */
+  score: number;
+  /** Highest vigor in the flock. */
+  bestVigor: number;
+  flockSize: number;
+  /** Colors the flock had achieved (the dex at reset). */
+  colors: Color[];
+  /** Wall-clock ms at prestige. */
+  timestamp: number;
 }
 
 /** Mutable per-predator state (the static schedule/params live in PREDATOR_DEFS). */
@@ -373,6 +399,10 @@ export function initialState(now: number): GameState {
     secureCoops: 0,
     waterFeatures: 0,
     predatorsIntroduced: false,
+    legacyTier: 0,
+    legacyCurrency: 0,
+    purchasedBoosts: {},
+    legacyHall: [],
     lastSeen: now,
   };
 }

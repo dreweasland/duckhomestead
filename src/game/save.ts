@@ -62,6 +62,12 @@ export function deserialize(raw: string, now: number): GameState {
       // Phase 4d water: pre-4d saves load with no water features (yard baseline
       // only) and the pond locked (its zone entry is merged in via `zones` above).
       waterFeatures: parsed.waterFeatures ?? 0,
+      // Phase 4e prestige meta — persists across resets; pre-4e saves load at
+      // tier 0 with no currency/boosts/hall.
+      legacyTier: parsed.legacyTier ?? 0,
+      legacyCurrency: parsed.legacyCurrency ?? 0,
+      purchasedBoosts: { ...(parsed.purchasedBoosts ?? {}) },
+      legacyHall: parsed.legacyHall ?? [],
       // Pre-4c saves (and any not-yet-introduced save) keep the first-contact
       // grace: predators won't resolve their first window until the player is
       // back online to see them. So a returning player is never first-exposed

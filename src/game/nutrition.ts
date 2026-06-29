@@ -2,6 +2,7 @@ import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
 import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { waterConditionMult } from './water';
+import { eggValueBoostMult } from './prestige';
 import { adultLayers, AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
 
 const N = BALANCE.NUTRITION;
@@ -171,7 +172,9 @@ function layNutritionTail(
     flockRate += (BALANCE.COOP.eggPerCycle / coopCycle) * hen.vigor * debuff * wound;
   }
   const eggModuleMult = eggOutputMult(state); // rack eggOutput modules buff the flock
-  const eggsThisStep = flockRate * eggMult * eggModuleMult * step;
+  // Phase 4e: the legacy eggValue boost is a uniform scalar on eggs laid (never
+  // the satisfaction/throttle math above — the nutrition puzzle is untouched).
+  const eggsThisStep = flockRate * eggMult * eggModuleMult * eggValueBoostMult(state) * step;
   // Deposit into coop buffers (split evenly) so Collect / Auto-Haul / the buffer
   // chips keep working unchanged. Coops are the flock's collection points.
   if (coops.length > 0 && eggsThisStep > 0) {

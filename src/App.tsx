@@ -12,8 +12,10 @@ import {
 import type { StationType } from './config/balance';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
+import { thresholdProgress } from './game/prestige';
+import { LegacyPanel, legacyReady } from './ui/LegacyPanel';
 import { defenseFloor, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
-import { DuckIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
+import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
@@ -111,6 +113,7 @@ export default function App() {
   const [modulesOpen, setModulesOpen] = useState(false);
   const [flockOpen, setFlockOpen] = useState(false);
   const [watchOpen, setWatchOpen] = useState(false);
+  const [legacyOpen, setLegacyOpen] = useState(false);
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
@@ -189,6 +192,7 @@ export default function App() {
       )}
       {flockOpen && <FlockPanel engine={engine} state={state} onClose={() => setFlockOpen(false)} />}
       {watchOpen && <WatchPanel engine={engine} state={state} onClose={() => setWatchOpen(false)} />}
+      {legacyOpen && <LegacyPanel engine={engine} state={state} onClose={() => setLegacyOpen(false)} />}
 
       <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas + the station box directly under it (close to the tiles). */}
@@ -280,6 +284,25 @@ export default function App() {
                 <DuckIcon size={16} /> Flock
               </span>
               <span className="tabular-nums">{state.ducks.length} ducks</span>
+            </button>
+          )}
+          {(state.ducks.length > 0 || state.legacyTier > 0) && (
+            <button
+              onClick={() => setLegacyOpen(true)}
+              className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${
+                legacyReady(state)
+                  ? 'bg-[#5a4320] text-[#ffe9a8] ring-1 ring-[#e2b94f] hover:bg-[#6a4f28]'
+                  : 'bg-[#2e2746] text-[#cdbcff] hover:bg-[#372e57]'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <LegacyIcon size={16} /> Legacy
+              </span>
+              <span className="tabular-nums">
+                {legacyReady(state)
+                  ? 'champion ready!'
+                  : `T${state.legacyTier} · ${Math.round(thresholdProgress(state) * 100)}%`}
+              </span>
             </button>
           )}
           {(predatorsActive(state) ||

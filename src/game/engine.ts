@@ -35,6 +35,13 @@ import type { Milestone } from './rank';
 import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
 import {
+  buyBoost as buyBoostAction,
+  canPrestige,
+  prestigeCurrency,
+  prestigeReset,
+  type BoostId,
+} from './prestige';
+import {
   type Color,
   type GameState,
   type Ingredient,
@@ -467,6 +474,30 @@ export class GameEngine {
     if (r.ok) this.fireXp(r.value.xp);
     this.notify();
     return r;
+  }
+
+  // ── Prestige (the meta loop) ───────────────────────────────────────
+  /**
+   * Raise your Legacy: wipe the run for permanent boosts. Gated by the champion
+   * goal; the UI confirms first. Replaces state with a fresh game carrying the
+   * meta forward, then saves so the legacy persists. Returns what was granted.
+   */
+  prestige(): { ok: boolean; granted: number; tier: number } {
+    if (!canPrestige(this.state)) return { ok: false, granted: 0, tier: this.state.legacyTier };
+    const granted = prestigeCurrency(this.state);
+    const tier = this.state.legacyTier + 1;
+    this.state = prestigeReset(this.state, Date.now());
+    this.away = null;
+    this.saveNow();
+    this.notify();
+    return { ok: true, granted, tier };
+  }
+
+  /** Spend legacy currency on the next level of a global-scalar boost. */
+  buyBoost(id: BoostId): number | null {
+    const lvl = buyBoostAction(this.state, id);
+    this.notify();
+    return lvl;
   }
 
   /** Dismiss the "While you were away" summary. */

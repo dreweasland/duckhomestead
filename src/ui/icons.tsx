@@ -357,6 +357,22 @@ export const WaterIcon = (p: PixProps) => (
   />
 );
 
+/** Legacy / prestige — a champion's trophy cup. */
+export const LegacyIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ y: '#e2b94f', d: '#b8902f', h: '#ffe9a8' }}
+    rows={[
+      'hyyyyh',
+      'yyyyyy',
+      'yyyyyy',
+      '.yyyy.',
+      '..yy..',
+      '.dddd.',
+    ]}
+  />
+);
+
 // ── Panel glyphs (side-panel buttons) ───────────────────────────────
 /** Nutrition — a feed sprout (the ration / grid). */
 export const NutritionIcon = (p: PixProps) => (
