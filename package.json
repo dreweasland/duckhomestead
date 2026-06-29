@@ -10,6 +10,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "sim:nutrition": "NUTRI=1 vitest run tests/nutrition-metrics.test.ts --disableConsoleIntercept",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
