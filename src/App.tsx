@@ -345,14 +345,18 @@ export default function App() {
                 })()}
               </ErrorBoundary>
             </div>
-            {/* Selected-station controls: a slim strip on the board's bottom edge. */}
+            {/* Selected-station controls: a slim strip on the board's bottom edge.
+                Pinned to the board width so a busier station (e.g. a coop with the
+                Dose button) wraps inside it instead of widening the whole column. */}
             {selected && selected.zoneId === activeZone && (
-              <StationBar
-                engine={engine}
-                state={state}
-                station={selected}
-                onClose={() => setSelectedId(null)}
-              />
+              <div style={{ width: MAX_BOARD_WIDTH, maxWidth: '100%' }}>
+                <StationBar
+                  engine={engine}
+                  state={state}
+                  station={selected}
+                  onClose={() => setSelectedId(null)}
+                />
+              </div>
             )}
           </div>
           {!zoneUnlocked(state, activeZone) && (
