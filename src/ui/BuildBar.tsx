@@ -37,7 +37,7 @@ export function BuildBar({ state, buildType, onPick }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <div className="text-xs font-bold uppercase tracking-wider text-[#9a8a6a]">Build</div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
         {STATION_ORDER.map((t) => {
           const cost = BALANCE.COSTS[t];
           const affordable = state.resources.eggs >= cost;

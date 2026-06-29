@@ -5,12 +5,14 @@ import { stationStatus, UPGRADE_OUTPUT, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import { coopCapacity, type GameState, type Resource, type Station } from '../game/state';
 import { fmt } from './format';
-import { CollectIcon, EggIcon, HandIcon, RESOURCE_ICON, UpgradeIcon } from './icons';
+import { CloseIcon, CollectIcon, EggIcon, HandIcon, RESOURCE_ICON, UpgradeIcon } from './icons';
 
 interface Props {
   engine: GameEngine;
   state: GameState;
   station: Station | null;
+  /** When provided, shows a close (×) button in the header (used by the popover). */
+  onClose?: () => void;
 }
 
 /** Inline "<icon> amount" chip for a resource. */
@@ -75,7 +77,7 @@ function CoopStatus({
   );
 }
 
-export function StationPanel({ engine, state, station }: Props) {
+export function StationPanel({ engine, state, station, onClose }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   // Two-click confirm: armed only for the station whose id this matches.
   const [armedId, setArmedId] = useState<string | null>(null);
@@ -121,9 +123,20 @@ export function StationPanel({ engine, state, station }: Props) {
             Level {station.level}
           </span>
         </div>
-        <span className="text-[10px] text-[#9a8a6a]">
-          ({station.x},{station.y})
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-[#9a8a6a]">
+            ({station.x},{station.y})
+          </span>
+          {onClose && (
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded p-1 text-[#9a8a6a] hover:bg-[#1f1812] hover:text-[#f5ecd8]"
+            >
+              <CloseIcon size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-1 text-[11px] text-[#c9b88f]">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import {
   playAttack,
   playCollect,
@@ -36,6 +36,18 @@ import { LootBanner } from './ui/LootBanner';
 import { ModulesPanel } from './ui/ModulesPanel';
 import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
 import { StationPanel } from './ui/StationPanel';
+
+/** Position the station popover near the click, clamped to the viewport; opens
+ *  upward for clicks in the lower half so it never runs off the bottom. */
+function stationPopStyle(a: { x: number; y: number }): CSSProperties {
+  const W = 300;
+  const M = 8;
+  const left = Math.max(M, Math.min(a.x + 14, window.innerWidth - W - M));
+  const openUp = a.y > window.innerHeight * 0.55;
+  return openUp
+    ? { left, bottom: Math.max(M, window.innerHeight - a.y + 14) }
+    : { left, top: a.y + 14 };
+}
 
 export default function App() {
   const [ding, setDing] = useState<DingEvent | null>(null);
@@ -107,6 +119,8 @@ export default function App() {
   }, [salvage]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Screen position of the last board click — anchors the station popover.
+  const [popAnchor, setPopAnchor] = useState<{ x: number; y: number } | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
   const [tendFlash, setTendFlash] = useState<{ id: number; xp: number } | null>(null);
@@ -119,6 +133,18 @@ export default function App() {
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
+  // Build is only meaningful on a buildable (non-water) unlocked zone — the Yard.
+  const activeZd = zoneDef(activeZone);
+  const isBuildZone = zoneUnlocked(state, activeZone) && !activeZd?.pondLayout && !activeZd?.waterworks;
+  // Close the station popover on Escape.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId]);
   const anyBuffer = state.stations.some((s) => Object.values(s.buffer).some((v) => (v ?? 0) > 0));
   const readyToTend = state.stations.filter((s) => s.tendCooldownRemaining === 0).length;
 
@@ -199,15 +225,31 @@ export default function App() {
       {watchOpen && <WatchPanel engine={engine} state={state} onClose={() => setWatchOpen(false)} />}
       {legacyOpen && <LegacyPanel engine={engine} state={state} onClose={() => setLegacyOpen(false)} />}
 
+      {/* Station controls as a popover anchored at the click — not a column panel.
+          No backdrop, so clicking another station just re-anchors it; Escape, the
+          × button, or clicking an empty tile dismisses it. */}
+      {selected && popAnchor && (
+        <div
+          className="fixed z-50 max-h-[80vh] w-[300px] max-w-[92vw] overflow-y-auto rounded-lg shadow-2xl ring-2 ring-[#3a2e22]"
+          style={stationPopStyle(popAnchor)}
+        >
+          <StationPanel engine={engine} state={state} station={selected} onClose={() => setSelectedId(null)} />
+        </div>
+      )}
+
       {/* The predator telegraph is pinned (fixed) to the very top; reserve flow
           space for it so it never overlaps the zone tabs / HUD beneath it. */}
       {currentThreat(state) && <div aria-hidden className="h-12 md:h-8" />}
 
-      <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
-        {/* Canvas + the station box directly under it (close to the tiles). */}
+      <div className="mx-auto flex max-w-4xl flex-col gap-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        {/* Canvas — the board. */}
         <div className="flex flex-col items-center gap-3">
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
-          <div className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
+          <div
+            className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]"
+            onClickCapture={(e) => setPopAnchor({ x: e.clientX, y: e.clientY })}
+          >
             {/* Status pills tuck into the board's empty top headroom (the canvas
                 reserves space there) — present, but adding no height. Yard only:
                 Auto-Haul / Tend-All are station/tending milestones, irrelevant on
@@ -270,11 +312,6 @@ export default function App() {
               Your homestead is already running — the Coop is laying. The flock is short on protein
               and calcium, so build {missingProducers.join(' and ')} from the bar below (you have{' '}
               {Math.round(state.resources.eggs)} eggs), then open Nutrition to balance the ration.
-            </div>
-          )}
-          {selected && (
-            <div className="w-full max-w-[496px] md:w-[496px]">
-              <StationPanel engine={engine} state={state} station={selected} />
             </div>
           )}
         </div>
@@ -421,7 +458,6 @@ export default function App() {
               )}
             </div>
           )}
-          <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
           {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
           <button
             onClick={() => {
@@ -436,6 +472,15 @@ export default function App() {
             New homestead (reset save)
           </button>
         </div>
+        </div>
+
+        {/* Build palette — a full-width row spanning both columns, below the board.
+            Yard-only: the water canvases aren't build space. */}
+        {isBuildZone && (
+          <div className="rounded-lg bg-[#1f1812] p-3 ring-1 ring-[#3a2e22]">
+            <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
+          </div>
+        )}
       </div>
     </div>
   );
