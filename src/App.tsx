@@ -207,8 +207,8 @@ export default function App() {
         {/* Canvas + the station box directly under it (close to the tiles). */}
         <div className="flex flex-col items-center gap-3">
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
-          <StatusPills state={state} />
-          <div className="rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
+          <div className="flex flex-col gap-2 rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
+            <StatusPills state={state} />
             {/* Pin to the widest zone so swapping to a narrower one (pasture/pond)
                 centers the board instead of shrinking the whole column. */}
             <div
