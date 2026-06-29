@@ -241,7 +241,10 @@ export default function App() {
           space for it so it never overlaps the zone tabs / HUD beneath it. */}
       {currentThreat(state) && <div aria-hidden className="h-12 md:h-8" />}
 
-      <div className="mx-auto flex max-w-4xl flex-col gap-4">
+      {/* Shrink-wrap to the two columns (board + side panel) so the full-width
+          build row below lines up exactly with the right column's edge, instead
+          of stretching to a wider max-width. */}
+      <div className="mx-auto flex w-fit max-w-full flex-col gap-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas — the board. */}
         <div className="flex flex-col items-center gap-3">
