@@ -3,9 +3,16 @@ import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { pondView } from '../game/pond';
 import { flockRequirement, waterAccess, waterProvision, waterStatus } from '../game/water';
-import { cellKey, type FlowFeatureType, type GameState, type PondFeatureType } from '../game/state';
+import {
+  cellKey,
+  type FlowFeature,
+  type FlowFeatureType,
+  type GameState,
+  type PondFeature,
+  type PondFeatureType,
+} from '../game/state';
 import { playPlace } from '../audio/sfx';
-import { EggIcon, WaterIcon } from './icons';
+import { CloseIcon, EggIcon, WaterIcon } from './icons';
 
 const W = BALANCE.WATER;
 const TILE = 52;
@@ -36,6 +43,152 @@ function freshColor(f: number): string {
   return f >= 0.85 ? '#8fe388' : f >= 0.6 ? '#e8c45a' : '#e8835a';
 }
 
+// ── Help: plain-language effects + a worked "ideal" example ───────────
+const FEAT_EFFECT: Record<PondFeatureType, string> = {
+  spring: `No water by itself — it lifts each bathing pool placed right next to it (+${W.FEATURES.bathingPool.springBonus}). Surround it with pools.`,
+  bathingPool: `+${W.FEATURES.bathingPool.baseProvision} water, and +${W.FEATURES.bathingPool.springBonus} more next to a spring.`,
+  plantBed: `+${W.FEATURES.plantBed.baseProvision} water, and raises each neighbouring feature by +${Math.round(W.FEATURES.plantBed.adjacentQualityBonus * 100)}%.`,
+  deepZone: `+${W.FEATURES.deepZone.baseProvision} water — the richest tile, but fouls fastest, so keep it in a fountain's range.`,
+};
+const FLOW_EFFECT: Record<FlowFeatureType, string> = {
+  intake: 'Where fresh water enters. A fountain needs one in its line.',
+  fountain: `Keeps every tile within ${W.CIRCULATION.fountainCoverageRadius} (a ${2 * W.CIRCULATION.fountainCoverageRadius + 1}×${2 * W.CIRCULATION.fountainCoverageRadius + 1} area) fresh — but only when its line connects an intake to an outflow.`,
+  outflow: 'Where stale water leaves — closes the circuit.',
+};
+
+/** A compact, centred 3×3 cluster: a spring feeds the pools, plant beds lift them. */
+const EXAMPLE_FEATURES: PondFeature[] = [
+  { x: 2, y: 1, type: 'bathingPool' },
+  { x: 3, y: 1, type: 'plantBed' },
+  { x: 4, y: 1, type: 'bathingPool' },
+  { x: 2, y: 2, type: 'spring' },
+  { x: 3, y: 2, type: 'bathingPool' },
+  { x: 4, y: 2, type: 'spring' },
+  { x: 2, y: 3, type: 'bathingPool' },
+  { x: 3, y: 3, type: 'plantBed' },
+  { x: 4, y: 3, type: 'bathingPool' },
+];
+/** One live line across the middle — a single fountain covers the whole cluster. */
+const EXAMPLE_FLOW: FlowFeature[] = [
+  { x: 2, y: 2, type: 'intake' },
+  { x: 3, y: 2, type: 'fountain' },
+  { x: 4, y: 2, type: 'outflow' },
+];
+
+/** A small static diagram of the canvas (used only in the help sheet). */
+function MiniGrid({ features, flow }: { features: PondFeature[]; flow?: FlowFeature[] }) {
+  const T = 26;
+  const w = W.CANVAS.width * T;
+  const h = W.CANVAS.height * T;
+  const featAt = (x: number, y: number) => features.find((f) => f.x === x && f.y === y);
+  const flowAt = (x: number, y: number) => flow?.find((f) => f.x === x && f.y === y);
+  return (
+    <svg width={w} height={h} shapeRendering="crispEdges" style={{ imageRendering: 'pixelated' }}>
+      <rect x={0} y={0} width={w} height={h} rx={6} fill="#163243" />
+      {Array.from({ length: W.CANVAS.height }).map((_, y) =>
+        Array.from({ length: W.CANVAS.width }).map((_, x) => {
+          const px = x * T;
+          const py = y * T;
+          const feat = featAt(x, y);
+          const fl = flowAt(x, y);
+          return (
+            <g key={`${x},${y}`}>
+              <rect x={px + 1} y={py + 1} width={T - 2} height={T - 2} rx={3} fill={(x + y) % 2 ? '#1a3a4c' : '#173443'} />
+              {feat && (
+                <rect x={px + 4} y={py + 4} width={T - 8} height={T - 8} rx={3} fill={FEAT_META[feat.type].color} opacity={flow ? 0.45 : 1} />
+              )}
+              {fl && (
+                <circle cx={px + T / 2} cy={py + T / 2} r={7} fill={FLOW_META[fl.type].color} stroke="#fff4d6" strokeWidth={1.5} />
+              )}
+            </g>
+          );
+        }),
+      )}
+    </svg>
+  );
+}
+
+/** The help sheet: what each piece does + a worked ideal layout. */
+function WaterHelp({ onClose }: { onClose: () => void }) {
+  const Swatch = ({ color }: { color: string }) => (
+    <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: color }} />
+  );
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#15242e] p-5 ring-2 ring-[#27485a]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="inline-flex items-center gap-1.5 text-lg font-black text-[#a8d0e8]">
+            <WaterIcon size={16} /> Water — how it works
+          </h2>
+          <button onClick={onClose} className="rounded p-1.5 text-[#7a9aa8] hover:bg-[#0f1b23] hover:text-[#dff]" aria-label="Close">
+            <CloseIcon size={14} />
+          </button>
+        </div>
+
+        <p className="mb-3 text-[11px] leading-relaxed text-[#c4dae6]">
+          Your flock needs water. The bar reads <b>Provision / need</b>, where <b>need = your flock
+          size</b>. Aim for provision about <b>double your flock</b> for the full bonus (faster
+          condition recovery + more time to treat wounds). Low water only slows recovery — it's never
+          lethal.
+        </p>
+
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
+          The Pond — layout
+        </div>
+        <div className="mb-3 space-y-1.5">
+          {FEAT_TYPES.map((t) => (
+            <div key={t} className="flex items-start gap-2 text-[11px] text-[#c4dae6]">
+              <Swatch color={FEAT_META[t].color} />
+              <span>
+                <b style={{ color: FEAT_META[t].color }}>{FEAT_META[t].label}</b>{' '}
+                <span className="text-[#7a9aa8]">({W.FEATURES[t].costEggs} eggs)</span> — {FEAT_EFFECT[t]}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
+          Waterworks — circulation
+        </div>
+        <div className="mb-3 space-y-1.5">
+          {FLOW_TYPES.map((t) => (
+            <div key={t} className="flex items-start gap-2 text-[11px] text-[#c4dae6]">
+              <Swatch color={FLOW_META[t].color} />
+              <span>
+                <b style={{ color: FLOW_META[t].color }}>{FLOW_META[t].label}</b>{' '}
+                <span className="text-[#7a9aa8]">({W.FLOW[t].costEggs} eggs)</span> — {FLOW_EFFECT[t]}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6f93a3]">
+          An ideal starter
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col items-center gap-1">
+            <MiniGrid features={EXAMPLE_FEATURES} />
+            <div className="text-center text-[10px] leading-snug text-[#7a9aa8]">
+              <b className="text-[#a8d0e8]">1. Pond:</b> a spring with pools around it, plant beds
+              tucked between to lift them.
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <MiniGrid features={EXAMPLE_FEATURES} flow={EXAMPLE_FLOW} />
+            <div className="text-center text-[10px] leading-snug text-[#7a9aa8]">
+              <b className="text-[#a8d0e8]">2. Waterworks:</b> intake → fountain → outflow across the
+              middle (they sit on the features). One fountain keeps it all fresh.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The water canvas. One shared grid surfaced two ways:
  *   - layout mode (the Pond tab): place provision features; arrangement scores.
@@ -48,6 +201,7 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
   const [pick, setPick] = useState<PondFeatureType | FlowFeatureType>(
     isFlow ? 'fountain' : 'bathingPool',
   );
+  const [help, setHelp] = useState(false);
   const view = pondView(state);
   const featAt = (x: number, y: number) => view.features.find((f) => f.x === x && f.y === y);
   const flowAt = (x: number, y: number) => view.flow.find((f) => f.x === x && f.y === y);
@@ -89,6 +243,20 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
 
   return (
     <div className="flex flex-col items-center gap-2" style={{ width: GW }}>
+      {help && <WaterHelp onClose={() => setHelp(false)} />}
+      <div className="flex w-full items-center justify-between">
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#a8d0e8]">
+          <WaterIcon size={13} /> {isFlow ? 'Waterworks — circulation' : 'The Pond — layout'}
+        </span>
+        <button
+          onClick={() => setHelp(true)}
+          className="inline-flex items-center gap-1 rounded-full bg-[#13202a] px-2.5 py-1 text-[10px] font-bold text-[#7fd8e8] ring-1 ring-[#27485a] hover:bg-[#1a2c38]"
+          aria-label="How water works"
+        >
+          <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-[#27485a] text-[9px] text-[#dff]">?</span>
+          How it works
+        </button>
+      </div>
       <svg
         width={GW}
         height={GH}
