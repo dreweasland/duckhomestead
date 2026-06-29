@@ -18,7 +18,7 @@ import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
 import { useGame } from './game/useGame';
-import { GameCanvas } from './render/GameCanvas';
+import { GameCanvas, MAX_BOARD_WIDTH } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
 import { BuildBar } from './ui/BuildBar';
 import { DevPanel } from './ui/DevPanel';
@@ -195,24 +195,31 @@ export default function App() {
         <div className="flex flex-col items-center gap-3">
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
           <div className="rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
-            <ErrorBoundary
-              fallback={
-                <div className="flex h-[480px] w-[480px] max-w-full items-center justify-center p-6 text-center text-xs text-[#9a8a6a]">
-                  The board failed to render, but your homestead is safe and still running. Reload to
-                  bring it back.
-                </div>
-              }
+            {/* Pin to the widest zone so swapping to a narrower one (pasture/pond)
+                centers the board instead of shrinking the whole column. */}
+            <div
+              className="flex max-w-full justify-center"
+              style={{ width: MAX_BOARD_WIDTH }}
             >
-              <GameCanvas
-                key={activeZone}
-                engine={engine}
-                selectedId={selectedId}
-                zoneId={activeZone}
-                unlocked={zoneUnlocked(state, activeZone)}
-                buildType={buildType}
-                onTileClick={onTileClick}
-              />
-            </ErrorBoundary>
+              <ErrorBoundary
+                fallback={
+                  <div className="flex h-[480px] w-full items-center justify-center p-6 text-center text-xs text-[#9a8a6a]">
+                    The board failed to render, but your homestead is safe and still running. Reload
+                    to bring it back.
+                  </div>
+                }
+              >
+                <GameCanvas
+                  key={activeZone}
+                  engine={engine}
+                  selectedId={selectedId}
+                  zoneId={activeZone}
+                  unlocked={zoneUnlocked(state, activeZone)}
+                  buildType={buildType}
+                  onTileClick={onTileClick}
+                />
+              </ErrorBoundary>
+            </div>
           </div>
           {!zoneUnlocked(state, activeZone) && (
             <ZoneUnlockCard engine={engine} state={state} zoneId={activeZone} />

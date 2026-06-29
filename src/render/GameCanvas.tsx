@@ -16,6 +16,11 @@ const TOP_EXTRA = 14;
 const OX = PAD;
 const OY = PAD + TOP_EXTRA;
 
+/** Pixel width of the widest zone's board. The board column is pinned to this so
+ *  swapping to a narrower zone (pasture/pond are 6 wide vs the yard's 8) centers
+ *  the canvas instead of shrinking the whole column. */
+export const MAX_BOARD_WIDTH = Math.max(...ZONE_DEFS.map((z) => z.grid.width)) * TILE + PAD * 2;
+
 interface Props {
   engine: GameEngine;
   selectedId: string | null;
