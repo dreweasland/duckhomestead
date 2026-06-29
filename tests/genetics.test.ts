@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import {
+  axisScore,
+  axisTier,
   breedGenome,
   breedGenotype,
   goodGeneCount,
@@ -160,6 +162,45 @@ describe('crossbreeding: position-linked + dominance-weighted + mutation', () =>
     expect(goodGeneCount(drake)).toBe(3);
     expect(goodGeneCount(hen)).toBe(3);
     expect(best).toBeGreaterThan(3); // an offspring richer than either parent
+  });
+});
+
+describe('phenotype band (free, coarse, intrinsic — the phone-it-in floor)', () => {
+  const TIERS = BALANCE.PHENOTYPE.TIERS;
+
+  it('all-of-axis reads top tier, all-Dud reads bottom — clearly different', () => {
+    expect(axisTier(g('LLLLLL'), 'lay')).toBe(TIERS - 1);
+    expect(axisTier(g('DDDDDD'), 'lay')).toBe(0);
+    expect(axisTier(g('LLLLLL'), 'lay')).toBeGreaterThan(axisTier(g('DDDDDD'), 'lay'));
+    // a maxed axis scores 1.0, a dud 0.
+    expect(axisScore(g('LLLLLL'), 'lay')).toBeCloseTo(1, 6);
+    expect(axisScore(g('DDDDDD'), 'lay')).toBe(0);
+  });
+
+  it('reads the right axis: a Vigor genome is a strong vigor / weak lay+hardy band', () => {
+    expect(axisTier(g('VVVVVV'), 'vigor')).toBe(TIERS - 1);
+    expect(axisTier(g('VVVVVV'), 'hardy')).toBe(0);
+    // Hardy genome: top hardy, no lay/vigor.
+    expect(axisTier(g('HHHHHH'), 'hardy')).toBe(TIERS - 1);
+    expect(axisTier(g('HHHHHH'), 'lay')).toBe(0);
+  });
+
+  it('is COARSE: middling genomes spread but never expose exact good-gene counts', () => {
+    // 3 different genomes with the same lay-gene count can share a lay tier (coarse),
+    // while clearly distinct genomes separate — the band buckets, it does not count.
+    const a = axisTier(g('LLLDDD'), 'lay');
+    expect(a).toBeGreaterThan(axisTier(g('DDDDDD'), 'lay'));
+    expect(a).toBeLessThan(axisTier(g('LLLLLL'), 'lay'));
+  });
+
+  it('is INTRINSIC: the band is a pure function of the genome (ignores live state)', () => {
+    // axisTier takes only the genome — no nutrition/water/module inputs exist, so a
+    // starving high-genome duck and a well-fed one read identically.
+    const gem = g('LLLLLL');
+    expect(axisTier(gem, 'lay')).toBe(axisTier([...gem], 'lay'));
+    // and a high-genome duck out-bands a dud regardless of any feed multiplier — the
+    // band never multiplies by output, it reads the STAT_PER_GENE ceiling.
+    expect(axisTier(g('LLLLLL'), 'lay')).toBeGreaterThan(axisTier(g('DDDDDD'), 'lay'));
   });
 });
 

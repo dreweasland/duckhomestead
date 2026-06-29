@@ -486,6 +486,22 @@ export const BALANCE = {
     SEED_GENE_WEIGHTS: { L: 1, V: 1, H: 1, D: 2 } as Record<string, number>,
   },
 
+  // ── Phenotype band: the free, always-visible "phone-it-in" floor ─────
+  // Every duck shows a COARSE performance band per axis (Lay / Vigor / Hardy),
+  // visible from turn one with no gene-reader. The band is derived from the
+  // duck's INTRINSIC genome potential (the STAT_PER_GENE profile), NOT its live
+  // egg output — so a starving gem still reads strong and a well-fed dud still
+  // reads weak. It is deliberately coarse: it buckets each axis into a few tiers
+  // and NEVER reveals the exact genes/slots (those stay gene-reader-gated). See
+  // game/genetics.ts (axisScore / axisTier).
+  PHENOTYPE: {
+    TIERS: 5, // pips / bands per axis
+    // Bucket thresholds on the intrinsic axis score (0..1, where a 6-of-the-axis-
+    // gene genome reads 1.0 and a 6-Dud genome reads 0). A score lands in tier
+    // = (count of thresholds it meets), so there are TIERS = thresholds+1 buckets.
+    AXIS_THRESHOLDS: [0.15, 0.35, 0.6, 0.85],
+  },
+
   // ── Phase 4e: prestige (the meta loop) ──────────────────────────────
   // Multiplier-only, clean slate. A CHAMPION-FLOCK goal gates an explicit,
   // confirmed reset that wipes the WHOLE run and grants legacy currency for

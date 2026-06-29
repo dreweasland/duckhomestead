@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { colorOdds, goodGeneCount, layMult, slotOdds, targetMatch, woundResistChance } from '../game/genetics';
+import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
 import { COLORS, coopCapacity, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
@@ -66,15 +66,57 @@ function qualityLabel(d: Duck, target: Gene[]): string {
   return d.genomeKnown ? `${targetMatch(d.genome, target)}/${target.length}` : '?';
 }
 
+// ── Phenotype band: the free, always-visible coarse read (no reader needed) ──
+const AXIS_META: Record<PhenoAxis, { label: string; abbr: string; color: string }> = {
+  lay: { label: 'Lay', abbr: 'Lay', color: '#8fe388' },
+  vigor: { label: 'Vigor', abbr: 'Vig', color: '#e8c45a' },
+  hardy: { label: 'Hardy', abbr: 'Hdy', color: '#7fb8e8' },
+};
+const TIER_WORDS = ['poor', 'weak', 'fair', 'strong', 'elite'];
+function tierWord(tier: number): string {
+  return BALANCE.PHENOTYPE.TIERS === 5 ? (TIER_WORDS[tier] ?? `${tier}`) : `${tier + 1}/${BALANCE.PHENOTYPE.TIERS}`;
+}
+
+/**
+ * Three stacked micro-bars (Lay / Vigor / Hardy) showing each axis's COARSE
+ * intrinsic tier. Free and visible for every duck, read or not — the phone-it-in
+ * floor. Never shows exact genes (that's GenomeTiles, reader-gated).
+ */
+function PhenoBands({ genome, width = 22 }: { genome: Gene[]; width?: number }) {
+  const tiers = BALANCE.PHENOTYPE.TIERS;
+  const title = PHENO_AXES.map((a) => `${AXIS_META[a].label}: ${tierWord(axisTier(genome, a))}`).join(' · ');
+  return (
+    <span className="inline-flex flex-col justify-center gap-[1.5px]" title={title}>
+      {PHENO_AXES.map((a) => {
+        const t = axisTier(genome, a);
+        const frac = tiers > 1 ? t / (tiers - 1) : 0;
+        return (
+          <span key={a} className="block rounded-[1px]" style={{ width, height: 3, background: '#2a2018' }}>
+            <span className="block h-full rounded-[1px]" style={{ width: `${frac * 100}%`, background: AXIS_META[a].color }} />
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** Coarse band code for a text context (e.g. a <select> option): "Lay4 Vig1 Hdy2". */
+function bandCode(genome: Gene[]): string {
+  return PHENO_AXES.map((a) => `${AXIS_META[a].abbr}${axisTier(genome, a)}`).join(' ');
+}
+
 const GENE_ORDER: Gene[] = ['L', 'V', 'H', 'D'];
 
-/** Flock-browser sort keys (all but `new` read the genome). */
-type SortKey = 'match' | 'good' | 'lay' | 'hardy' | 'new';
+/** Flock-browser sort keys. `match`/`good` read the EXACT genome (reader-gated);
+ *  the band sorts (`lay`/`vigor`/`hardy`) read the free coarse tier, so they work
+ *  on unread ducks too — the pre-reader selection tool. `new` reads the id. */
+type SortKey = 'match' | 'good' | 'lay' | 'vigor' | 'hardy' | 'new';
 const SORT_LABEL: Record<SortKey, string> = {
+  lay: 'Lay band',
+  vigor: 'Vigor band',
+  hardy: 'Hardy band',
   match: 'Target match',
   good: 'Good genes',
-  lay: 'Lay',
-  hardy: 'Hardy',
   new: 'Newest',
 };
 /** Numeric tail of a duck id (e.g. "d12" → 12) for the "Newest" sort. */
@@ -276,9 +318,11 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
           <div key={p.id} className="mb-1.5 rounded bg-[#171009] px-2 py-1.5">
             <div className="flex items-center gap-1.5 text-[11px]">
               <ColorSwatch color={phenotype(dr.genotype)} size={11} />
+              <PhenoBands genome={dr.genome} width={16} />
               <GenomeTiles duck={dr} target={target} size={12} />
               <span className="text-[#5a4d3a]">·</span>
               <ColorSwatch color={phenotype(he.genotype)} size={11} />
+              <PhenoBands genome={he.genome} width={16} />
               <GenomeTiles duck={he} target={target} size={12} />
               <button
                 onClick={() => engine.unpair(p.id)}
@@ -313,7 +357,8 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
             <option value="">drake…</option>
             {drakes.map((d) => (
               <option key={d.id} value={d.id}>
-                {phenotype(d.genotype)} · {qualityLabel(d, target)}
+                {phenotype(d.genotype)} · {bandCode(d.genome)}
+                {d.genomeKnown ? ` · ${qualityLabel(d, target)}` : ''}
               </option>
             ))}
           </select>
@@ -325,7 +370,8 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
             <option value="">hen…</option>
             {hens.map((d) => (
               <option key={d.id} value={d.id}>
-                {phenotype(d.genotype)} · {qualityLabel(d, target)}
+                {phenotype(d.genotype)} · {bandCode(d.genome)}
+                {d.genomeKnown ? ` · ${qualityLabel(d, target)}` : ''}
               </option>
             ))}
           </select>
@@ -427,10 +473,14 @@ export function FlockPanel({
   const sortStat: Record<SortKey, (d: Duck) => number> = {
     match: (d) => targetMatch(d.genome, target),
     good: (d) => goodGeneCount(d.genome),
-    lay: (d) => layMult(d.genome),
-    hardy: (d) => woundResistChance(d.genome),
+    lay: (d) => axisTier(d.genome, 'lay'),
+    vigor: (d) => axisTier(d.genome, 'vigor'),
+    hardy: (d) => axisTier(d.genome, 'hardy'),
     new: (d) => idNum(d),
   };
+  // Only the EXACT-genome sorts (match/good) sink unread ducks — the band sorts
+  // read free public info, so they rank read and unread ducks alike.
+  const exactSort = sortKey === 'match' || sortKey === 'good';
   const shown = ducks
     .filter(
       (d) =>
@@ -440,8 +490,7 @@ export function FlockPanel({
         matchesGeneQuery(d),
     )
     .sort((a, b) => {
-      // 'new' reads ids (always known); genome stats sink unread ducks last.
-      if (sortKey !== 'new') {
+      if (exactSort) {
         const ka = a.genomeKnown ? 0 : 1;
         const kb = b.genomeKnown ? 0 : 1;
         if (ka !== kb) return ka - kb;
@@ -703,6 +752,7 @@ export function FlockPanel({
                         </span>
                       )}
                       <span className="ml-auto flex items-center gap-1.5">
+                        <PhenoBands genome={d.genome} />
                         <GenomeTiles duck={d} target={target} size={13} />
                         <span
                           className="tabular-nums text-[#ffe9a8]"

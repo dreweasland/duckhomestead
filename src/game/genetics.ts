@@ -62,6 +62,45 @@ export function goodGeneCount(genome: Genome): number {
   return genome.reduce((a, g) => a + (g === 'D' ? 0 : 1), 0);
 }
 
+// ── Phenotype band: free, coarse, INTRINSIC (the phone-it-in floor) ──
+/** The three observable performance axes a duck's band reports. */
+export type PhenoAxis = 'lay' | 'vigor' | 'hardy';
+type AxisStat = 'eggOutput' | 'maturationSpeed' | 'woundResist';
+const AXIS_STAT: Record<PhenoAxis, AxisStat> = {
+  lay: 'eggOutput',
+  vigor: 'maturationSpeed',
+  hardy: 'woundResist',
+};
+export const PHENO_AXES: PhenoAxis[] = ['lay', 'vigor', 'hardy'];
+
+/** Best single-gene contribution to a stat (the per-slot ceiling) — the
+ *  normaliser so a genome maxed on this axis scores 1.0. */
+function maxStatPerGene(stat: AxisStat): number {
+  return Math.max(0, ...GENES.map((g) => G.STAT_PER_GENE[g]?.[stat] ?? 0));
+}
+
+/**
+ * Intrinsic 0..1 potential of a genome on an axis — read straight off the
+ * STAT_PER_GENE profile, so it reflects the genome's CEILING, never its live
+ * (nutrition/water/module-scaled) output. all-of-the-axis-gene → 1.0; all-Dud → 0.
+ */
+export function axisScore(genome: Genome, axis: PhenoAxis): number {
+  const stat = AXIS_STAT[axis];
+  const max = maxStatPerGene(stat) * genome.length;
+  if (max <= 0) return 0;
+  return Math.min(1, sumStat(genome, stat) / max);
+}
+
+/**
+ * Coarse band tier (0..PHENOTYPE.TIERS-1) for an axis — the free, always-visible
+ * read. Bucketed via AXIS_THRESHOLDS; deliberately lossy so it can never be
+ * inverted back to the exact genome (which stays gene-reader-gated).
+ */
+export function axisTier(genome: Genome, axis: PhenoAxis): number {
+  const score = axisScore(genome, axis);
+  return BALANCE.PHENOTYPE.AXIS_THRESHOLDS.reduce((n, t) => n + (score >= t ? 1 : 0), 0);
+}
+
 /** Slots matching the target profile (0..SLOTS) — distance-to-god-clone, inverted. */
 export function targetMatch(genome: Genome, target: Genome): number {
   let n = 0;
