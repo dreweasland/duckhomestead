@@ -15,6 +15,7 @@ import {
   incoming,
   windowOpen,
 } from '../src/game/predators';
+import { waterWoundMult } from '../src/game/water';
 import {
   buildDeterrent,
   buildSecureCoop,
@@ -240,13 +241,15 @@ describe('a landed attack wounds (it does not kill)', () => {
 });
 
 describe('wound → escalation → treat (the checkpoint)', () => {
-  it('an untended wound escalates to a permanent loss after WOUND_ESCALATE_SEC', () => {
+  it('an untended wound escalates to a permanent loss after the recovery window', () => {
     const s = flock(3);
     s.ducks[0].wounded = true;
     s.ducks[0].woundElapsed = 0;
     // Park the schedule so no NEW attacks confound the count.
     s.predators.owl.timeToNextWindow = 1e9;
-    runPredators(s, P.WOUND_ESCALATE_SEC + 1, { mode: 'online', rng: never });
+    // The window is the base timer stretched/tightened by water access (Phase 4d).
+    const escalateAt = P.WOUND_ESCALATE_SEC * waterWoundMult(s);
+    runPredators(s, escalateAt + 1, { mode: 'online', rng: never });
     expect(s.ducks.find((d) => d.id === 'd0')).toBeUndefined();
     expect(events(s).some((e) => e.kind === 'escalated')).toBe(true);
   });

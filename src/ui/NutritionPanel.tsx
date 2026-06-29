@@ -2,8 +2,17 @@ import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from '../game/state';
+import {
+  canBuildWaterFeatures,
+  waterAccess,
+  waterCapacity,
+  waterConditionMult,
+  waterStatus,
+  waterWoundMult,
+} from '../game/water';
+import { playPlace } from '../audio/sfx';
 import { fmt } from './format';
-import { CloseIcon, ForageIcon, RESOURCE_ICON } from './icons';
+import { CloseIcon, ForageIcon, RESOURCE_ICON, WaterIcon } from './icons';
 
 const N = BALANCE.NUTRITION;
 const B = BALANCE.BREEDING;
@@ -103,6 +112,81 @@ function RationSliders({
   );
 }
 
+/** Water-access readout: structural capacity vs flock, its effects, and the
+ *  build-feature lever — so the player SEES the flock outgrowing its water. */
+function WaterCard({ engine, state }: { engine: GameEngine; state: GameState }) {
+  const cap = waterCapacity(state);
+  const flock = state.ducks.length;
+  const access = waterAccess(state);
+  const status = waterStatus(access);
+  const condMult = waterConditionMult(state);
+  const woundMult = waterWoundMult(state);
+  const canBuild = canBuildWaterFeatures(state);
+  const cost = BALANCE.WATER.FEATURE_COST_EGGS;
+  const featCap = BALANCE.WATER.FEATURE_CAPACITY;
+  const color = status === 'good' ? '#8fe388' : status === 'ok' ? '#e8c45a' : '#e8835a';
+  const label =
+    !Number.isFinite(access) || access >= 2
+      ? 'abundant'
+      : status === 'good'
+        ? 'comfortable'
+        : status === 'ok'
+          ? 'getting tight'
+          : 'thirsty — outgrowing the water';
+  // Bar on a 0..2 access scale (50% = "enough"); a tick marks the neutral point.
+  const fillPct = Number.isFinite(access) ? Math.min(100, access * 50) : 100;
+  const multColor = (m: number) => (m >= 1 ? '#8fe388' : m >= 0.85 ? '#e8c45a' : '#e8835a');
+
+  return (
+    <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">
+      <div className="mb-1.5 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+          <WaterIcon size={13} /> Water access
+        </div>
+        <span className="text-xs font-bold tabular-nums" style={{ color }}>
+          {cap} cap / {flock} {flock === 1 ? 'duck' : 'ducks'} · {label}
+        </span>
+      </div>
+      <div className="relative mb-1.5 h-2 overflow-hidden rounded-full bg-[#0f0b07]">
+        <div className="h-full rounded-full" style={{ width: `${fillPct}%`, background: color }} />
+        {/* neutral (ratio 1.0) tick */}
+        <div className="absolute inset-y-0 left-1/2 w-px bg-[#5a4d3a]" />
+      </div>
+      <div className="text-[10px] text-[#9a8a6a]">
+        Condition regen{' '}
+        <span className="font-bold tabular-nums" style={{ color: multColor(condMult) }}>
+          ×{condMult.toFixed(2)}
+        </span>{' '}
+        · wound recovery{' '}
+        <span className="font-bold tabular-nums" style={{ color: multColor(woundMult) }}>
+          ×{woundMult.toFixed(2)}
+        </span>
+      </div>
+      {canBuild ? (
+        <button
+          onClick={() => {
+            if (engine.buildWaterFeature().ok) playPlace();
+          }}
+          disabled={state.resources.eggs < cost}
+          className={`mt-2 w-full rounded-md px-3 py-1.5 text-xs font-bold transition ${
+            state.resources.eggs >= cost
+              ? 'bg-[#26323a] text-[#a8d0e8] hover:bg-[#2e3c46]'
+              : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+          }`}
+        >
+          Build water feature · {cost} eggs (+{featCap} cap)
+        </button>
+      ) : (
+        status !== 'good' && (
+          <div className="mt-1.5 text-[10px] text-[#7a6a4a]">
+            Unlock The Pond for a big jump in water capacity.
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 export function NutritionPanel({
   engine,
   state,
@@ -165,6 +249,8 @@ export function NutritionPanel({
                   <div className="mt-0.5 text-[10px] text-[#9a8a6a]">{condPct}% reserve</div>
                 </div>
               </div>
+
+              <WaterCard engine={engine} state={state} />
 
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
                 Nutrient balance ({adults} adult{adults > 1 ? 's' : ''})

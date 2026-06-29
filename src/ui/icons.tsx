@@ -341,6 +341,22 @@ export const WoundIcon = (p: PixProps) => (
   />
 );
 
+/** Water access — a droplet (the pond's signature). */
+export const WaterIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ b: '#5b9bd5', d: '#3a6ea5', h: '#a9d3f0' }}
+    rows={[
+      '..h..',
+      '..b..',
+      '.bhb.',
+      'bbbbb',
+      'bbdbb',
+      '.bbb.',
+    ]}
+  />
+);
+
 // ── Panel glyphs (side-panel buttons) ───────────────────────────────
 /** Nutrition — a feed sprout (the ration / grid). */
 export const NutritionIcon = (p: PixProps) => (

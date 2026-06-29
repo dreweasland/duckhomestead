@@ -11,6 +11,7 @@ import {
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { GameState, Module, Rarity, Resource, Station } from './state';
 import { isBlockedTile, rackSockets, secureCapacity, seedFlock, stationAt, zoneUnlocked } from './state';
+import { canBuildWaterFeatures } from './water';
 
 /** Output/throughput multiplier for a station at a given level. */
 export function UPGRADE_OUTPUT(level: number): number {
@@ -455,6 +456,21 @@ export function buildSecureCoop(state: GameState): ActionResult<{ secureCoops: n
   state.resources.eggs -= cost;
   state.secureCoops += 1;
   return done({ secureCoops: state.secureCoops });
+}
+
+/**
+ * Build one water feature — adds WATER.FEATURE_CAPACITY structural capacity (the
+ * player's lever to keep water access ahead of a growing flock). Gated behind an
+ * unlocked water zone beyond the yard (the pond is the water-scaling era). It
+ * holds once built — a scaling checkpoint like housing, never a per-cycle refill.
+ */
+export function buildWaterFeature(state: GameState): ActionResult<{ waterFeatures: number }> {
+  if (!canBuildWaterFeatures(state)) return fail('Unlock the Pond first');
+  const cost = BALANCE.WATER.FEATURE_COST_EGGS;
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.waterFeatures += 1;
+  return done({ waterFeatures: state.waterFeatures });
 }
 
 /** Mark/unmark a duck as secured (excluded from targeting), bounded by slots. */

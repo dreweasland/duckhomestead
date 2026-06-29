@@ -1,6 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
 import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
+import { waterConditionMult } from './water';
 import { adultLayers, AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
 
 const N = BALANCE.NUTRITION;
@@ -108,7 +109,10 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const minEggSat = Math.min(...EGG_AXES.map((a) => satisfaction[a]));
   const target = (hasMill ? clamp01(minEggSat) : 0) * N.CONDITION_MAX;
   if (state.condition < target) {
-    const rise = N.CONDITION_RISE_PER_S * conditionRegenMult(state);
+    // Phase 4d: water access scales regen — thirsty flocks recover slower, well-
+    // watered ones faster (bounded). A multiplier alongside the rack regen bonus;
+    // the satisfaction/throttle math above is untouched.
+    const rise = N.CONDITION_RISE_PER_S * conditionRegenMult(state) * waterConditionMult(state);
     state.condition = Math.min(target, state.condition + rise * step);
   } else if (state.condition > target) {
     const severity = clamp01(1 - minEggSat);

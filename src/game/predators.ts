@@ -6,6 +6,7 @@ import {
   type PredatorEvent,
   type PredatorState,
 } from './state';
+import { waterWoundMult } from './water';
 
 const P = BALANCE.PREDATORS;
 
@@ -227,19 +228,22 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
 }
 
 /** Age every wound by raw `dt`; escalate any that pass the recovery window into
- *  a permanent loss (subject to the offline mercy rail). Runs online & offline. */
+ *  a permanent loss (subject to the offline mercy rail). Runs online & offline.
+ *  Phase 4d: water access stretches/tightens the recovery window (the timer
+ *  multiplier stays > 0, so there is always time to treat — no new death path). */
 function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void {
+  const threshold = P.WOUND_ESCALATE_SEC * waterWoundMult(state);
   for (const d of [...state.ducks]) {
     if (!d.wounded) continue;
     d.woundElapsed = (d.woundElapsed ?? 0) + dt;
-    if (d.woundElapsed < P.WOUND_ESCALATE_SEC) continue;
+    if (d.woundElapsed < threshold) continue;
     if (permitPermanentLoss(opts)) {
       emit(state, { kind: 'escalated', duckId: d.id });
       removeDuck(state, d.id);
     } else {
       // Mercy rail (offline budget spent): hold at the brink. The player returns
       // to a wounded duck to TREAT, not a corpse.
-      d.woundElapsed = P.WOUND_ESCALATE_SEC;
+      d.woundElapsed = threshold;
     }
   }
 }

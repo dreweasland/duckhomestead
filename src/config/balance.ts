@@ -235,6 +235,35 @@ export const BALANCE = {
       energyPerCycle: 2, // flat energy yield — must not scale with anything
       cycleSeconds: 4,
     },
+    /** The Pond (Phase 4d): second unlockable zone; its signature is water access. */
+    POND: {
+      rankRequired: 16,
+      eggCost: 5000,
+      tileRegionSize: { width: 6, height: 8 },
+    },
+  },
+
+  // ── Phase 4d: water access (the pond's signature) ───────────────────
+  // Structural capacity (BUILT, never refilled per-cycle), scored as ONE ratio on
+  // a saturation curve: access = builtWaterCapacity / flockSize. Below 1 a gentle
+  // throttle (the need); at 1 neutral; above 1 a bounded, diminishing resilience
+  // bonus (the reward). It only ever modifies flock CONDITION regen and the 4c
+  // wound-escalation timer — never the nutrition axes, never a new death path.
+  WATER: {
+    /** Capacity present from the start (the yard's decorative pond) — small flocks
+     *  are never punished. Lives on the yard ZoneDef's `water.baseCapacity`. */
+    YARD_BASELINE: 6,
+    /** Capacity the pond unlock grants (the big structural jump). */
+    POND_BASE: 24,
+    /** Buildable water feature to scale capacity further (pond-era content). */
+    FEATURE_CAPACITY: 8,
+    FEATURE_COST_EGGS: 200,
+    /** Saturation-curve anchors (value of the modifier at access ratios 0.5 / 2.0;
+     *  it is 1.0 at ratio 1.0 and saturates flat beyond 2.0). */
+    CONDITION_REGEN_AT_HALF: 0.6, // regen mult at access 0.5 (decline)
+    CONDITION_REGEN_AT_DOUBLE: 1.4, // regen mult at access 2.0 (bounded reward)
+    WOUND_TIMER_AT_HALF: 0.7, // escalation-timer mult at access 0.5 (less time)
+    WOUND_TIMER_AT_DOUBLE: 1.5, // escalation-timer mult at access 2.0 (more time to treat)
   },
 
   // ── Phase 4c: predators (the risk layer) ────────────────────────────
@@ -515,6 +544,11 @@ export interface ForageDef {
   energyPerCycle: number;
   cycleSeconds: number;
 }
+/** A zone's contribution to structural water capacity (Phase 4d). Present on the
+ *  yard (baseline) and the pond (the big jump); a future water zone is just config. */
+export interface WaterDef {
+  baseCapacity: number;
+}
 export interface ZoneDef {
   id: string;
   name: string;
@@ -526,6 +560,8 @@ export interface ZoneDef {
   unlock?: { rankRequired: number; eggCost: number };
   /** Signature node that activates on unlock (the pasture's free-range forage). */
   forage?: ForageDef;
+  /** Water capacity this zone provides while unlocked (the pond's signature). */
+  water?: WaterDef;
 }
 
 export const ZONE_DEFS: ZoneDef[] = [
@@ -534,6 +570,8 @@ export const ZONE_DEFS: ZoneDef[] = [
     name: 'Yard',
     grid: BALANCE.GRID,
     blocked: BALANCE.POND,
+    // The yard's decorative pond is the flock's baseline water.
+    water: { baseCapacity: BALANCE.WATER.YARD_BASELINE },
   },
   {
     id: 'backPasture',
@@ -544,6 +582,16 @@ export const ZONE_DEFS: ZoneDef[] = [
       eggCost: BALANCE.ZONES.BACK_PASTURE.eggCost,
     },
     forage: BALANCE.ZONES.FORAGE,
+  },
+  {
+    id: 'pond',
+    name: 'The Pond',
+    grid: BALANCE.ZONES.POND.tileRegionSize,
+    unlock: {
+      rankRequired: BALANCE.ZONES.POND.rankRequired,
+      eggCost: BALANCE.ZONES.POND.eggCost,
+    },
+    water: { baseCapacity: BALANCE.WATER.POND_BASE },
   },
 ];
 

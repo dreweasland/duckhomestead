@@ -3,6 +3,7 @@ import {
   autoFillRack,
   buildDeterrent,
   buildSecureCoop,
+  buildWaterFeature,
   repairDeterrents,
   collectAll,
   collectStation,
@@ -256,20 +257,16 @@ export class GameEngine {
   unlockZone(zoneId: string): ActionResult<{ name: string }> {
     const r = unlockZoneAction(this.state, zoneId);
     if (r.ok) {
-      const forage = !!zoneDef(zoneId)?.forage;
+      const def = zoneDef(zoneId);
+      const description = def?.forage
+        ? 'New buildable space — and free-range forage now drips energy into storage.'
+        : def?.water
+          ? 'New buildable space — and a big jump in water access (deeper flock condition + more time to treat wounds). Build water features to keep it ahead of the flock.'
+          : 'New buildable space for more coops and stations.';
       this.emitDing({
         newRank: this.state.rank,
         levelsGained: 0,
-        milestones: [
-          {
-            rank: this.state.rank,
-            title: r.value.name,
-            description: forage
-              ? 'New buildable space — and free-range forage now drips energy into storage.'
-              : 'New buildable space for more coops and stations.',
-            kind: 'zone',
-          },
-        ],
+        milestones: [{ rank: this.state.rank, title: r.value.name, description, kind: 'zone' }],
       });
     }
     this.notify();
@@ -435,6 +432,12 @@ export class GameEngine {
   /** Repair the deterrent floor back to pristine (active-only upkeep). */
   repairDeterrents(): ActionResult<{ cost: number }> {
     const r = repairDeterrents(this.state);
+    this.notify();
+    return r;
+  }
+  /** Build a water feature (scale structural water capacity). */
+  buildWaterFeature(): ActionResult<{ waterFeatures: number }> {
+    const r = buildWaterFeature(this.state);
     this.notify();
     return r;
   }

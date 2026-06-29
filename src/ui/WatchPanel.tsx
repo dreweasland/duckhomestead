@@ -1,6 +1,7 @@
 import { BALANCE, PREDATOR_DEFS } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { currentThreat } from '../game/predators';
+import { waterWoundMult } from '../game/water';
 import { defenseFloor, secureCapacity, type GameState } from '../game/state';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, EggIcon, HealIcon, NetIcon, OwlIcon, ShieldIcon } from './icons';
@@ -211,8 +212,10 @@ export function WatchPanel({
             </div>
             <div className="flex flex-col gap-1.5">
               {wounded.map((d) => {
-                const left = Math.max(0, P.WOUND_ESCALATE_SEC - (d.woundElapsed ?? 0));
-                const frac = left / P.WOUND_ESCALATE_SEC;
+                // Phase 4d: the effective escalation window stretches/tightens with water access.
+                const escalateAt = P.WOUND_ESCALATE_SEC * waterWoundMult(state);
+                const left = Math.max(0, escalateAt - (d.woundElapsed ?? 0));
+                const frac = escalateAt > 0 ? left / escalateAt : 0;
                 return (
                   <div key={d.id} className="rounded bg-[#171009] px-2.5 py-1.5">
                     <div className="flex items-center gap-2 text-[11px]">

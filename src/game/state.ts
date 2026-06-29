@@ -250,6 +250,12 @@ export interface GameState {
   /** Deterrent integrity (0..1): the floor scales with it. Worn by threat windows
    *  + breaches; restored by the Repair action. The defense upkeep loop. */
   deterrentIntegrity: number;
+
+  // ── Phase 4d: water access ──
+  /** Built water features (count) — each adds WATER.FEATURE_CAPACITY to the
+   *  homestead's structural water capacity. Yard baseline + pond base come from
+   *  zone defs; this is the player's scaling lever. Structural, never consumed. */
+  waterFeatures: number;
   /** Built Secure Coops (count) — each adds SECURE_SLOTS_PER_COOP secure slots. */
   secureCoops: number;
   /** First-contact grace: predators only ever resolve their first window once the
@@ -365,6 +371,7 @@ export function initialState(now: number): GameState {
     deterrents: 0,
     deterrentIntegrity: 1,
     secureCoops: 0,
+    waterFeatures: 0,
     predatorsIntroduced: false,
     lastSeen: now,
   };

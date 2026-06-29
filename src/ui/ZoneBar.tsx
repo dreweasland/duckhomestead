@@ -64,6 +64,8 @@ export function ZoneUnlockCard({
       <p className="mx-auto mt-1 max-w-xs text-[11px] text-[#9a8a6a]">
         New buildable space for more coops and stations.
         {zone.forage && ' Its free-range forage drips passive energy into your shared storage.'}
+        {zone.water &&
+          ' Its water access deepens flock condition and buys more time to treat wounds — and you can build water features to scale it.'}
       </p>
 
       <div className="mt-3 flex items-center justify-center gap-4 text-xs">

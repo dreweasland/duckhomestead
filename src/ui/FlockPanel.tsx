@@ -3,6 +3,7 @@ import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { colorOdds, expectedVigor, populationMeanVigor } from '../game/genetics';
 import { COLORS, coopCapacity, phenotype, secureCapacity, type Color, type Duck, type GameState } from '../game/state';
+import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, HealIcon, ShieldIcon, WoundIcon } from './icons';
 
@@ -350,7 +351,11 @@ export function FlockPanel({
                         <span
                           className="inline-flex items-center"
                           title={`Wounded — ${Math.ceil(
-                            Math.max(0, BALANCE.PREDATORS.WOUND_ESCALATE_SEC - (d.woundElapsed ?? 0)),
+                            Math.max(
+                              0,
+                              BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(state) -
+                                (d.woundElapsed ?? 0),
+                            ),
                           )}s to escalate. Treat to save.`}
                         >
                           <WoundIcon size={11} />

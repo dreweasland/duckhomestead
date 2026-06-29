@@ -59,6 +59,9 @@ export function deserialize(raw: string, now: number): GameState {
       deterrents: parsed.deterrents ?? 0,
       deterrentIntegrity: parsed.deterrentIntegrity ?? 1,
       secureCoops: parsed.secureCoops ?? 0,
+      // Phase 4d water: pre-4d saves load with no water features (yard baseline
+      // only) and the pond locked (its zone entry is merged in via `zones` above).
+      waterFeatures: parsed.waterFeatures ?? 0,
       // Pre-4c saves (and any not-yet-introduced save) keep the first-contact
       // grace: predators won't resolve their first window until the player is
       // back online to see them. So a returning player is never first-exposed
