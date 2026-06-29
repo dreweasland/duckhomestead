@@ -35,7 +35,7 @@ import { TendIcon } from './ui/icons';
 import { LootBanner } from './ui/LootBanner';
 import { ModulesPanel } from './ui/ModulesPanel';
 import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
-import { StationPanel } from './ui/StationPanel';
+import { StationBar } from './ui/StationBar';
 
 /** Per-browser flag: the first-run welcome pop-up shows once, then never again. */
 const WELCOME_SEEN_KEY = 'duck-homestead-welcome-seen';
@@ -45,18 +45,6 @@ const WELCOME_SEEN_KEY = 'duck-homestead-welcome-seen';
  *  pinned to this so they line up with the right column's edge regardless of
  *  their own content width (e.g. a long hint that would otherwise stretch it). */
 const COLS_WIDTH = MAX_BOARD_WIDTH + 16 + 16 + 300;
-
-/** Position the station popover near the click, clamped to the viewport; opens
- *  upward for clicks in the lower half so it never runs off the bottom. */
-function stationPopStyle(a: { x: number; y: number }): CSSProperties {
-  const W = 300;
-  const M = 8;
-  const left = Math.max(M, Math.min(a.x + 14, window.innerWidth - W - M));
-  const openUp = a.y > window.innerHeight * 0.55;
-  return openUp
-    ? { left, bottom: Math.max(M, window.innerHeight - a.y + 14) }
-    : { left, top: a.y + 14 };
-}
 
 export default function App() {
   const [ding, setDing] = useState<DingEvent | null>(null);
@@ -128,8 +116,6 @@ export default function App() {
   }, [salvage]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Screen position of the last board click — anchors the station popover.
-  const [popAnchor, setPopAnchor] = useState<{ x: number; y: number } | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
   const [tendFlash, setTendFlash] = useState<{ id: number; xp: number } | null>(null);
@@ -289,17 +275,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Station controls as a popover anchored at the click — not a column panel.
-          No backdrop, so clicking another station just re-anchors it; Escape, the
-          × button, or clicking an empty tile dismisses it. */}
-      {selected && popAnchor && (
-        <div
-          className="fixed z-50 max-h-[80vh] w-[300px] max-w-[92vw] overflow-y-auto rounded-lg shadow-2xl ring-2 ring-[#3a2e22]"
-          style={stationPopStyle(popAnchor)}
-        >
-          <StationPanel engine={engine} state={state} station={selected} onClose={() => setSelectedId(null)} />
-        </div>
-      )}
 
       {/* The predator telegraph is pinned (fixed) to the very top; reserve flow
           space for it so it never overlaps the zone tabs / HUD beneath it. */}
@@ -316,10 +291,7 @@ export default function App() {
         {/* Canvas — the board. */}
         <div className="flex flex-col items-center gap-3">
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
-          <div
-            className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]"
-            onClickCapture={(e) => setPopAnchor({ x: e.clientX, y: e.clientY })}
-          >
+          <div className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
             {/* Status pills tuck into the board's empty top headroom (the canvas
                 reserves space there) — present, but adding no height. Yard only:
                 Auto-Haul / Tend-All are station/tending milestones, irrelevant on
@@ -373,6 +345,15 @@ export default function App() {
                 })()}
               </ErrorBoundary>
             </div>
+            {/* Selected-station controls: a slim strip on the board's bottom edge. */}
+            {selected && selected.zoneId === activeZone && (
+              <StationBar
+                engine={engine}
+                state={state}
+                station={selected}
+                onClose={() => setSelectedId(null)}
+              />
+            )}
           </div>
           {!zoneUnlocked(state, activeZone) && (
             <ZoneUnlockCard engine={engine} state={state} zoneId={activeZone} />
