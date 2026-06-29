@@ -148,8 +148,8 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
 /** A flock that clears all three tier-0 champion requirements. */
 function championRun(): GameState {
   const s = initialState(0);
-  // 60 ducks (> tier-0 target 50), mean vigor 1.7 (> tier-0 gate 1.5), all colours.
-  s.ducks = Array.from({ length: 60 }, (_, i) => duck(`c${i}`, 1.7));
+  // 120 ducks (> tier-0 target 100), mean vigor 1.7 (> tier-0 gate 1.5), all colours.
+  s.ducks = Array.from({ length: 120 }, (_, i) => duck(`c${i}`, 1.7));
   s.dexSeen = ['black', 'blue', 'splash'];
   return s;
 }
@@ -165,7 +165,7 @@ describe('champion goal: three concrete requirements', () => {
     expect(g.vigor.value).toBeCloseTo(1.0, 6);
     expect(g.vigor.met).toBe(false); // 1.0 < gate 1.5
     expect(g.size.value).toBe(2);
-    expect(g.size.met).toBe(false); // 2 < target 50
+    expect(g.size.met).toBe(false); // 2 < target 100
     expect(g.readiness).toBeLessThan(1);
   });
 
@@ -188,7 +188,7 @@ describe('champion goal: three concrete requirements', () => {
   });
 
   it('currency is ≥ the base grant and scales with BOTH size and vigor overshoot', () => {
-    const champ = championRun(); // 60 ducks vs target 50, vigor 1.7 vs gate 1.5
+    const champ = championRun(); // 120 ducks vs target 100, vigor 1.7 vs gate 1.5
     const Pp = BALANCE.PRESTIGE;
     const expected = Math.round(
       Pp.CURRENCY_AT_THRESHOLD *

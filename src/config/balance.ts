@@ -468,8 +468,9 @@ export const BALANCE = {
     VIGOR_GATE_PER_TIER: 0.05,
     VIGOR_GATE_MAX: 1.9,
     /** Flock-size target at tier 0; each tier multiplies it by SIZE_GROWTH.
-     *  Tuned to be a real grind, not a formality (≈50, 75, 113, 169, …). */
-    SIZE_BASE: 50,
+     *  A real grind that forces deep coop upgrades, not a formality
+     *  (≈100, 150, 225, 337, …). */
+    SIZE_BASE: 100,
     SIZE_GROWTH: 1.5,
     /** Legacy currency = CURRENCY_AT_THRESHOLD scaled by BOTH overshoots:
      *  (size/target)^OVERSHOOT_EXP × (meanVigor/gate)^VIGOR_EXP — so a
