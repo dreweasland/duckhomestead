@@ -147,6 +147,9 @@ export default function App() {
         if (r.ok) {
           playPlace();
           setSelectedId(stationAt(engine.state, x, y, activeZone)?.id ?? null);
+          // Disarm build mode after a successful place so a second click on the
+          // just-placed station doesn't accidentally upgrade it (spending eggs).
+          setBuildType(null);
         }
         return;
       }
