@@ -20,6 +20,7 @@ import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/i
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
+import { StatusPills } from './ui/StatusPills';
 import { useGame } from './game/useGame';
 import { GameCanvas, MAX_BOARD_WIDTH } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
@@ -206,6 +207,7 @@ export default function App() {
         {/* Canvas + the station box directly under it (close to the tiles). */}
         <div className="flex flex-col items-center gap-3">
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
+          <StatusPills state={state} />
           <div className="rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
             {/* Pin to the widest zone so swapping to a narrower one (pasture/pond)
                 centers the board instead of shrinking the whole column. */}

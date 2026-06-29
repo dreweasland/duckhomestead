@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { isMuted, setMuted } from '../audio/sfx';
-import { BALANCE } from '../config/balance';
 import type { GameState, Resource } from '../game/state';
 import { rankProgress, xpForLevel } from '../game/rank';
 import { fmt } from './format';
-import { CartIcon, DuckIcon, LockIcon, MuteIcon, RESOURCE_ICON, SpeakerIcon, TendIcon } from './icons';
+import { DuckIcon, MuteIcon, RESOURCE_ICON, SpeakerIcon } from './icons';
 import { RankPanel } from './RankPanel';
 
 // Eggs (currency) + the five nutrition ingredients. `pellets` is a retired
@@ -95,44 +94,8 @@ export function HUD({ state }: { state: GameState }) {
           <span className="font-bold text-[#b59a5a]">See unlocks →</span>
         </div>
       </button>
-
-      {/* Auto-haul status */}
-      <div
-        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs ${
-          state.autoHaulUnlocked ? 'bg-[#2e2746] text-[#cdbcff]' : 'bg-[#241c14] text-[#7a6a4a]'
-        }`}
-      >
-        {state.autoHaulUnlocked ? (
-          <>
-            <CartIcon size={16} title="Auto-Haul Cart" />
-            <span>Auto-Haul Cart active — output flows automatically.</span>
-          </>
-        ) : (
-          <>
-            <LockIcon size={13} />
-            <span>Auto-Haul Cart unlocks at Rank {BALANCE.MILESTONE_AUTOHAUL_RANK}.</span>
-          </>
-        )}
-      </div>
-
-      {/* Tending Whistle status */}
-      <div
-        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs ${
-          state.tendAllUnlocked ? 'bg-[#1f3326] text-[#bfe8a8]' : 'bg-[#241c14] text-[#7a6a4a]'
-        }`}
-      >
-        {state.tendAllUnlocked ? (
-          <>
-            <TendIcon size={15} title="Tending Whistle" />
-            <span>Tending Whistle active — tend every ready station at once.</span>
-          </>
-        ) : (
-          <>
-            <LockIcon size={13} />
-            <span>Tending Whistle unlocks at Rank {BALANCE.MILESTONE_TENDALL_RANK}.</span>
-          </>
-        )}
-      </div>
+      {/* Auto-Haul / Tending-Whistle status now live as pills above the board
+          (see ui/StatusPills) — closer to where they matter, less HUD clutter. */}
     </div>
   );
 }
