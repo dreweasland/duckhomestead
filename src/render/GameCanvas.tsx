@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text, TextStyle, type Texture } from 'pixi.js';
 import { playPlace } from '../audio/sfx';
 import { STATION_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
 import { BALANCE } from '../config/balance';
 import { stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
-import { isBlockedTile, stationAt, type Resource, type Station } from '../game/state';
+import { isBlockedTile, phenotype, stationAt, type Color, type Resource, type Station } from '../game/state';
 import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './assets';
 
 const TILE = 56;
@@ -87,7 +87,14 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
       .init({ width: W, height: H, background: 0x2a2018, antialias: false })
       .then(async () => {
         if (disposed) return; // unmounted mid-init; cleanup will destroy.
-        let textures: GameTextures = { stations: {}, millSails: null, ducks: [], ground: [], water: [] };
+        let textures: GameTextures = {
+          stations: {},
+          millSails: null,
+          ducks: [],
+          duckTints: { black: [], blue: [], splash: [] },
+          ground: [],
+          water: [],
+        };
         try {
           textures = await loadTextures();
         } catch {
@@ -355,18 +362,31 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
 
         // Ambient ducks: cosmetic only (not game state). A small flock that
         // grows with the number of coops in THIS zone and free-roams the grass.
-        interface Duck { sp: Sprite; x: number; y: number; tx: number; ty: number; facing: number; frame: number; frameT: number; pause: number }
+        interface Duck { sp: Sprite; x: number; y: number; tx: number; ty: number; facing: number; frame: number; frameT: number; pause: number; color: Color | null }
         const ducks: Duck[] = [];
         const DUCK_SCALE = SCALE * 0.78; // ducks read a touch smaller than tiles
         const rand = (a: number, b: number) => a + Math.random() * (b - a);
         const haveDucks = textures.ducks.some(Boolean);
+        // Each ambient duck takes a colour sampled from the real flock, so the
+        // wanderers read as the player's blue/black/splash Swedish ducks (or the
+        // yellow base when there's no flock).
+        const pickFlockColor = (): Color | null => {
+          const flock = engine.state.ducks;
+          if (flock.length === 0) return null;
+          return phenotype(flock[Math.floor(Math.random() * flock.length)].genotype);
+        };
+        const frameTex = (color: Color | null, frame: number): Texture => {
+          const tinted = color ? textures.duckTints[color]?.[frame] : undefined;
+          return tinted ?? textures.ducks[frame] ?? textures.ducks[0];
+        };
         const spawnDuck = (): Duck => {
-          const sp = new Sprite(textures.ducks[0]);
+          const color = pickFlockColor();
+          const sp = new Sprite(frameTex(color, 0));
           sp.anchor.set(0.5, 1);
           sp.scale.set(DUCK_SCALE);
           duckLayer.addChild(sp);
           const x = rand(fieldX0, fieldX1), y = rand(fieldY0, fieldY1);
-          return { sp, x, y, tx: rand(fieldX0, fieldX1), ty: rand(fieldY0, fieldY1), facing: 1, frame: 0, frameT: 0, pause: 0 };
+          return { sp, x, y, tx: rand(fieldX0, fieldX1), ty: rand(fieldY0, fieldY1), facing: 1, frame: 0, frameT: 0, pause: 0, color };
         };
 
         const render = () => {
@@ -530,7 +550,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
                   if (d.frameT > 0.18) {
                     d.frameT = 0;
                     d.frame ^= 1;
-                    d.sp.texture = textures.ducks[d.frame] ?? textures.ducks[0];
+                    d.sp.texture = frameTex(d.color, d.frame);
                   }
                 }
               }

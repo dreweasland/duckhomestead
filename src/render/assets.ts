@@ -1,5 +1,6 @@
 import { Assets, Texture } from 'pixi.js';
 import type { StationType } from '../config/balance';
+import { COLORS, type Color } from '../game/state';
 
 /**
  * Sprite-loading pipeline. Station/duck art is hand-drawn pixel art baked into
@@ -40,8 +41,80 @@ export interface GameTextures {
   stations: Partial<Record<StationType, Texture>>;
   millSails: Texture | null;
   ducks: Texture[];
+  /** Per-phenotype recolored duck frames (black/blue/splash Swedish), so the
+   *  ambient ducks reflect the flock's colors. Falls back to `ducks` if recolor
+   *  fails. */
+  duckTints: Record<Color, Texture[]>;
   ground: Texture[];
   water: Texture[];
+}
+
+// ── Duck recoloring (Phase 5 polish) ─────────────────────────────────
+// The baked duck sprite's BODY is exactly three yellow shades; beak/eye/legs are
+// separate. So we exact-match the body pixels and swap in three shades of the
+// flock's body color (orange bill + legs stay — Swedish ducks have those too).
+type RGB = [number, number, number];
+const DUCK_BODY: RGB[] = [
+  [246, 212, 60], // C.duck  — main body
+  [224, 182, 42], // C.duckD — wing/tail shade
+  [255, 236, 150], // C.duckH — belly highlight
+];
+/** Body color per phenotype (matches the Flock panel swatches). */
+const DUCK_BODY_COLOR: Record<Color, RGB> = {
+  black: [56, 56, 66],
+  blue: [91, 122, 157],
+  splash: [174, 190, 210],
+};
+const clampByte = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+const darker = (c: RGB, f: number): RGB => [clampByte(c[0] * f), clampByte(c[1] * f), clampByte(c[2] * f)];
+const lighter = (c: RGB, t: number): RGB =>
+  [clampByte(c[0] + (255 - c[0]) * t), clampByte(c[1] + (255 - c[1]) * t), clampByte(c[2] + (255 - c[2]) * t)];
+
+function loadImage(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+/** Recolor one duck frame's body to `body`, returning a crisp pixel texture. */
+function recolorDuck(img: HTMLImageElement, body: RGB): Texture | null {
+  try {
+    const w = img.naturalWidth || 16;
+    const h = img.naturalHeight || 16;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h);
+    const px = data.data;
+    const shades: RGB[] = [body, darker(body, 0.78), lighter(body, 0.45)];
+    const near = (a: number, b: number) => Math.abs(a - b) <= 4;
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3] === 0) continue;
+      for (let k = 0; k < DUCK_BODY.length; k++) {
+        const f = DUCK_BODY[k];
+        if (near(px[i], f[0]) && near(px[i + 1], f[1]) && near(px[i + 2], f[2])) {
+          const t = shades[k];
+          px[i] = t[0];
+          px[i + 1] = t[1];
+          px[i + 2] = t[2];
+          break;
+        }
+      }
+    }
+    ctx.putImageData(data, 0, 0);
+    const tex = Texture.from(canvas);
+    tex.source.scaleMode = 'nearest';
+    return tex;
+  } catch {
+    return null;
+  }
 }
 
 /** Sample a texture with no smoothing — crisp pixels when scaled up. */
@@ -88,7 +161,19 @@ export async function loadTextures(): Promise<GameTextures> {
     }),
   ]);
 
-  return { stations, millSails, ducks, ground, water };
+  // Recolored ambient-duck frames per phenotype (from the raw PNGs, so we have
+  // pixel access). Falls back gracefully to the yellow base if recolor fails.
+  const duckTints: Record<Color, Texture[]> = { black: [], blue: [], splash: [] };
+  const duckImgs = await Promise.all(DUCK_URLS.map(loadImage));
+  for (const color of COLORS) {
+    duckImgs.forEach((img, i) => {
+      if (!img) return;
+      const t = recolorDuck(img, DUCK_BODY_COLOR[color]);
+      if (t) duckTints[color][i] = t;
+    });
+  }
+
+  return { stations, millSails, ducks, duckTints, ground, water };
 }
 
 /** Stable pseudo-random ground-variant index for a tile, so it doesn't flicker. */
