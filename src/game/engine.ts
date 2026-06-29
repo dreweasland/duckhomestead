@@ -3,7 +3,6 @@ import {
   autoFillRack,
   buildDeterrent,
   buildSecureCoop,
-  buildWaterFeature,
   repairDeterrents,
   collectAll,
   collectStation,
@@ -34,7 +33,14 @@ import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
-import { setValveKnob, tendPasture, toggleChannel } from './irrigation';
+import {
+  placeFlowFeature,
+  placePondFeature,
+  removeFlowFeature,
+  removePondFeature,
+  type PondResult,
+} from './pond';
+import type { FlowFeatureType, PondFeatureType } from './state';
 import {
   buyBoost as buyBoostAction,
   canPrestige,
@@ -267,10 +273,10 @@ export class GameEngine {
     const r = unlockZoneAction(this.state, zoneId);
     if (r.ok) {
       const def = zoneDef(zoneId);
-      const description = def?.irrigation
-        ? 'An irrigation farm! Lay channels to route the water supply to your crop plots, hit each plot’s sweet-spot, and harvest a cash crop for eggs.'
-        : def?.water
-          ? 'New buildable space — and a big jump in water access (deeper flock condition + more time to treat wounds). Build water features to keep it ahead of the flock.'
+      const description = def?.pondLayout
+        ? 'The Pond! Arrange springs, bathing pools, plant beds and a deep zone — a thoughtful layout gives your flock far more water (deeper condition + more time to treat wounds).'
+        : def?.waterworks
+          ? 'Waterworks! Your growing flock fouls the pond faster now — route intake → fountains → outflow to keep it circulating, or provision coasts toward a floor.'
           : 'New buildable space for more coops and stations.';
       this.emitDing({
         newRank: this.state.rank,
@@ -450,31 +456,30 @@ export class GameEngine {
     this.notify();
     return r;
   }
-  /** Build a water feature (scale structural water capacity). */
-  buildWaterFeature(): ActionResult<{ waterFeatures: number }> {
-    const r = buildWaterFeature(this.state);
-    this.notify();
+  // ── THE WATER SYSTEM: Pond layout + Waterworks circulation ─────────
+  /** Place a provision feature on the pond canvas (Stage 1: layout). */
+  placePondFeature(type: PondFeatureType, x: number, y: number): PondResult {
+    const r = placePondFeature(this.state, type, x, y);
+    if (r.ok) this.notify();
     return r;
   }
-
-  // ── Pasture irrigation ─────────────────────────────────────────────
-  /** Toggle an irrigation channel cell (lay/erase). */
-  toggleChannel(x: number, y: number): boolean {
-    const changed = toggleChannel(this.state, x, y);
-    if (changed) this.notify();
-    return changed;
+  /** Remove a provision feature (refunds part of its cost). */
+  removePondFeature(x: number, y: number): PondResult {
+    const r = removePondFeature(this.state, x, y);
+    if (r.ok) this.notify();
+    return r;
   }
-  /** Set a valve cell's split knob (0..1). */
-  setValveKnob(x: number, y: number, knob: number): boolean {
-    const ok = setValveKnob(this.state, x, y, knob);
-    if (ok) this.notify();
-    return ok;
+  /** Place a circulation feature on the pond canvas (Stage 2: circulation). */
+  placeFlowFeature(type: FlowFeatureType, x: number, y: number): PondResult {
+    const r = placeFlowFeature(this.state, type, x, y);
+    if (r.ok) this.notify();
+    return r;
   }
-  /** Tend the pasture: clear silt/weeds, restoring output to peak. */
-  tendPasture(): boolean {
-    const ok = tendPasture(this.state);
-    this.notify();
-    return ok;
+  /** Remove a circulation feature (refunds part of its cost). */
+  removeFlowFeature(x: number, y: number): PondResult {
+    const r = removeFlowFeature(this.state, x, y);
+    if (r.ok) this.notify();
+    return r;
   }
   /** Mark/unmark a duck as secured (excluded from predator targeting). */
   setSecured(duckId: string, secured: boolean): ActionResult<unknown> {

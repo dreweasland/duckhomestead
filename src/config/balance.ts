@@ -216,79 +216,63 @@ export const BALANCE = {
    */
   MILESTONE_TENDALL_RANK: 10,
 
-  // ── Phase 4b: zones (data-driven; see ZONE_DEFS below) ──────────────
-  ZONES: {
-    /** The first zone beyond the always-unlocked Yard. Its signature is the
-     *  irrigation flow puzzle (see BALANCE.PASTURE); the unlock gate stays here. */
-    BACK_PASTURE: {
-      rankRequired: 15, // gate against the rank curve — tune
-      eggCost: 2000, // the egg sink — also re-paid each prestige run, so kept modest
-      /** The irrigation board's grid (NOT build space — it's a dedicated puzzle area). */
-      tileRegionSize: { width: 7, height: 7 },
-    },
-    /** The Pond (Phase 4d): second unlockable zone; its signature is water access. */
-    POND: {
-      rankRequired: 16,
-      eggCost: 2500,
-      tileRegionSize: { width: 6, height: 8 },
-      /** A real body of water dominates the zone (rendered as animated water by
-       *  the generic `blocked` path), leaving a 1-tile shore ring to build on —
-       *  so "The Pond" actually reads as a pond, not just more land. */
-      waterRegion: { x: 1, y: 1, w: 4, h: 6 },
-    },
-  },
-
-  // ── Phase 4b REWORK: the Back Pasture irrigation flow puzzle ────────
-  // A self-contained side-system: route a fixed water supply through a channel
-  // network (tree from the source; valves split at branches) to land each fixed
-  // plot in its water SWEET-SPOT, growing a cash crop sold for EGGS. Currency
-  // only — it NEVER produces or touches a nutrition axis. Layout is solved once
-  // and holds; a separate "health" drift coasts output peak→floor over time and a
-  // self-paced tend restores it (active-engine / idle-floor — neglect costs
-  // upside, never progress, never zero).
-  PASTURE: {
-    /** Fixed inlet + fixed crop plots on the 7×7 board (local tile coords). */
-    SOURCE: { x: 3, y: 0 },
-    PLOTS: [
-      { x: 1, y: 6 },
-      { x: 3, y: 6 },
-      { x: 5, y: 6 },
-      { x: 0, y: 3 },
-      { x: 6, y: 3 },
-      { x: 3, y: 3 },
-    ],
-    SOURCE_FLOW: 12, // total water units to distribute through the network
-    PLOT_IDEAL_BAND: [1.5, 2.5] as [number, number], // flow per plot for max yield
-    PLOT_OVERWATER_FALLOFF: 0.6, // yield mult when fully waterlogged (above the band)
-    CROP_GROW_SEC: 30, // an ideal-water plot fills one harvestable crop unit this fast
-    CROP_SELL_EGGS: 25, // eggs per harvested crop unit (tune vs the core economy)
-    DRIFT_TO_FLOOR_SEC: 600, // a neglected pasture reaches the upkeep floor this slowly
-    UPKEEP_FLOOR: 0.45, // neglected output never drops below ~45% of peak (never zero)
-    TEND_RESTORE: 1.0, // a tend pass restores health fully (back to peak)
-    TEND_COST_EGGS: 0, // upkeep is effort, not a tax
-  },
-
-  // ── Phase 4d: water access (the pond's signature) ───────────────────
-  // Structural capacity (BUILT, never refilled per-cycle), scored as ONE ratio on
-  // a saturation curve: access = builtWaterCapacity / flockSize. Below 1 a gentle
-  // throttle (the need); at 1 neutral; above 1 a bounded, diminishing resilience
-  // bonus (the reward). It only ever modifies flock CONDITION regen and the 4c
-  // wound-escalation timer — never the nutrition axes, never a new death path.
+  // ── THE WATER SYSTEM (wellness-only): two staged unlocks, one canvas ─
+  // The flock's water is ONE self-contained system surfaced as two zone tabs
+  // onto a shared canvas (WATER.CANVAS):
+  //   1. The Pond  — a layout-adjacency puzzle: arrange provision features so a
+  //      thoughtful layout beats a scattered dump → `layoutBase`.
+  //   2. Waterworks — a flow-routing puzzle that keeps the pond CIRCULATING as
+  //      a growing flock fouls it faster; coverage → `circulationHealth` (the
+  //      ONE upkeep loop in the game). Reuses the old back-pasture zone slot.
+  // provision = layoutBase × circulationHealth; provision / (flock ×
+  // REQUIREMENT_PER_DUCK) feeds the EXISTING saturation curve → flock condition
+  // regen + the wound-escalation timer (see game/water.ts, game/pond.ts).
+  // It NEVER produces eggs/currency and never touches a nutrition axis.
   WATER: {
-    /** Capacity present from the start (the yard's decorative pond) — small flocks
-     *  are never punished. Lives on the yard ZoneDef's `water.baseCapacity`. */
-    YARD_BASELINE: 6,
-    /** Capacity the pond unlock grants (the big structural jump). */
-    POND_BASE: 24,
-    /** Buildable water feature to scale capacity further (pond-era content). */
-    FEATURE_CAPACITY: 8,
-    FEATURE_COST_EGGS: 200,
-    /** Saturation-curve anchors (value of the modifier at access ratios 0.5 / 2.0;
-     *  it is 1.0 at ratio 1.0 and saturates flat beyond 2.0). */
-    CONDITION_REGEN_AT_HALF: 0.6, // regen mult at access 0.5 (decline)
-    CONDITION_REGEN_AT_DOUBLE: 1.4, // regen mult at access 2.0 (bounded reward)
-    WOUND_TIMER_AT_HALF: 0.7, // escalation-timer mult at access 0.5 (less time)
-    WOUND_TIMER_AT_DOUBLE: 1.5, // escalation-timer mult at access 2.0 (more time to treat)
+    /** Stage 1 — the Pond (layout). Teased + locked like any zone. */
+    POND_UNLOCK: { rankRequired: 12, eggCost: 4000 },
+    /** Stage 2 — Waterworks (circulation). Arrives later, as fouling bites. */
+    WORKS_UNLOCK: { rankRequired: 18, eggCost: 6000 },
+    /** The shared water canvas (pond shape). Both tabs edit these coordinates. */
+    CANVAS: { width: 7, height: 5 },
+    /** Always-on baseline provision (the yard's puddle) so a small flock with no
+     *  pond is never punished — matches the old yard-baseline feel. */
+    YARD_BASELINE_PROVISION: 6,
+    /** provision / (flock × this) = the access ratio fed to the saturation curve. */
+    REQUIREMENT_PER_DUCK: 1.0,
+
+    /** Pond LAYOUT features (Stage 1). baseProvision is the feature's own water;
+     *  the bonuses reward arrangement (a great layout must beat a random dump). */
+    FEATURES: {
+      spring: { costEggs: 150, baseProvision: 0, feedsPools: true }, // source: feeds adjacent pools
+      bathingPool: { costEggs: 120, baseProvision: 4, springBonus: 3 }, // +3 when spring-fed (adjacent)
+      plantBed: { costEggs: 80, baseProvision: 1, adjacentQualityBonus: 0.25 }, // +25% to each adjacent feature
+      deepZone: { costEggs: 180, baseProvision: 6, wantsCirculation: true }, // high provision; fouls fastest
+    },
+    /** Circulation FLOW features (Stage 2). A fountain is "live" (projects
+     *  coverage) only on a path that connects an intake to an outflow. */
+    FLOW: {
+      intake: { costEggs: 100 }, // where fresh water enters the circuit
+      fountain: { costEggs: 90 }, // aerator: keeps the nearby pond fresh (when live)
+      outflow: { costEggs: 60 }, // where stale water leaves — closes the circuit
+    },
+
+    /** The ONE upkeep loop: fouling pressure vs circulation coverage. */
+    CIRCULATION: {
+      foulPerDuckPerSec: 0.02, // fouling pressure scales with flock size
+      circulationFloor: 0.45, // a fully-stagnant feature still gives ~45% of its provision
+      foulToFloorSec: 600, // an uncovered feature coasts to the floor this slowly
+      fountainCoverageRadius: 2, // tiles a LIVE fountain keeps fresh (Chebyshev)
+      /** deepZone (wantsCirculation) fouls this much faster than a plain feature. */
+      wantsCirculationFoulMult: 2,
+    },
+
+    // Saturation-curve anchors (UNCHANGED — the existing wellness math). The
+    // modifier is 1.0 at access ratio 1.0 and saturates flat beyond 2.0.
+    CONDITION_REGEN_AT_HALF: 0.6, // condition-regen mult at access 0.5 (decline)
+    CONDITION_REGEN_AT_DOUBLE: 1.4, // condition-regen mult at access 2.0 (bounded reward)
+    WOUND_TIMER_AT_HALF: 0.7, // wound-timer mult at access 0.5 (less time)
+    WOUND_TIMER_AT_DOUBLE: 1.5, // wound-timer mult at access 2.0 (more time to treat)
   },
 
   // ── Phase 4c: predators (the risk layer) ────────────────────────────
@@ -469,19 +453,27 @@ export const BALANCE = {
   // The goal is THREE concrete requirements, so it can't be brute-forced by raw
   // headcount and the player can read exactly what's left:
   //   1. all colours bred (collection mastery),
-  //   2. average flock vigor ≥ VIGOR_GATE (breeding mastery — needs real
-  //      selective breeding + culling, can't be faked with random ducks),
+  //   2. average flock vigor ≥ the tier's vigor gate (breeding mastery — needs
+  //      real selective breeding + culling, and the gate RISES each prestige),
   //   3. flock size ≥ the tier's target (which scales each prestige).
   PRESTIGE: {
-    /** Required average flock vigor (range 0.5–2.0; seed ≈ 1.0). A mastery bar. */
-    VIGOR_GATE: 1.5,
-    /** Flock-size target at tier 0; each tier multiplies it by SIZE_GROWTH. */
-    SIZE_BASE: 20,
-    SIZE_GROWTH: 1.4,
-    /** Legacy currency granted at exactly the size target (with the other two
-     *  requirements met), scaling with overshoot (size/target)^EXP. */
+    /** Required average flock vigor (range 0.5–2.0; seed ≈ 1.0). A mastery bar
+     *  that RISES each tier: gate(tier) = min(MAX, BASE + PER_TIER·tier). Capped
+     *  below the 2.0 ceiling so it always stays reachable. */
+    VIGOR_GATE_BASE: 1.5,
+    VIGOR_GATE_PER_TIER: 0.05,
+    VIGOR_GATE_MAX: 1.9,
+    /** Flock-size target at tier 0; each tier multiplies it by SIZE_GROWTH.
+     *  Tuned to be a real grind, not a formality (≈50, 75, 113, 169, …). */
+    SIZE_BASE: 50,
+    SIZE_GROWTH: 1.5,
+    /** Legacy currency = CURRENCY_AT_THRESHOLD scaled by BOTH overshoots:
+     *  (size/target)^OVERSHOOT_EXP × (meanVigor/gate)^VIGOR_EXP — so a
+     *  championship flock out-earns a merely-bigger one (both ratios are ≥ 1
+     *  once the requirements are met). */
     CURRENCY_AT_THRESHOLD: 10,
     CURRENCY_OVERSHOOT_EXP: 0.8,
+    CURRENCY_VIGOR_EXP: 1.5,
     /** Stackable global-scalar boosts. perLevel = fractional bump per level;
      *  cost for level L = round(baseCost · costGrowth^L). */
     BOOSTS: {
@@ -591,30 +583,25 @@ export const STATION_ORDER: StationType[] = [
 
 // ── Phase 4b: data-driven zones ──────────────────────────────────────
 /**
- * A zone is space with a signature. Adding one (the pond, a far field, …) is a
- * new entry in ZONE_DEFS — NOT new code: the unlock flow, placement, and
- * rendering iterate these defs. The Yard is zone 0 and always unlocked. A zone's
- * signature payload is `water` (the pond) or `irrigation` (the back pasture).
+ * A zone is space with a signature. Adding one is a new entry in ZONE_DEFS —
+ * NOT new code: the unlock flow, placement, and rendering iterate these defs.
+ * The Yard is zone 0 and always unlocked. The two water canvases carry a
+ * signature flag (`pondLayout` / `waterworks`) instead of being build space.
  */
-/** A zone's contribution to structural water capacity (Phase 4d). Present on the
- *  yard (baseline) and the pond (the big jump); a future water zone is just config. */
-export interface WaterDef {
-  baseCapacity: number;
-}
 export interface ZoneDef {
   id: string;
   name: string;
-  /** This zone's own buildable tile grid (local coordinates). */
+  /** This zone's own buildable tile grid (local coordinates). For the water
+   *  canvases this is the puzzle surface, not build space. */
   grid: { width: number; height: number };
   /** Non-buildable region within the grid (e.g. the Yard pond). */
   blocked?: { x: number; y: number; w: number; h: number };
   /** Double-gated unlock. Absent ⇒ always unlocked (the Yard). */
   unlock?: { rankRequired: number; eggCost: number };
-  /** Water capacity this zone provides while unlocked (the pond's signature). */
-  water?: WaterDef;
-  /** Marks this zone as the irrigation puzzle (the back pasture's signature) —
-   *  its grid is the irrigation board, not build space. */
-  irrigation?: boolean;
+  /** Stage 1: the Pond layout-adjacency canvas (place provision features). */
+  pondLayout?: boolean;
+  /** Stage 2: the Waterworks circulation canvas (route flow over the pond). */
+  waterworks?: boolean;
 }
 
 export const ZONE_DEFS: ZoneDef[] = [
@@ -623,30 +610,23 @@ export const ZONE_DEFS: ZoneDef[] = [
     name: 'Yard',
     grid: BALANCE.GRID,
     blocked: BALANCE.POND,
-    // The yard's decorative pond is the flock's baseline water.
-    water: { baseCapacity: BALANCE.WATER.YARD_BASELINE },
   },
   {
-    id: 'backPasture',
-    name: 'Back Pasture',
-    grid: BALANCE.ZONES.BACK_PASTURE.tileRegionSize,
-    unlock: {
-      rankRequired: BALANCE.ZONES.BACK_PASTURE.rankRequired,
-      eggCost: BALANCE.ZONES.BACK_PASTURE.eggCost,
-    },
-    irrigation: true,
-  },
-  {
+    // Stage 1 — the Pond: a layout-adjacency canvas, not build space.
     id: 'pond',
     name: 'The Pond',
-    grid: BALANCE.ZONES.POND.tileRegionSize,
-    // The pond's body of water (non-buildable, rendered as animated water).
-    blocked: BALANCE.ZONES.POND.waterRegion,
-    unlock: {
-      rankRequired: BALANCE.ZONES.POND.rankRequired,
-      eggCost: BALANCE.ZONES.POND.eggCost,
-    },
-    water: { baseCapacity: BALANCE.WATER.POND_BASE },
+    grid: BALANCE.WATER.CANVAS,
+    unlock: BALANCE.WATER.POND_UNLOCK,
+    pondLayout: true,
+  },
+  {
+    // Stage 2 — Waterworks (reuses the old back-pasture slot/id so a save that
+    // already unlocked that zone keeps it). Circulation over the same canvas.
+    id: 'backPasture',
+    name: 'Waterworks',
+    grid: BALANCE.WATER.CANVAS,
+    unlock: BALANCE.WATER.WORKS_UNLOCK,
+    waterworks: true,
   },
 ];
 

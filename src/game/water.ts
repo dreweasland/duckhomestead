@@ -1,48 +1,48 @@
-import { BALANCE, ZONE_DEFS } from '../config/balance';
-import { zoneUnlocked, type GameState } from './state';
+import { BALANCE } from '../config/balance';
+import type { GameState } from './state';
+import { circulationHealth, pondLayoutBase } from './pond';
 
 /**
- * water.ts — Phase 4d water access.
+ * water.ts — the provision → wellness bridge of THE WATER SYSTEM.
  *
- * Water is STRUCTURAL capacity (built, never refilled per-cycle), scored as ONE
- * ratio on a saturation curve:  access = builtWaterCapacity / flockSize.
- *   - below 1 → a gentle throttle (the baseline need), scaled by shortfall,
- *   - at 1   → neutral,
- *   - above 1 → a BOUNDED, DIMINISHING resilience bonus (the reward), flat past 2.
+ * The water system produces ONE number, `provision = layoutBase ×
+ * circulationHealth` (the Pond layout × how fresh the Waterworks keeps it).
+ * Scored as a single ratio on the EXISTING saturation curve:
+ *   access = provision / (flock × REQUIREMENT_PER_DUCK)
+ *     - below 1 → a gentle throttle (the baseline need), scaled by shortfall,
+ *     - at 1   → neutral,
+ *     - above 1 → a BOUNDED, DIMINISHING resilience bonus (the reward), flat past 2.
  *
  * It only ever modifies two existing systems via multipliers: flock CONDITION
  * regen (nutrition.ts) and the wound-escalation timer (predators.ts). It never
- * touches the nutrition axes and never creates a new death path — the timer
- * multiplier stays comfortably above zero, so a wound always leaves time to treat.
+ * touches the nutrition axes, never produces eggs, and never creates a new death
+ * path — the timer multiplier stays comfortably above zero, so a wound always
+ * leaves time to treat. (The layout/circulation puzzles live in game/pond.ts.)
  */
 
 const W = BALANCE.WATER;
 
-/** Total structural water capacity: every unlocked zone's baseline + built features. */
-export function waterCapacity(state: GameState): number {
-  let base = 0;
-  for (const z of ZONE_DEFS) {
-    if (z.water && zoneUnlocked(state, z.id)) base += z.water.baseCapacity;
-  }
-  return base + state.waterFeatures * W.FEATURE_CAPACITY;
+/** Total water provision the system supplies: layout × circulation freshness. */
+export function waterProvision(state: GameState): number {
+  return pondLayoutBase(state) * circulationHealth(state);
 }
 
-/** Access ratio = capacity / flock. Infinite when there's no flock (no constraint). */
+/** What the flock asks of the water (heads × per-duck requirement). */
+export function flockRequirement(state: GameState): number {
+  return state.ducks.length * W.REQUIREMENT_PER_DUCK;
+}
+
+/** Access ratio = provision / requirement. Infinite when there's no flock. */
 export function waterAccess(state: GameState): number {
-  const n = state.ducks.length;
-  return n > 0 ? waterCapacity(state) / n : Infinity;
-}
-
-/** Whether the player can build water features yet (any unlocked non-yard water zone). */
-export function canBuildWaterFeatures(state: GameState): boolean {
-  return ZONE_DEFS.some((z) => z.id !== 'yard' && z.water != null && zoneUnlocked(state, z.id));
+  const req = flockRequirement(state);
+  return req > 0 ? waterProvision(state) / req : Infinity;
 }
 
 /**
  * The saturation curve. 1.0 at ratio 1.0. Below 1 it declines LINEARLY (scaled by
  * shortfall) toward `atHalf` at ratio 0.5. Above 1 it rises with DIMINISHING
  * returns (ease-out) toward `atDouble` at ratio 2.0, then saturates flat. Pure;
- * exported for tests.
+ * exported for tests. (Unchanged from the original water math.)
  */
 export function waterCurve(ratio: number, atHalf: number, atDouble: number): number {
   if (!Number.isFinite(ratio)) return atDouble; // no flock → max (harmless; unused)

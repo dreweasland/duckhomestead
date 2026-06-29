@@ -43,6 +43,12 @@ export function sizeTarget(state: GameState): number {
   return Math.round(P.SIZE_BASE * Math.pow(P.SIZE_GROWTH, state.legacyTier));
 }
 
+/** The average-vigor gate for the current tier — RISES each prestige (breeding
+ *  mastery escalates), capped below the 2.0 ceiling so it stays reachable. */
+export function vigorGate(state: GameState): number {
+  return Math.min(P.VIGOR_GATE_MAX, P.VIGOR_GATE_BASE + P.VIGOR_GATE_PER_TIER * state.legacyTier);
+}
+
 export interface ChampionReq {
   /** 0..1 progress toward this requirement. */
   progress: number;
@@ -63,8 +69,9 @@ export function championGoal(state: GameState): ChampionGoal {
   const mv = meanVigor(state);
   const size = state.ducks.length;
   const target = sizeTarget(state);
+  const gate = vigorGate(state);
   const colors = { bred, total, progress: clamp01(bred / total), met: bred >= total };
-  const vigor = { value: mv, gate: P.VIGOR_GATE, progress: clamp01(mv / P.VIGOR_GATE), met: mv >= P.VIGOR_GATE };
+  const vigor = { value: mv, gate, progress: clamp01(mv / gate), met: mv >= gate };
   const sz = { value: size, target, progress: clamp01(size / target), met: size >= target };
   return {
     colors,
@@ -86,11 +93,17 @@ export function championReadiness(state: GameState): number {
 }
 
 /** Legacy currency this run would grant — scales with how far the flock overshoots
- *  the size target (the requirements must all be met first). */
+ *  BOTH the size target and the vigor gate (all requirements must be met first),
+ *  so a championship flock out-earns a merely-bigger one. */
 export function prestigeCurrency(state: GameState): number {
   if (!canPrestige(state)) return 0;
-  const over = state.ducks.length / sizeTarget(state); // ≥ 1
-  return Math.round(P.CURRENCY_AT_THRESHOLD * Math.pow(over, P.CURRENCY_OVERSHOOT_EXP));
+  const sizeOver = state.ducks.length / sizeTarget(state); // ≥ 1 (size met)
+  const vigorOver = meanVigor(state) / vigorGate(state); // ≥ 1 (vigor met)
+  return Math.round(
+    P.CURRENCY_AT_THRESHOLD *
+      Math.pow(sizeOver, P.CURRENCY_OVERSHOOT_EXP) *
+      Math.pow(vigorOver, P.CURRENCY_VIGOR_EXP),
+  );
 }
 
 // ── Boosts (global scalars) ──────────────────────────────────────────

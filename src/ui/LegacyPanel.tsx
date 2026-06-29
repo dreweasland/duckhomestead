@@ -202,9 +202,15 @@ export function LegacyPanel({
               ? 'Wipe the run? — flock, zones, everything. Confirm'
               : `Raise your Legacy · +${grant} legacy`}
         </button>
+        {ready && (
+          <div className="mb-1 text-center text-[10px] text-[#8fae6a]">
+            Payout scales with overshoot of BOTH the size target and the vigor gate — a bigger,
+            higher-vigor flock earns more.
+          </div>
+        )}
         <div className="mb-3 text-center text-[10px] text-[#7a6a4a]">
           Prestige wipes the entire run (flock, eggs, stations, zones re-lock) for permanent boosts.
-          Only your legacy + boosts persist.
+          Only your legacy + boosts persist. The size target and vigor gate both rise each tier.
         </div>
 
         {/* Legacy shop */}

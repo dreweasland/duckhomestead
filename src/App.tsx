@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import {
   playAttack,
   playCollect,
@@ -10,7 +10,7 @@ import {
   playUpgrade,
 } from './audio/sfx';
 import { zoneDef, type StationType } from './config/balance';
-import { IrrigationBoard } from './ui/IrrigationBoard';
+import { WaterBoard } from './ui/WaterBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
 import { championReadiness } from './game/prestige';
@@ -20,6 +20,7 @@ import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/i
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
+import { StatusPills } from './ui/StatusPills';
 import { useGame } from './game/useGame';
 import { GameCanvas, MAX_BOARD_WIDTH } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
@@ -35,6 +36,24 @@ import { LootBanner } from './ui/LootBanner';
 import { ModulesPanel } from './ui/ModulesPanel';
 import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
 import { StationPanel } from './ui/StationPanel';
+
+/** Combined width of the two columns at desktop: board box (MAX_BOARD_WIDTH +
+ *  p-2) + the gap-4 + the 300px side panel. The bottom build row / footer are
+ *  pinned to this so they line up with the right column's edge regardless of
+ *  their own content width (e.g. a long hint that would otherwise stretch it). */
+const COLS_WIDTH = MAX_BOARD_WIDTH + 16 + 16 + 300;
+
+/** Position the station popover near the click, clamped to the viewport; opens
+ *  upward for clicks in the lower half so it never runs off the bottom. */
+function stationPopStyle(a: { x: number; y: number }): CSSProperties {
+  const W = 300;
+  const M = 8;
+  const left = Math.max(M, Math.min(a.x + 14, window.innerWidth - W - M));
+  const openUp = a.y > window.innerHeight * 0.55;
+  return openUp
+    ? { left, bottom: Math.max(M, window.innerHeight - a.y + 14) }
+    : { left, top: a.y + 14 };
+}
 
 export default function App() {
   const [ding, setDing] = useState<DingEvent | null>(null);
@@ -106,6 +125,8 @@ export default function App() {
   }, [salvage]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Screen position of the last board click — anchors the station popover.
+  const [popAnchor, setPopAnchor] = useState<{ x: number; y: number } | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
   const [tendFlash, setTendFlash] = useState<{ id: number; xp: number } | null>(null);
@@ -118,6 +139,18 @@ export default function App() {
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
+  // Build is only meaningful on a buildable (non-water) unlocked zone — the Yard.
+  const activeZd = zoneDef(activeZone);
+  const isBuildZone = zoneUnlocked(state, activeZone) && !activeZd?.pondLayout && !activeZd?.waterworks;
+  // Close the station popover on Escape.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId]);
   const anyBuffer = state.stations.some((s) => Object.values(s.buffer).some((v) => (v ?? 0) > 0));
   const readyToTend = state.stations.filter((s) => s.tendCooldownRemaining === 0).length;
 
@@ -198,11 +231,49 @@ export default function App() {
       {watchOpen && <WatchPanel engine={engine} state={state} onClose={() => setWatchOpen(false)} />}
       {legacyOpen && <LegacyPanel engine={engine} state={state} onClose={() => setLegacyOpen(false)} />}
 
-      <div className="mx-auto flex max-w-4xl flex-col gap-4 md:flex-row md:items-start">
-        {/* Canvas + the station box directly under it (close to the tiles). */}
+      {/* Station controls as a popover anchored at the click — not a column panel.
+          No backdrop, so clicking another station just re-anchors it; Escape, the
+          × button, or clicking an empty tile dismisses it. */}
+      {selected && popAnchor && (
+        <div
+          className="fixed z-50 max-h-[80vh] w-[300px] max-w-[92vw] overflow-y-auto rounded-lg shadow-2xl ring-2 ring-[#3a2e22]"
+          style={stationPopStyle(popAnchor)}
+        >
+          <StationPanel engine={engine} state={state} station={selected} onClose={() => setSelectedId(null)} />
+        </div>
+      )}
+
+      {/* The predator telegraph is pinned (fixed) to the very top; reserve flow
+          space for it so it never overlaps the zone tabs / HUD beneath it. */}
+      {currentThreat(state) && <div aria-hidden className="h-12 md:h-8" />}
+
+      {/* Pin the column stack to the two columns' combined width (COLS_WIDTH) so
+          the full-width build row + footer line up exactly with the right
+          column's edge, and a long hint can't stretch the whole thing wider. */}
+      <div
+        className="mx-auto flex w-full max-w-full flex-col gap-4 md:w-[var(--cw)]"
+        style={{ '--cw': `${COLS_WIDTH}px` } as CSSProperties}
+      >
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        {/* Canvas — the board. */}
         <div className="flex flex-col items-center gap-3">
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
-          <div className="rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
+          <div
+            className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]"
+            onClickCapture={(e) => setPopAnchor({ x: e.clientX, y: e.clientY })}
+          >
+            {/* Status pills tuck into the board's empty top headroom (the canvas
+                reserves space there) — present, but adding no height. Yard only:
+                Auto-Haul / Tend-All are station/tending milestones, irrelevant on
+                the water canvases (which have their own header). The wrapper
+                ignores pointer events so the board beneath stays clickable. */}
+            {activeZone === 'yard' && (
+              <div className="pointer-events-none absolute inset-x-0 top-1.5 z-10 flex justify-center">
+                <div className="pointer-events-auto">
+                  <StatusPills state={state} />
+                </div>
+              </div>
+            )}
             {/* Pin to the widest zone so swapping to a narrower one (pasture/pond)
                 centers the board instead of shrinking the whole column. */}
             <div
@@ -217,20 +288,31 @@ export default function App() {
                   </div>
                 }
               >
-                {zoneDef(activeZone)?.irrigation && zoneUnlocked(state, activeZone) ? (
-                  // The pasture is the irrigation puzzle, not a build grid.
-                  <IrrigationBoard engine={engine} state={state} />
-                ) : (
-                  <GameCanvas
-                    key={activeZone}
-                    engine={engine}
-                    selectedId={selectedId}
-                    zoneId={activeZone}
-                    unlocked={zoneUnlocked(state, activeZone)}
-                    buildType={buildType}
-                    onTileClick={onTileClick}
-                  />
-                )}
+                {(() => {
+                  const zd = zoneDef(activeZone);
+                  // The water canvases (Pond layout / Waterworks circulation) are
+                  // dedicated puzzle surfaces, not build grids.
+                  if ((zd?.pondLayout || zd?.waterworks) && zoneUnlocked(state, activeZone)) {
+                    return (
+                      <WaterBoard
+                        engine={engine}
+                        state={state}
+                        mode={zd.waterworks ? 'circulation' : 'layout'}
+                      />
+                    );
+                  }
+                  return (
+                    <GameCanvas
+                      key={activeZone}
+                      engine={engine}
+                      selectedId={selectedId}
+                      zoneId={activeZone}
+                      unlocked={zoneUnlocked(state, activeZone)}
+                      buildType={buildType}
+                      onTileClick={onTileClick}
+                    />
+                  );
+                })()}
               </ErrorBoundary>
             </div>
           </div>
@@ -242,11 +324,6 @@ export default function App() {
               Your homestead is already running — the Coop is laying. The flock is short on protein
               and calcium, so build {missingProducers.join(' and ')} from the bar below (you have{' '}
               {Math.round(state.resources.eggs)} eggs), then open Nutrition to balance the ration.
-            </div>
-          )}
-          {selected && (
-            <div className="w-full max-w-[496px] md:w-[496px]">
-              <StationPanel engine={engine} state={state} station={selected} />
             </div>
           )}
         </div>
@@ -393,21 +470,31 @@ export default function App() {
               )}
             </div>
           )}
-          <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
-          {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
-          <button
-            onClick={() => {
-              if (window.confirm('Wipe this homestead and start over?')) {
-                engine.reset();
-                setSelectedId(null);
-                setBuildType(null);
-              }
-            }}
-            className="self-start text-[10px] text-[#6a5a3a] underline hover:text-[#9a8a6a]"
-          >
-            New homestead (reset save)
-          </button>
         </div>
+        </div>
+
+        {/* Build palette — a full-width row spanning both columns, below the board.
+            Yard-only: the water canvases aren't build space. */}
+        {isBuildZone && (
+          <div className="rounded-lg bg-[#1f1812] p-3 ring-1 ring-[#3a2e22]">
+            <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
+          </div>
+        )}
+
+        {/* Dev tools + reset sit at the very bottom, under the build palette. */}
+        {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
+        <button
+          onClick={() => {
+            if (window.confirm('Wipe this homestead and start over?')) {
+              engine.reset();
+              setSelectedId(null);
+              setBuildType(null);
+            }
+          }}
+          className="self-start text-[10px] text-[#6a5a3a] underline hover:text-[#9a8a6a]"
+        >
+          New homestead (reset save)
+        </button>
       </div>
     </div>
   );

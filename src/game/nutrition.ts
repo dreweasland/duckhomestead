@@ -73,21 +73,6 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
     for (const axis of AXES) supply[axis] += rate * (vals[axis] ?? 0);
   }
 
-  // Phase 4b: free-range forage is pure-ENERGY feed (zone signature), auto-eaten
-  // from shared storage to fill ONLY the flock's energy gap — never protein /
-  // niacin / calcium. It's non-scaling at the source, so it's self-diminishing
-  // as the flock grows; excess stays banked. The throttle / satisfaction /
-  // condition math below is unchanged — it just sees more energy supplied. (When
-  // no forage is stocked this is a no-op, so the Phase 2 math is byte-for-byte.)
-  const energyReqRate = (N.REQUIREMENT.energy * layerCount) / coopCycle;
-  const forageEat = Math.min(Math.max(0, energyReqRate - supply.energy) * step, state.resources.forage);
-  let forageEnergy = 0; // energy/s the forage actually supplied this step (for the dashboard)
-  if (forageEat > 0) {
-    state.resources.forage -= forageEat;
-    forageEnergy = step > 0 ? forageEat / step : 0;
-    supply.energy += forageEnergy;
-  }
-
   // Requirement (rate) + satisfaction. The instantaneous ratio is noisy (chunky
   // production vs continuous eating), so smooth it with an EMA — the bars and
   // throttle then read steady and only move when a line genuinely can't keep up.
@@ -130,7 +115,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // Condition buffers: full condition masks the penalty; empty applies it fully.
   const eggMult = eggMultRaw + (1 - eggMultRaw) * cond;
 
-  state.nutrition = { satisfaction, supply, requirement, eggMultRaw, eggMult, feedScale, hasMill, forageEnergy };
+  state.nutrition = { satisfaction, supply, requirement, eggMultRaw, eggMult, feedScale, hasMill };
 
   // Niacin debuff: sustained shortfall accrues a timer; each time it crosses the
   // onset threshold, one healthy coop's duck gets a leg debuff (halves output).

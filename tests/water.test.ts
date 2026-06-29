@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { initialState, zoneUnlocked, type Duck, type GameState, type Genotype } from '../src/game/state';
 import {
-  waterCapacity,
+  waterProvision,
+  flockRequirement,
   waterAccess,
   waterCurve,
   waterConditionMult,
   waterWoundMult,
-  canBuildWaterFeatures,
 } from '../src/game/water';
-import { buildWaterFeature, unlockZone } from '../src/game/actions';
+import { unlockZone } from '../src/game/actions';
 import { runPredators } from '../src/game/predators';
 import { serialize, deserialize, runOfflineCatchUp } from '../src/game/save';
 import { setHens, stockAll, fullSetup, run } from './helpers';
@@ -28,44 +28,40 @@ function ducks(n: number, stage: Duck['stage'] = 'adult'): Duck[] {
   }));
 }
 
-describe('pond zone is pure config (no new architecture)', () => {
-  it('the pond is a ZONE_DEFS entry with the standard unlock shape + water', () => {
+describe('the Pond is a standard staged zone unlock', () => {
+  it('teased + locked, then unlockable at its rank + egg gate', () => {
     const s = initialState(0);
-    expect(zoneUnlocked(s, 'pond')).toBe(false); // teased + locked, like the pasture
-    s.rank = BALANCE.ZONES.POND.rankRequired;
-    s.resources.eggs = BALANCE.ZONES.POND.eggCost;
+    expect(zoneUnlocked(s, 'pond')).toBe(false);
+    s.rank = W.POND_UNLOCK.rankRequired;
+    s.resources.eggs = W.POND_UNLOCK.eggCost;
     expect(unlockZone(s, 'pond').ok).toBe(true);
     expect(zoneUnlocked(s, 'pond')).toBe(true);
   });
 });
 
-describe('water capacity is structural (built, never consumed)', () => {
-  it('yard baseline only at first; pond unlock is a big jump; features scale further', () => {
+describe('provision = layoutBase × circulationHealth, scored vs the flock', () => {
+  it('an empty pond gives the always-on baseline provision (never punishes a small flock)', () => {
     const s = initialState(0);
-    expect(waterCapacity(s)).toBe(W.YARD_BASELINE); // pond locked -> yard only
-    s.zones.pond.unlocked = true;
-    expect(waterCapacity(s)).toBe(W.YARD_BASELINE + W.POND_BASE);
-    s.waterFeatures = 2;
-    expect(waterCapacity(s)).toBe(W.YARD_BASELINE + W.POND_BASE + 2 * W.FEATURE_CAPACITY);
+    expect(waterProvision(s)).toBe(W.YARD_BASELINE_PROVISION);
   });
 
-  it('water features are gated behind the pond and hold once built', () => {
+  it('a placed pond feature raises provision (layoutBase grows)', () => {
     const s = initialState(0);
-    s.resources.eggs = 1e6;
-    expect(canBuildWaterFeatures(s)).toBe(false);
-    expect(buildWaterFeature(s).ok).toBe(false); // pond locked
     s.zones.pond.unlocked = true;
-    expect(canBuildWaterFeatures(s)).toBe(true);
-    expect(buildWaterFeature(s).ok).toBe(true);
-    expect(s.waterFeatures).toBe(1);
-    // Structural: nothing consumes it over time.
-    s.ducks = ducks(3);
-    run(s, 120);
-    expect(s.waterFeatures).toBe(1);
+    s.pond.features.push({ x: 0, y: 0, type: 'deepZone' });
+    expect(waterProvision(s)).toBe(W.YARD_BASELINE_PROVISION + W.FEATURES.deepZone.baseProvision);
+  });
+
+  it('access = provision / (flock × REQUIREMENT_PER_DUCK); infinite (neutral-safe) with no flock', () => {
+    const s = initialState(0);
+    expect(waterAccess(s)).toBe(Infinity);
+    s.ducks = ducks(3); // 6 / (3 × 1) = 2.0
+    expect(flockRequirement(s)).toBeCloseTo(3 * W.REQUIREMENT_PER_DUCK, 6);
+    expect(waterAccess(s)).toBeCloseTo(W.YARD_BASELINE_PROVISION / 3, 6);
   });
 });
 
-describe('the saturation curve', () => {
+describe('the saturation curve (unchanged wellness math)', () => {
   it('hits its anchors: neutral at 1, atHalf at 0.5, atDouble at 2, flat beyond', () => {
     expect(waterCurve(1, 0.6, 1.4)).toBeCloseTo(1, 6);
     expect(waterCurve(0.5, 0.6, 1.4)).toBeCloseTo(0.6, 6);
@@ -74,26 +70,17 @@ describe('the saturation curve', () => {
   });
 
   it('declines below 1 (scaled by shortfall) and rewards above 1 with diminishing returns', () => {
-    // monotonic decline below 1
     expect(waterCurve(0.75, 0.6, 1.4)).toBeGreaterThan(waterCurve(0.5, 0.6, 1.4));
     expect(waterCurve(0.5, 0.6, 1.4)).toBeLessThan(1);
-    // diminishing returns above 1: first half of the climb gives MORE than the second
     const at1_5 = waterCurve(1.5, 0.6, 1.4);
     expect(at1_5 - 1).toBeGreaterThan(1.4 - at1_5); // concave
-  });
-
-  it('access ratio = capacity / flock; infinite (neutral-safe) with no flock', () => {
-    const s = initialState(0);
-    expect(waterAccess(s)).toBe(Infinity);
-    s.ducks = ducks(3); // cap 6 / 3 = 2.0
-    expect(waterAccess(s)).toBeCloseTo(W.YARD_BASELINE / 3, 6);
   });
 });
 
 describe('water modifies condition + wound recovery — and nothing else', () => {
   it('a well-watered flock regenerates condition faster than a thirsty one', () => {
-    const flush = setHens(stockAll(fullSetup()), 1); // cap 6 / 1 hen = 6 -> reward
-    const thirsty = setHens(stockAll(fullSetup()), 30); // cap 6 / 30 -> deep decline
+    const flush = setHens(stockAll(fullSetup()), 1); // 6 / 1 → reward
+    const thirsty = setHens(stockAll(fullSetup()), 30); // 6 / 30 → deep decline
     flush.condition = 20;
     thirsty.condition = 20;
     run(flush, 30);
@@ -108,10 +95,11 @@ describe('water modifies condition + wound recovery — and nothing else', () =>
   });
 
   it('never touches the nutrition axes (same flock, different water → axes identical)', () => {
-    // Hold the flock (heads/ration/stock) fixed and change ONLY water capacity.
-    const dry = setHens(stockAll(fullSetup()), 4); // cap 6 / 4 = 1.5
+    // Hold the flock (heads/ration/stock) fixed and change ONLY the water layout.
+    const dry = setHens(stockAll(fullSetup()), 4); // provision 6 / 4 = 1.5
     const wet = setHens(stockAll(fullSetup()), 4);
-    wet.zones.pond.unlocked = true; // cap 30 / 4 = 7.5 — very different water, same flock
+    wet.zones.pond.unlocked = true;
+    wet.pond.features.push({ x: 0, y: 0, type: 'deepZone' }); // much more water, same flock
     run(dry, 60);
     run(wet, 60);
     expect(wet.nutrition!.requirement).toEqual(dry.nutrition!.requirement);
@@ -121,7 +109,7 @@ describe('water modifies condition + wound recovery — and nothing else', () =>
   });
 });
 
-describe('NO new death path (4d locked constraint)', () => {
+describe('NO new death path (locked constraint)', () => {
   it('even at the lowest water, a wound keeps a real window to treat (> 0)', () => {
     const s = { ...initialState(0), ducks: ducks(200) } as GameState; // extreme thirst
     const mult = waterWoundMult(s);
@@ -133,14 +121,13 @@ describe('NO new death path (4d locked constraint)', () => {
     const s = initialState(0);
     s.rank = 5;
     s.resources.eggs = 1e7;
-    s.ducks = ducks(40); // low water (cap 6 / 40)
+    s.ducks = ducks(40); // low water (6 / 40)
     s.predatorsIntroduced = true;
-    s.secureCoops = 10; // enough slots
+    s.secureCoops = 10;
     for (let i = 0; i < 5; i++) s.deterrents += 1;
     for (const d of s.ducks) d.secured = true;
-    // Worst case: every roll lands, an hour online, bone-dry water.
     for (let t = 0; t < 3600; t++) runPredators(s, 1, { mode: 'online', rng: () => 0 });
-    expect(s.ducks).toHaveLength(40); // secured => never targeted => no wounds => no losses
+    expect(s.ducks).toHaveLength(40);
     expect(s.ducks.every((d) => !d.wounded)).toBe(true);
   });
 });
@@ -162,27 +149,31 @@ describe('offline + back-compat', () => {
     expect(flush.xp).toBe(12);
   });
 
-  it('a pre-4d save loads with yard baseline only, pond locked, no features', () => {
+  it('a pre-rework save loads with the pond locked + empty, baseline provision only', () => {
     const legacy = JSON.stringify({
       version: 1,
       resources: { eggs: 100 },
       stations: [],
       rank: 20,
+      // pre-rework fields that must be dropped cleanly:
+      irrigation: { channels: { '3,1': 0.5 }, crop: [1], health: 0.3 },
+      waterFeatures: 5,
       ducks: [{ id: 'd0', genotype: ['Bl', 'bl'], vigor: 1, sex: 'hen', stage: 'adult', ageTicks: 0 }],
     });
     const s = deserialize(legacy, 0);
-    expect(s.waterFeatures).toBe(0);
     expect(zoneUnlocked(s, 'pond')).toBe(false);
-    expect(waterCapacity(s)).toBe(W.YARD_BASELINE);
+    expect(s.pond).toEqual({ features: [], flow: [], freshness: {} });
+    expect(waterProvision(s)).toBe(W.YARD_BASELINE_PROVISION);
   });
 
-  it('water state round-trips through serialize', () => {
+  it('water-system state round-trips through serialize', () => {
     const s = initialState(0);
     s.zones.pond.unlocked = true;
-    s.waterFeatures = 3;
+    s.pond.features.push({ x: 1, y: 1, type: 'bathingPool' });
+    s.pond.flow.push({ x: 2, y: 1, type: 'fountain' });
+    s.pond.freshness['1,1'] = 0.7;
     const r = deserialize(serialize(s), 0);
-    expect(r.waterFeatures).toBe(3);
-    expect(zoneUnlocked(r, 'pond')).toBe(true);
-    expect(waterCapacity(r)).toBe(W.YARD_BASELINE + W.POND_BASE + 3 * W.FEATURE_CAPACITY);
+    expect(r.pond).toEqual(s.pond);
+    expect(waterProvision(r)).toBe(waterProvision(s));
   });
 });
