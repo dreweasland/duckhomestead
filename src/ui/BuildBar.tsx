@@ -15,6 +15,10 @@ const swatch = (color: string, label: string) => (
   </span>
 );
 
+// The core production chain shares the top row; the four ingredient producers
+// sit in the second row. On a 12-col grid that's span-4 (×3) over span-3 (×4).
+const CORE: StationType[] = ['plot', 'mill', 'coop'];
+
 const CHAIN_HINT: Record<StationType, React.ReactNode> = {
   plot: (
     <span className="inline-flex items-center gap-1">
@@ -37,16 +41,17 @@ export function BuildBar({ state, buildType, onPick }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <div className="text-xs font-bold uppercase tracking-wider text-[#9a8a6a]">Build</div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-12 gap-2">
         {STATION_ORDER.map((t) => {
           const cost = BALANCE.COSTS[t];
           const affordable = state.resources.eggs >= cost;
           const selected = buildType === t;
+          const span = CORE.includes(t) ? 'col-span-4' : 'col-span-3';
           return (
             <button
               key={t}
               onClick={() => onPick(selected ? null : t)}
-              className={`flex flex-col items-start gap-1 rounded-md border px-2.5 py-2 text-left transition ${
+              className={`${span} flex flex-col items-start gap-1 rounded-md border px-2.5 py-2 text-left transition ${
                 selected
                   ? 'border-[#fff4d6] bg-[#3a2e22]'
                   : 'border-transparent bg-[#2a2018] hover:bg-[#33271c]'
