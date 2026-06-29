@@ -98,7 +98,7 @@ function RationSliders({
               type="range"
               min={0}
               max={RATION_MAX}
-              step={0.5}
+              step={0.25}
               value={val}
               onChange={(e) => onSet(ing, parseFloat(e.target.value))}
               className="flex-1 accent-[#e2b94f]"

@@ -82,7 +82,9 @@ describe('flock condition battery', () => {
 
 describe('satisfaction is smoothed (no strobe)', () => {
   it('holds steady on a marginal line instead of bouncing', () => {
-    // 1 plot (~0.667 corn/s) barely feeds 1 coop (~0.625/s) — the strobe case.
+    // 1 plot (~1.0 corn/s) short-feeds 1 coop (~1.25 corn/s for 2 hens): a chunky,
+    // near-margin line where stock hovers low. The EMA must keep energy steady —
+    // a smoothing regression would swing it several times harder (~0.3+).
     const s = build({ plot: 1, mill: 1, coop: 1 });
     run(s, 30);
     let prev = s.nutrition!.satisfaction.energy;
@@ -93,7 +95,7 @@ describe('satisfaction is smoothed (no strobe)', () => {
       maxSwing = Math.max(maxSwing, Math.abs(e - prev));
       prev = e;
     }
-    expect(maxSwing).toBeLessThan(0.02);
+    expect(maxSwing).toBeLessThan(0.1);
   });
 });
 

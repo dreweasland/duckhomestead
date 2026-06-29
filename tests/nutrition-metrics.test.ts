@@ -16,7 +16,7 @@ import { build, setHens, run } from './helpers';
 
 const N = BALANCE.NUTRITION;
 const COOP_CYCLE = BALANCE.COOP.cycleSeconds; // 4s
-const STEP = 0.5; // the ration slider's increment (NutritionPanel)
+const STEP = 0.25; // the ration slider's increment (NutritionPanel)
 
 /** Which station produces each ingredient. */
 const PRODUCER: Record<Ingredient, StationType> = {
@@ -162,6 +162,8 @@ describe('nutrition balance metrics', () => {
     // Always-on invariant: the default ration meets every axis when fully stocked.
     const sat = stockedSatisfaction(N.DEFAULT_RATION as Ration);
     for (const axis of AXES) expect(sat[axis]).toBeGreaterThanOrEqual(1);
+    // And every default is settable on the slider grid (no off-grid values).
+    for (const ing of INGREDIENTS) expect(onGrid((N.DEFAULT_RATION as Ration)[ing])).toBe(true);
   });
 
   it('the live sim agrees with the analytic producer counts (8 hens fed)', () => {

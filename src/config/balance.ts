@@ -47,7 +47,7 @@ export const BALANCE = {
   /** Feed Plot: produces corn from nothing. The chain's root. */
   PLOT: {
     cornPerCycle: 2,
-    cycleSeconds: 3,
+    cycleSeconds: 2,
   },
   /** Feed Mill: blends the ration (formulation + feed capacity), not pellets. */
   MILL: {
@@ -130,14 +130,15 @@ export const BALANCE = {
 
   // ── Phase 2: ingredient producers (raw, like the plot) ──────────────
   /** Each ingredient station produces `perCycle` of its resource every cycle. */
-  // Tuned so one ingredient station roughly feeds one coop at the default
-  // ration (with ~30% headroom so stock grows and axes hold green). Rates/s:
-  // peas 0.50, mealworms 0.33, yeast 0.40, shell 0.40 (+ plot corn 0.67).
+  // Rates bumped so the flock doesn't demand ~1 producer PER laying hen (a full
+  // coop used to need ~3-4 of every line). Now ~0.5 producers/hen; you build a
+  // handful and lean on UPGRADES once the yard fills. Rates/s: peas 0.75,
+  // mealworms 0.50, yeast 0.50, shell 0.50 (+ plot corn 1.00).
   INGREDIENT_PROD: {
-    peaPatch: { resource: 'peas', perCycle: 2, cycleSeconds: 4 },
-    mealwormFarm: { resource: 'mealworms', perCycle: 1, cycleSeconds: 3 },
-    yeastVat: { resource: 'brewersYeast', perCycle: 1, cycleSeconds: 2.5 },
-    oysterSource: { resource: 'oysterShell', perCycle: 1, cycleSeconds: 2.5 },
+    peaPatch: { resource: 'peas', perCycle: 3, cycleSeconds: 4 },
+    mealwormFarm: { resource: 'mealworms', perCycle: 1, cycleSeconds: 2 },
+    yeastVat: { resource: 'brewersYeast', perCycle: 1, cycleSeconds: 2 },
+    oysterSource: { resource: 'oysterShell', perCycle: 1, cycleSeconds: 2 },
   } as const,
 
   // ── Phase 2: the nutrition grid (the homestead's "power grid") ───────
@@ -166,10 +167,12 @@ export const BALANCE = {
      * but is short on the rest (throttled, buffered by flock condition).
      * Satisfaction[axis] (fully stocked) = Σ ration[i]·INGREDIENT[i][axis] / REQUIREMENT[axis].
      */
-    DEFAULT_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.2, oysterShell: 1.2 },
-    /** Feed throughput a single mill can blend per second (level-scaled). A coop
-     * eats ~1.85 feed/s at the default ration, so ~1 mill per coop. */
-    MILL_CAPACITY: 2,
+    // On-grid (0.25 slider step) so every default is settable; yeast/shell 1.25
+    // keep ~25% niacin/calcium headroom.
+    DEFAULT_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.25, oysterShell: 1.25 },
+    /** Feed throughput a single mill can blend per second (level-scaled). Raised
+     * with the producer rates so mills don't also need ~1 per hen (~0.5/hen now). */
+    MILL_CAPACITY: 4,
     /** Per-axis output factor floor when an axis is fully starved. */
     THROTTLE_FLOOR: 0.2,
     /**
@@ -229,10 +232,11 @@ export const BALANCE = {
   // regen + the wound-escalation timer (see game/water.ts, game/pond.ts).
   // It NEVER produces eggs/currency and never touches a nutrition axis.
   WATER: {
-    /** Stage 1 — the Pond (layout). Teased + locked like any zone. */
-    POND_UNLOCK: { rankRequired: 12, eggCost: 4000 },
+    /** Stage 1 — the Pond (layout). Teased + locked like any zone. Cost kept
+     *  modest — it's a wellness feature (no income) and is re-paid each prestige. */
+    POND_UNLOCK: { rankRequired: 12, eggCost: 1500 },
     /** Stage 2 — Waterworks (circulation). Arrives later, as fouling bites. */
-    WORKS_UNLOCK: { rankRequired: 18, eggCost: 6000 },
+    WORKS_UNLOCK: { rankRequired: 18, eggCost: 3000 },
     /** The shared water canvas (pond shape). Both tabs edit these coordinates. */
     CANVAS: { width: 7, height: 5 },
     /** Always-on baseline provision (the yard's puddle) so a small flock with no
