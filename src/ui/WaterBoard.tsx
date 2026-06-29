@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { pondView } from '../game/pond';
@@ -20,6 +20,10 @@ const GW = W.CANVAS.width * TILE;
 const GH = W.CANVAS.height * TILE;
 
 type Mode = 'layout' | 'circulation';
+
+/** Per-browser "I've seen the help for this tab" flag (UI onboarding only — kept
+ *  out of the game save so it never touches prestige/migration). */
+const HELP_SEEN_KEY = (mode: Mode) => `duck-homestead-waterhelp-${mode}`;
 
 const FEAT_META: Record<PondFeatureType, { label: string; color: string; tag: string }> = {
   spring: { label: 'Spring', color: '#52b6dc', tag: 'Sp' },
@@ -109,7 +113,13 @@ function MiniGrid({ features, flow }: { features: PondFeature[]; flow?: FlowFeat
 }
 
 /** The help sheet: what each piece does + a worked ideal layout. */
-function WaterHelp({ onClose }: { onClose: () => void }) {
+function WaterHelp({
+  onClose,
+  starter,
+}: {
+  onClose: () => void;
+  starter: { isFlow: boolean; cost: number; canAfford: boolean; alreadyBuilt: boolean; onPlace: () => void };
+}) {
   const Swatch = ({ color }: { color: string }) => (
     <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: color }} />
   );
@@ -184,6 +194,23 @@ function WaterHelp({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         </div>
+
+        {/* One-tap: drop the example for the tab you're on (charges eggs). */}
+        {!starter.alreadyBuilt && (
+          <button
+            onClick={starter.onPlace}
+            disabled={!starter.canAfford}
+            className={`mt-3 w-full rounded-md px-3 py-2 text-xs font-bold transition ${
+              starter.canAfford
+                ? 'bg-[#27485a] text-[#dff] hover:bg-[#2f5870]'
+                : 'cursor-not-allowed bg-[#13202a] text-[#5a7a8a]'
+            }`}
+          >
+            {starter.canAfford
+              ? `Place the ${starter.isFlow ? 'Waterworks' : 'Pond'} starter · ${starter.cost.toLocaleString()} eggs`
+              : `Need ${starter.cost.toLocaleString()} eggs for the ${starter.isFlow ? 'Waterworks' : 'Pond'} starter`}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -202,6 +229,18 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
     isFlow ? 'fountain' : 'bathingPool',
   );
   const [help, setHelp] = useState(false);
+  // Auto-open the help sheet the first time each tab is viewed (once per browser).
+  useEffect(() => {
+    try {
+      const k = HELP_SEEN_KEY(mode);
+      if (!localStorage.getItem(k)) {
+        localStorage.setItem(k, '1');
+        setHelp(true);
+      }
+    } catch {
+      /* storage unavailable — just don't auto-open */
+    }
+  }, [mode]);
   const view = pondView(state);
   const featAt = (x: number, y: number) => view.features.find((f) => f.x === x && f.y === y);
   const flowAt = (x: number, y: number) => view.flow.find((f) => f.x === x && f.y === y);
@@ -213,6 +252,24 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
   const healthPct = Math.round(view.circulationHealth * 100);
   const outgrowing = state.ducks.length > 0 && provision < requirement * 0.999;
   const stagnating = view.features.filter((f) => !f.covered && f.freshness < 0.85).length;
+
+  // One-tap starter: drop the worked example for whichever tab you're on.
+  const starterSet = isFlow ? EXAMPLE_FLOW : EXAMPLE_FEATURES;
+  const starterCost = isFlow
+    ? EXAMPLE_FLOW.reduce((a, f) => a + W.FLOW[f.type].costEggs, 0)
+    : EXAMPLE_FEATURES.reduce((a, f) => a + W.FEATURES[f.type].costEggs, 0);
+  const starterBuilt = isFlow ? view.flow.length > 0 : view.features.length > 0;
+  const placeStarter = () => {
+    let placed = false;
+    for (const f of starterSet) {
+      const r = isFlow
+        ? engine.placeFlowFeature(f.type as FlowFeatureType, f.x, f.y)
+        : engine.placePondFeature(f.type as PondFeatureType, f.x, f.y);
+      placed = placed || r.ok;
+    }
+    if (placed) playPlace();
+    setHelp(false);
+  };
 
   // Coverage tiles (live fountains within radius) — a faint wash in circ mode.
   const covered = new Set<string>();
@@ -243,7 +300,18 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
 
   return (
     <div className="flex flex-col items-center gap-2" style={{ width: GW }}>
-      {help && <WaterHelp onClose={() => setHelp(false)} />}
+      {help && (
+        <WaterHelp
+          onClose={() => setHelp(false)}
+          starter={{
+            isFlow,
+            cost: starterCost,
+            canAfford: state.resources.eggs >= starterCost,
+            alreadyBuilt: starterBuilt,
+            onPlace: placeStarter,
+          }}
+        />
+      )}
       <div className="flex w-full items-center justify-between">
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#a8d0e8]">
           <WaterIcon size={13} /> {isFlow ? 'Waterworks — circulation' : 'The Pond — layout'}
