@@ -5,6 +5,7 @@ import type { GameState, Resource } from '../game/state';
 import { rankProgress, xpForLevel } from '../game/rank';
 import { fmt } from './format';
 import { CartIcon, DuckIcon, LockIcon, MuteIcon, RESOURCE_ICON, SpeakerIcon, TendIcon } from './icons';
+import { RankPanel } from './RankPanel';
 
 // Eggs (currency) + the five nutrition ingredients. `pellets` is a retired
 // Phase 1 field and is intentionally not shown.
@@ -21,6 +22,7 @@ export function HUD({ state }: { state: GameState }) {
   const prog = rankProgress(state.rank, state.xp);
   const need = xpForLevel(state.rank);
   const [muted, setMutedState] = useState(isMuted());
+  const [ranksOpen, setRanksOpen] = useState(false);
   // Forage (foraged energy feed) only appears once a forage zone is in play.
   const res =
     state.resources.forage > 0 ? [...RES, { key: 'forage' as Resource, label: 'Forage' }] : RES;
@@ -63,10 +65,21 @@ export function HUD({ state }: { state: GameState }) {
         })}
       </div>
 
-      {/* Rank bar */}
-      <div className="rounded-md bg-[#2a2018] px-3 py-2">
+      {/* Rank bar — click to see what unlocks by rank */}
+      {ranksOpen && <RankPanel state={state} onClose={() => setRanksOpen(false)} />}
+      <button
+        type="button"
+        onClick={() => setRanksOpen(true)}
+        className="w-full rounded-md bg-[#2a2018] px-3 py-2 text-left ring-1 ring-transparent transition hover:bg-[#332615] hover:ring-[#5a4a32]"
+        aria-label="See what unlocks by rank"
+      >
         <div className="mb-1 flex items-center justify-between text-xs">
-          <span className="font-bold text-[#ffe9a8]">Homestead Rank {state.rank}</span>
+          <span className="inline-flex items-center gap-1.5 font-bold text-[#ffe9a8]">
+            Homestead Rank {state.rank}
+            <span className="grid h-4 w-4 place-items-center rounded-full bg-[#5a4a32] text-[10px] font-black text-[#ffe9a8]">
+              ?
+            </span>
+          </span>
           <span className="tabular-nums text-[#c9b88f]">
             {Math.floor(state.xp)} / {need} XP
           </span>
@@ -77,10 +90,11 @@ export function HUD({ state }: { state: GameState }) {
             style={{ width: `${prog * 100}%` }}
           />
         </div>
-        <div className="mt-1 text-[10px] text-[#9a8a6a]">
-          XP comes only from tending — idle never ranks you up.
+        <div className="mt-1 flex items-center justify-between text-[10px]">
+          <span className="text-[#9a8a6a]">XP comes only from tending.</span>
+          <span className="font-bold text-[#b59a5a]">See unlocks →</span>
         </div>
-      </div>
+      </button>
 
       {/* Auto-haul status */}
       <div
