@@ -209,14 +209,17 @@ export default function App() {
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
           <div className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
             {/* Status pills tuck into the board's empty top headroom (the canvas
-                reserves space there) — present, but adding no height. The wrapper
-                ignores pointer events so the board/buttons beneath stay clickable;
-                only the pills themselves are interactive. */}
-            <div className="pointer-events-none absolute inset-x-0 top-1.5 z-10 flex justify-center">
-              <div className="pointer-events-auto">
-                <StatusPills state={state} />
+                reserves space there) — present, but adding no height. Yard only:
+                Auto-Haul / Tend-All are station/tending milestones, irrelevant on
+                the water canvases (which have their own header). The wrapper
+                ignores pointer events so the board beneath stays clickable. */}
+            {activeZone === 'yard' && (
+              <div className="pointer-events-none absolute inset-x-0 top-1.5 z-10 flex justify-center">
+                <div className="pointer-events-auto">
+                  <StatusPills state={state} />
+                </div>
               </div>
-            </div>
+            )}
             {/* Pin to the widest zone so swapping to a narrower one (pasture/pond)
                 centers the board instead of shrinking the whole column. */}
             <div
