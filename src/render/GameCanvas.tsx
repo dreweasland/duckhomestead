@@ -274,6 +274,10 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         const labelStyle = new TextStyle({ fontSize: 11, fill: 0xfff4d6, fontFamily: 'monospace' });
         const smallStyle = new TextStyle({ fontSize: 10, fill: 0xffe9a8, fontFamily: 'monospace' });
 
+        // Template only — each station's `up` text gets its OWN clone, since its
+        // fill is mutated per-station (affordable green / unaffordable red). Sharing
+        // one instance made the last-rendered station's colour win for ALL of them
+        // (green chevron, mismatched red cost).
         const upStyle = new TextStyle({ fontSize: 12, fontWeight: 'bold', fill: 0x8fe388, stroke: { color: 0x0f0b07, width: 3 }, fontFamily: 'monospace' });
 
         const sprites = new Map<
@@ -307,7 +311,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           const ring = new Graphics();
           const lvl = new Text({ text: '', style: smallStyle });
           const buf = new Text({ text: '', style: labelStyle });
-          const up = new Text({ text: '', style: upStyle });
+          const up = new Text({ text: '', style: upStyle.clone() });
           up.anchor.set(0.5);
           c.addChild(body, ring, lvl, buf, up);
           stationLayer.addChild(c);
