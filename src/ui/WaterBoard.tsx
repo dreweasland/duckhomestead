@@ -57,6 +57,8 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
   const access = waterAccess(state);
   const status = waterStatus(access);
   const healthPct = Math.round(view.circulationHealth * 100);
+  const outgrowing = state.ducks.length > 0 && provision < requirement * 0.999;
+  const stagnating = view.features.filter((f) => !f.covered && f.freshness < 0.85).length;
 
   // Coverage tiles (live fountains within radius) — a faint wash in circ mode.
   const covered = new Set<string>();
@@ -193,11 +195,33 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
           );
         })}
       </div>
-      <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
-        {isFlow
-          ? 'Tap to place; tap a flow piece to remove. A fountain only circulates when its line connects an intake to an outflow — keep every pond feature in a live fountain’s range.'
-          : 'Tap to place; tap a feature to remove. Cluster for bonuses: bathing pools beside a spring, plant beds beside your richest features.'}
-      </div>
+      {/* Dynamic, invited-upgrade prompt — the flock outgrowing its water should
+          read as a celebratory nudge, never a silent amber bar. */}
+      {isFlow ? (
+        stagnating > 0 ? (
+          <div className="w-full rounded-md bg-[#3a2a14] px-3 py-1.5 text-[10px] font-bold text-[#e8c45a]">
+            {stagnating} feature{stagnating > 1 ? 's' : ''} going stagnant — route intake → fountains
+            → outflow so a live fountain reaches {stagnating > 1 ? 'them' : 'it'}, or provision coasts
+            to the floor.
+          </div>
+        ) : (
+          <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
+            {view.features.length === 0
+              ? 'Build the Pond layout first — then circulate it here. A fountain only works on a line that connects an intake to an outflow.'
+              : 'Pond fully circulated — every feature is held at peak. Tap to place; tap a flow piece to remove.'}
+          </div>
+        )
+      ) : outgrowing ? (
+        <div className="w-full rounded-md bg-[#3a2a14] px-3 py-1.5 text-[10px] font-bold text-[#e8c45a]">
+          Your flock is outgrowing the pond — add features (cluster for bonuses: pools beside a
+          spring, plant beds beside your richest features) to give it more water.
+        </div>
+      ) : (
+        <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
+          Tap to place; tap a feature to remove. Cluster for bonuses: bathing pools beside a spring,
+          plant beds beside your richest features.
+        </div>
+      )}
     </div>
   );
 }
