@@ -1,9 +1,36 @@
 import { BALANCE } from '../config/balance';
 import { collectAll, placeStation } from './actions';
-import { initialState, rackSockets, seedFlock, type GameState, type Resource } from './state';
+import { initialState, rackSockets, seedFlock, type Duck, type Gene, type GameState, type Genome, type Resource } from './state';
 import { tick } from './tick';
 
 const SAVE_KEY = 'duck-homestead-save-v1';
+
+/**
+ * Breeding rework migration: convert a pre-rework duck's `vigor` scalar into a
+ * plausible 6-gene genome. Higher vigor → more good genes (spread across L/V/H,
+ * the rest Dud), so a strong old bird stays strong and a weak one has room to
+ * breed up. A re-roll would also satisfy the spec; this keeps the conversion
+ * monotonic so players don't feel robbed of a prized line.
+ */
+function migrateGenome(vigor: number | undefined): Genome {
+  const SLOTS = BALANCE.GENOME.SLOTS;
+  const v = typeof vigor === 'number' ? vigor : 1;
+  const t = Math.max(0, Math.min(1, (v - 0.5) / 1.5)); // old VIGOR_FLOOR..CEILING → 0..1
+  const good = Math.round(t * SLOTS);
+  const order: Gene[] = ['L', 'V', 'H'];
+  const genome: Genome = [];
+  for (let i = 0; i < SLOTS; i++) genome.push(i < good ? order[i % order.length] : 'D');
+  return genome;
+}
+
+/** A genome is valid iff it's an array of SLOTS genes from the gene set. */
+function validGenome(g: unknown): g is Genome {
+  return (
+    Array.isArray(g) &&
+    g.length === BALANCE.GENOME.SLOTS &&
+    g.every((x) => x === 'L' || x === 'V' || x === 'H' || x === 'D')
+  );
+}
 
 export interface AwaySummary {
   /** Real seconds elapsed since last seen (uncapped, for display). */
@@ -43,11 +70,20 @@ export function deserialize(raw: string, now: number): GameState {
       rack: parsed.rack ?? [],
       dust: parsed.dust ?? 0,
       nextModuleId: parsed.nextModuleId ?? 1,
-      // Phase 4a breeding defaults for older saves.
-      ducks: parsed.ducks ?? [],
+      // Phase 4a breeding defaults for older saves. Breeding rework: migrate each
+      // duck's vigor → a genome (drop the dead vigor field). A pre-rework save has
+      // no gene-reader, so migrated genomes start hidden until one is built.
+      ducks: (parsed.ducks ?? []).map((raw) => {
+        const { vigor: _vigor, ...d } = raw as Duck & { vigor?: number };
+        const genome = validGenome(d.genome) ? d.genome : migrateGenome(_vigor);
+        return { ...d, genome, genomeKnown: d.genomeKnown ?? (parsed.geneReader ?? false) };
+      }),
       nextDuckId: parsed.nextDuckId ?? 1,
       breedingPairs: parsed.breedingPairs ?? [],
       nextPairId: parsed.nextPairId ?? 1,
+      // Breeding rework: the god-clone target + the gene-reader flag.
+      genomeTarget: validGenome(parsed.genomeTarget) ? parsed.genomeTarget : [...base.genomeTarget],
+      geneReader: parsed.geneReader ?? false,
       dexSeen: parsed.dexSeen ?? [],
       // Phase 4b zones: pre-4b saves get the default (Yard-only unlocked); merge
       // so a partial saved zone map still has every known zone present. (The old
@@ -74,12 +110,13 @@ export function deserialize(raw: string, now: number): GameState {
       legacyTier: parsed.legacyTier ?? 0,
       legacyCurrency: parsed.legacyCurrency ?? 0,
       purchasedBoosts: { ...(parsed.purchasedBoosts ?? {}) },
-      // Champion-goal rework: hall entries used to store `score`, now `meanVigor`.
-      // Normalise old entries (no live data to derive from → 0) so the Hall renders.
+      // Champion-goal rework: hall entries now store genome `meanQuality`.
+      // Normalise older entries (vigor-era or score-era — no genome data to derive
+      // from → 0) so the Hall still renders.
       legacyHall: (parsed.legacyHall ?? []).map((c) => ({
         tier: c.tier,
-        meanVigor: typeof c.meanVigor === 'number' ? c.meanVigor : 0,
-        bestVigor: c.bestVigor ?? 0,
+        meanQuality: typeof c.meanQuality === 'number' ? c.meanQuality : 0,
+        bestQuality: typeof c.bestQuality === 'number' ? c.bestQuality : 0,
         flockSize: c.flockSize ?? 0,
         colors: c.colors ?? [],
         timestamp: c.timestamp ?? 0,

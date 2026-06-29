@@ -1,7 +1,12 @@
-import { initialState, type GameState } from '../src/game/state';
+import { initialState, type Gene, type Genome, type GameState } from '../src/game/state';
 import { placeStation } from '../src/game/actions';
 import { tick } from '../src/game/tick';
 import type { StationType } from '../src/config/balance';
+
+/** All-Dud genome → layMult 1.0 (the old "vigor 1.0" baseline for sim tests). */
+export const FLAT_GENOME: Genome = ['D', 'D', 'D', 'D', 'D', 'D'];
+/** Build a 6-slot genome from a gene string like "LLLDDD". */
+export const genome = (s: string): Genome => s.split('') as Gene[];
 
 export const INGREDIENTS = ['corn', 'peas', 'mealworms', 'brewersYeast', 'oysterShell'] as const;
 
@@ -46,15 +51,17 @@ export function run(s: GameState, seconds: number, autoHaul = true): GameState {
 }
 
 /**
- * Replace the seeded flock with a controlled set of adult hens (vigor 1.0).
- * A 1-hen flock makes the layer nutrition match Phase 2's single coop exactly
- * (adultCount = 1), so the green-bar / 15-eggs-min assertions still hold.
+ * Replace the seeded flock with a controlled set of adult hens. The default
+ * all-Dud genome lays at layMult 1.0 (the old "vigor 1.0" baseline), so a 1-hen
+ * flock matches Phase 2's single coop exactly and the green-bar / 15-eggs-min
+ * assertions still hold. Pass a genome to vary output.
  */
-export function setHens(s: GameState, count: number, vigor = 1): GameState {
+export function setHens(s: GameState, count: number, g: Genome = FLAT_GENOME): GameState {
   s.ducks = Array.from({ length: count }, (_, i) => ({
     id: `h${i}`,
     genotype: ['Bl', 'bl'] as ['Bl', 'bl'],
-    vigor,
+    genome: [...g],
+    genomeKnown: true,
     sex: 'hen' as const,
     stage: 'adult' as const,
     ageTicks: 0,

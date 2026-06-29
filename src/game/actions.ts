@@ -9,7 +9,7 @@ import {
   tendPowerMult,
 } from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
-import type { GameState, Module, Rarity, Resource, Station } from './state';
+import type { Gene, GameState, Module, Rarity, Resource, Station } from './state';
 import { isBlockedTile, rackSockets, secureCapacity, seedFlock, stationAt, zoneUnlocked } from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
@@ -349,10 +349,9 @@ export function rerollModule(
 
 // ── Breeding pairs + culling (the selection pressure) ─────────────────
 /**
- * Release a duck from the flock — the selection lever. Removing low-vigor birds
- * frees housing AND raises the live population mean, which lifts the breeding
- * target so the flock walks toward the vigor ceiling. Also drops any pair the
- * duck belonged to.
+ * Release a duck from the flock — the selection lever. Removing weak-genome birds
+ * frees housing AND raises the live mean genome quality, which is what the player
+ * steers toward the god-clone target. Also drops any pair the duck belonged to.
  */
 export function cullDuck(state: GameState, duckId: string): ActionResult<unknown> {
   const idx = state.ducks.findIndex((d) => d.id === duckId);
@@ -398,6 +397,45 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
   if (idx < 0) return fail('No such pair');
   state.breedingPairs.splice(idx, 1);
   return done(true);
+}
+
+// ── God-clone target (the player's breeding goal) ─────────────────────
+/**
+ * Set the god-clone target profile the flock is steered toward. Drives the
+ * genome-quality readouts, the Legacy Score, and the god-clone DING. Validated
+ * to GENOME.SLOTS genes from the gene set; rejected otherwise.
+ */
+export function setGenomeTarget(state: GameState, target: Gene[]): ActionResult<unknown> {
+  const genes = BALANCE.GENOME.GENES as readonly string[];
+  if (target.length !== BALANCE.GENOME.SLOTS || !target.every((g) => genes.includes(g))) {
+    return fail('Invalid target profile');
+  }
+  state.genomeTarget = [...target];
+  return done(true);
+}
+
+// ── Gene Reader (reveals genomes passively / in bulk) ─────────────────
+/**
+ * Build the gene-reader. One-time purchase: it immediately reads the WHOLE
+ * current flock (in bulk) and, from then on, every newly hatched/acquired duck
+ * auto-reads on arrival (see breeding.ts). NEVER a per-duck click — reading is
+ * the passive gate to deliberate min/maxing; phone-it-in pairing (off visible
+ * colour) works without it.
+ */
+export function buildGeneReader(state: GameState): ActionResult<{ revealed: number }> {
+  if (state.geneReader) return fail('Gene reader already built');
+  const cost = BALANCE.GENOME.READER_COST_EGGS;
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.geneReader = true;
+  let revealed = 0;
+  for (const d of state.ducks) {
+    if (!d.genomeKnown) {
+      d.genomeKnown = true;
+      revealed += 1;
+    }
+  }
+  return done({ revealed });
 }
 
 // ── Dose Brewer's Yeast (active-only intervention; clears a leg debuff) ──

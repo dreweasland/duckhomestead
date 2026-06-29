@@ -422,16 +422,11 @@ export const BALANCE = {
 
   // ── Phase 4a: breeding & genetics ───────────────────────────────────
   // Two orthogonal axes: COLOR (Bl locus, Mendelian — the collection grind) and
-  // VIGOR (continuous heritable egg-output multiplier — the power grind). Vigor
-  // is throughput-only and NEVER touches nutrition requirements/matrix/throttle.
+  // the hidden 6-gene GENOME (the heritable quality — see GENOME below). The
+  // genome drives a duck's stats and is throughput-only: it NEVER touches
+  // nutrition requirements/matrix/throttle (see game/genetics.ts).
   BREEDING: {
     COOP_CAPACITY: 4, // adult-equivalent ducks housed per coop level
-    /** Vigor is a duck's egg-output multiplier. Bounded so breeding can't run away. */
-    VIGOR_FLOOR: 0.5,
-    VIGOR_CEILING: 2.0,
-    VIGOR_SEED_RANGE: [0.8, 1.2] as [number, number],
-    H2: 0.4, // heritability — offspring regress toward the population mean
-    VIGOR_NOISE: 0.1, // env variance per offspring
     /** Breeding loop timers (seconds). */
     CLUTCH_INTERVAL_S: 120, // a pair lays a fertilized clutch this often
     CLUTCH_SIZE: 4, // fertilized eggs per clutch
@@ -443,9 +438,68 @@ export const BALANCE = {
     DUCKLING_RATION_MATURE_PENALTY_FLOOR: 0.3, // worst-case maturation speed mult
     /** Default grow-out ration fed to immature ducks (satisfies E/P/N when stocked). */
     DEFAULT_DUCKLING_RATION: { corn: 1, peas: 0, mealworms: 2.5, brewersYeast: 2, oysterShell: 0 },
-    /** Starting flock seeded into the first coop (Blue carriers, mid vigor). */
+    /** Starting flock seeded into the first coop (Blue carriers, mixed genome). */
     SEED_DRAKES: 1,
     SEED_HENS: 2,
+  },
+
+  // ── Breeding rework: the hidden 6-gene GENOME (heritable quality) ────
+  // A duck's quality is a 6-slot genome, each slot a gene ∈ {L,V,H,D}. Stats
+  // derive from the gene PROFILE (the three good genes do DIFFERENT things, so
+  // the genome can't collapse to one scalar): L→egg output, V→growth/maturation
+  // (+ a smaller output bump), H→resilience (wound resistance + water synergy),
+  // D→nothing. THROUGHPUT-ONLY: genome-derived stats boost output/resilience and
+  // NEVER reduce a nutrition/water requirement. Inheritance is position-linked +
+  // dominance-weighted + per-slot mutation. See game/genetics.ts.
+  GENOME: {
+    SLOTS: 6,
+    GENES: ['L', 'V', 'H', 'D'] as const, // Lay, Vigor, Hardy, Dud
+    /** Expressed stat contribution per gene of each type (profile → stats).
+     *  Summed across the 6 slots, then folded into the existing output/resilience
+     *  chains as multipliers (1 + Σ). Never a nutrition/water requirement. */
+    STAT_PER_GENE: {
+      L: { eggOutput: 0.12 },
+      V: { eggOutput: 0.05, maturationSpeed: 0.1 },
+      H: { woundResist: 0.1, waterSynergy: 0.08 },
+      D: {},
+    } as Record<string, { eggOutput?: number; maturationSpeed?: number; woundResist?: number; waterSynergy?: number }>,
+    /** Hard ceiling on derived wound-resist (a chance to shrug off a wound), so a
+     *  full-Hardy clone is very tanky but never invulnerable. */
+    WOUND_RESIST_CAP: 0.6,
+    // ── inheritance ──
+    /** Relative weight a gene passes its slot (good genes weighted to pass → the
+     *  cross is plannable; D rarely wins a contested slot). */
+    DOMINANCE: { L: 3, V: 3, H: 3, D: 1 } as Record<string, number>,
+    /** Per-slot chance the inherited gene is replaced by a uniformly-random gene
+     *  (the occasional upgrade / escape from two-Dud parents). */
+    MUTATION_CHANCE: 0.04,
+    // ── gene-reader (Step 3) ──
+    /** Eggs to build the gene-reader. Once built it reveals genomes passively/in
+     *  bulk (the whole flock at build time, then every new duck auto-reads on
+     *  arrival) — NEVER a per-duck click. */
+    READER_COST_EGGS: 1500,
+    // ── god clone (Step 5) ──
+    /** Default target profile a player steers toward (all-Lay god clone). */
+    DEFAULT_TARGET: ['L', 'L', 'L', 'L', 'L', 'L'] as const,
+    /** Seed-flock genomes: per-slot gene weights (Dud-leaning so a fresh flock is
+     *  middling — accessible floor, real room to breed up toward a god clone). */
+    SEED_GENE_WEIGHTS: { L: 1, V: 1, H: 1, D: 2 } as Record<string, number>,
+  },
+
+  // ── Phenotype band: the free, always-visible "phone-it-in" floor ─────
+  // Every duck shows a COARSE performance band per axis (Lay / Vigor / Hardy),
+  // visible from turn one with no gene-reader. The band is derived from the
+  // duck's INTRINSIC genome potential (the STAT_PER_GENE profile), NOT its live
+  // egg output — so a starving gem still reads strong and a well-fed dud still
+  // reads weak. It is deliberately coarse: it buckets each axis into a few tiers
+  // and NEVER reveals the exact genes/slots (those stay gene-reader-gated). See
+  // game/genetics.ts (axisScore / axisTier).
+  PHENOTYPE: {
+    TIERS: 5, // pips / bands per axis
+    // Bucket thresholds on the intrinsic axis score (0..1, where a 6-of-the-axis-
+    // gene genome reads 1.0 and a 6-Dud genome reads 0). A score lands in tier
+    // = (count of thresholds it meets), so there are TIERS = thresholds+1 buckets.
+    AXIS_THRESHOLDS: [0.15, 0.35, 0.6, 0.85],
   },
 
   // ── Phase 4e: prestige (the meta loop) ──────────────────────────────
@@ -457,28 +511,30 @@ export const BALANCE = {
   // The goal is THREE concrete requirements, so it can't be brute-forced by raw
   // headcount and the player can read exactly what's left:
   //   1. all colours bred (collection mastery),
-  //   2. average flock vigor ≥ the tier's vigor gate (breeding mastery — needs
-  //      real selective breeding + culling, and the gate RISES each prestige),
+  //   2. average flock GENOME QUALITY ≥ the tier's gate (breeding mastery — the
+  //      mean number of slots matching the god-clone target, 0..6; needs real
+  //      selective crossbreeding + culling, and the gate RISES each prestige),
   //   3. flock size ≥ the tier's target (which scales each prestige).
   PRESTIGE: {
-    /** Required average flock vigor (range 0.5–2.0; seed ≈ 1.0). A mastery bar
-     *  that RISES each tier: gate(tier) = min(MAX, BASE + PER_TIER·tier). Capped
-     *  below the 2.0 ceiling so it always stays reachable. */
-    VIGOR_GATE_BASE: 1.5,
-    VIGOR_GATE_PER_TIER: 0.05,
-    VIGOR_GATE_MAX: 1.9,
+    /** Required average flock GENOME QUALITY = mean slots matching the god-clone
+     *  target (range 0..GENOME.SLOTS; a fresh flock ≈ 2). A mastery bar that
+     *  RISES each tier: gate(tier) = min(MAX, BASE + PER_TIER·tier). Capped below
+     *  the 6-slot perfect so it always stays reachable. */
+    QUALITY_GATE_BASE: 4.5,
+    QUALITY_GATE_PER_TIER: 0.1,
+    QUALITY_GATE_MAX: 5.7,
     /** Flock-size target at tier 0; each tier multiplies it by SIZE_GROWTH.
      *  A real grind that forces deep coop upgrades, not a formality
      *  (≈100, 150, 225, 337, …). */
     SIZE_BASE: 100,
     SIZE_GROWTH: 1.5,
     /** Legacy currency = CURRENCY_AT_THRESHOLD scaled by BOTH overshoots:
-     *  (size/target)^OVERSHOOT_EXP × (meanVigor/gate)^VIGOR_EXP — so a
+     *  (size/target)^OVERSHOOT_EXP × (meanQuality/gate)^QUALITY_EXP — so a
      *  championship flock out-earns a merely-bigger one (both ratios are ≥ 1
      *  once the requirements are met). */
     CURRENCY_AT_THRESHOLD: 10,
     CURRENCY_OVERSHOOT_EXP: 0.8,
-    CURRENCY_VIGOR_EXP: 1.5,
+    CURRENCY_QUALITY_EXP: 1.5,
     /** Stackable global-scalar boosts. perLevel = fractional bump per level;
      *  cost for level L = round(baseCost · costGrowth^L). */
     BOOSTS: {

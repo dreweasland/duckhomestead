@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import type { GameState } from './state';
+import { flockWaterSynergy } from './genetics';
 import { circulationHealth, pondLayoutBase } from './pond';
 
 /**
@@ -55,9 +56,12 @@ export function waterCurve(ratio: number, atHalf: number, atDouble: number): num
   return Math.max(0, 1 + (atHalf - 1) * shortfall);
 }
 
-/** Condition-regen multiplier from water access (slower when thirsty, faster when flush). */
+/** Condition-regen multiplier from water access (slower when thirsty, faster when
+ *  flush), lifted by the flock's mean H-gene water synergy (a wellness reward —
+ *  it never reduces the water requirement, only gets more condition from access). */
 export function waterConditionMult(state: GameState): number {
-  return waterCurve(waterAccess(state), W.CONDITION_REGEN_AT_HALF, W.CONDITION_REGEN_AT_DOUBLE);
+  const base = waterCurve(waterAccess(state), W.CONDITION_REGEN_AT_HALF, W.CONDITION_REGEN_AT_DOUBLE);
+  return base * (1 + flockWaterSynergy(state));
 }
 
 /** Wound-escalation-timer multiplier from water access (less/more time to treat). */

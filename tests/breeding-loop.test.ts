@@ -1,18 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { createPair, cullDuck, cullDucks, removePair } from '../src/game/actions';
-import { breedVigor, populationMeanVigor } from '../src/game/genetics';
+import { goodGeneCount } from '../src/game/genetics';
 import { runOfflineCatchUp, serialize, deserialize } from '../src/game/save';
-import { phenotype, type Duck, type GameState } from '../src/game/state';
-import { build, run, stockAll } from './helpers';
+import { phenotype, type Duck, type Genome, type GameState } from '../src/game/state';
+import { build, run, stockAll, FLAT_GENOME, genome } from './helpers';
 
-const B = BALANCE.BREEDING;
-
-/** Replace the flock with a controlled drake + hen of a given genotype/vigor. */
-function pairFlock(s: GameState, geno: Duck['genotype'], vigor = 1): { drakeId: string; henId: string } {
+/** Replace the flock with a controlled drake + hen of a given genotype/genome. */
+function pairFlock(s: GameState, geno: Duck['genotype'], g: Genome = FLAT_GENOME): { drakeId: string; henId: string } {
   s.ducks = [
-    { id: 'D', genotype: geno, vigor, sex: 'drake', stage: 'adult', ageTicks: 0 },
-    { id: 'H', genotype: geno, vigor, sex: 'hen', stage: 'adult', ageTicks: 0 },
+    { id: 'D', genotype: geno, genome: [...g], genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 },
+    { id: 'H', genotype: geno, genome: [...g], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 },
   ];
   s.nextDuckId = 100;
   return { drakeId: 'D', henId: 'H' };
@@ -41,6 +39,21 @@ describe('breeding loop end to end', () => {
     const offspring = s.ducks.filter((d) => d.id !== 'D' && d.id !== 'H');
     expect(offspring.length).toBeGreaterThan(0);
     expect(offspring.some((d) => d.stage === 'adult')).toBe(true); // matured fully
+  });
+
+  it('offspring carry a full 6-slot genome inherited from the parents', () => {
+    const s = stockAll(build({ coop: 2 }));
+    const { drakeId, henId } = pairFlock(s, ['Bl', 'bl'], genome('LLLHHH'));
+    createPair(s, drakeId, henId);
+    run(s, 300);
+    const offspring = s.ducks.filter((d) => d.id !== 'D' && d.id !== 'H');
+    expect(offspring.length).toBeGreaterThan(0);
+    expect(offspring.every((d) => d.genome.length === BALANCE.GENOME.SLOTS)).toBe(true);
+    // Both parents are LLLHHH; mutation aside, slots come from L/H — the vast
+    // majority of inherited slots should be one of the parents' genes.
+    const slots = offspring.flatMap((d) => d.genome);
+    const fromParents = slots.filter((g) => g === 'L' || g === 'H').length;
+    expect(fromParents / slots.length).toBeGreaterThan(0.8);
   });
 
   it('offspring genotype comes from the parents (Splash×Splash breeds true)', () => {
@@ -110,33 +123,36 @@ describe('offline breeding', () => {
   });
 });
 
-describe('culling = the selection lever (live pop mean)', () => {
-  it('cullDuck removes the duck, drops its pair, and raises the live mean', () => {
-    const s = build({ coop: 2 });
-    s.ducks.forEach((d, i) => (d.vigor = [0.6, 1.4, 1.0][i] ?? 1));
+describe('culling = the selection lever (live mean genome quality)', () => {
+  const meanGood = (f: Duck[]) => f.reduce((a, d) => a + goodGeneCount(d.genome), 0) / f.length;
+
+  it('cullDuck removes the duck, drops its pair, and raises the live mean quality', () => {
+    const s = build({ coop: 2 }); // seeded: drake d1, hens d2/d3
+    const genomes = [genome('DDDDDD'), genome('LLLLDD'), genome('LLDDDD')];
+    s.ducks.forEach((d, i) => (d.genome = genomes[i] ?? [...FLAT_GENOME]));
     const drake = s.ducks.find((d) => d.sex === 'drake')!;
     const hen = s.ducks.find((d) => d.sex === 'hen')!;
     createPair(s, drake.id, hen.id);
-    const before = populationMeanVigor(s);
-    const lowest = [...s.ducks].sort((a, b) => a.vigor - b.vigor)[0];
+    const before = meanGood(s.ducks);
+    const lowest = [...s.ducks].sort((a, b) => goodGeneCount(a.genome) - goodGeneCount(b.genome))[0];
     cullDuck(s, lowest.id);
     expect(s.ducks.some((d) => d.id === lowest.id)).toBe(false);
-    expect(populationMeanVigor(s)).toBeGreaterThan(before); // removing the worst lifts the anchor
+    expect(meanGood(s.ducks)).toBeGreaterThan(before); // removing the worst lifts the anchor
     if (lowest.id === drake.id || lowest.id === hen.id) expect(s.breedingPairs).toHaveLength(0);
   });
 
   it('cullDucks bulk-releases the set but protects secured + paired keepers', () => {
     const s = build({ coop: 4 });
-    const mk = (id: string, v: number, extra: Partial<Duck> = {}): Duck => ({
-      id, genotype: ['Bl', 'bl'], vigor: v, sex: 'hen', stage: 'adult', ageTicks: 0, ...extra,
+    const mk = (id: string, extra: Partial<Duck> = {}): Duck => ({
+      id, genotype: ['Bl', 'bl'], genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0, ...extra,
     });
     s.ducks = [
-      mk('lo1', 0.7),
-      mk('lo2', 0.8),
-      mk('keepSecured', 0.6, { secured: true }), // low but secured -> protected
-      mk('keepPairedD', 0.5, { sex: 'drake' }), // low but paired -> protected
-      mk('keepPairedH', 0.9),
-      mk('hi', 1.6),
+      mk('lo1'),
+      mk('lo2'),
+      mk('keepSecured', { secured: true }), // secured -> protected
+      mk('keepPairedD', { sex: 'drake' }), // paired -> protected
+      mk('keepPairedH'),
+      mk('hi'),
     ];
     createPair(s, 'keepPairedD', 'keepPairedH');
 
@@ -146,57 +162,5 @@ describe('culling = the selection lever (live pop mean)', () => {
     const ids = s.ducks.map((d) => d.id).sort();
     expect(ids).toEqual(['keepPairedD', 'keepPairedH', 'keepSecured']);
     expect(s.breedingPairs).toHaveLength(1); // the pair is intact
-  });
-
-  it('live mean + culling walks toward the ceiling; no culling stalls near the seed mean', () => {
-    const B = BALANCE.BREEDING;
-    const hen = (v: number): Duck => ({ id: `x${v}-${Math.random()}`, genotype: ['Bl', 'bl'], vigor: v, sex: 'hen', stage: 'adult', ageTicks: 0 });
-    const mean = (f: Duck[]) => f.reduce((a, d) => a + d.vigor, 0) / f.length;
-    // simulate the player loop: each gen, breed the top pair (live mean anchor),
-    // add a clutch, then optionally cull back to capacity.
-    function sim(cull: boolean): number {
-      let flock = Array.from({ length: 12 }, () => hen(0.8 + Math.random() * 0.4));
-      for (let g = 0; g < 80; g++) {
-        const top = [...flock].sort((a, b) => b.vigor - a.vigor);
-        const pm = mean(flock); // LIVE
-        for (let i = 0; i < 4; i++) flock.push(hen(breedVigor(top[0].vigor, top[1].vigor, pm)));
-        if (cull) flock = flock.sort((a, b) => b.vigor - a.vigor).slice(0, 12);
-      }
-      return mean(flock);
-    }
-    const culled = sim(true);
-    const uncull = sim(false);
-    expect(culled).toBeGreaterThan(1.7); // climbs toward the 2.0 ceiling
-    expect(uncull).toBeLessThan(1.4); // stalls without selection pressure
-    expect(culled).toBeGreaterThan(uncull + 0.4);
-    expect(culled).toBeLessThanOrEqual(B.VIGOR_CEILING); // but bounded
-  });
-});
-
-describe('vigor inheritance (regression to the mean, bounded)', () => {
-  it('stays within [floor, ceiling]', () => {
-    for (let i = 0; i < 1000; i++) {
-      const v = breedVigor(2.0, 2.0, 1.0);
-      expect(v).toBeGreaterThanOrEqual(B.VIGOR_FLOOR);
-      expect(v).toBeLessThanOrEqual(B.VIGOR_CEILING);
-    }
-  });
-
-  it('regresses toward the population mean (offspring of top parents < parents)', () => {
-    // two ceiling parents, low pop mean -> offspring well below the ceiling
-    const v = breedVigor(2.0, 2.0, 1.0, () => 0.5); // zero noise
-    expect(v).toBeLessThan(2.0);
-    expect(v).toBeGreaterThan(1.0); // but above the mean
-    expect(v).toBeCloseTo(1.0 + B.H2 * (2.0 - 1.0), 5);
-  });
-
-  it('selective breeding gains are bounded, not runaway', () => {
-    let mean = 1.0;
-    for (let gen = 0; gen < 100; gen++) {
-      // always breed two "best" at the ceiling against the current mean
-      mean = breedVigor(B.VIGOR_CEILING, B.VIGOR_CEILING, mean, () => 0.5);
-    }
-    expect(mean).toBeLessThanOrEqual(B.VIGOR_CEILING);
-    expect(mean).toBeLessThan(B.VIGOR_CEILING); // never actually reaches it via regression alone... bounded
   });
 });

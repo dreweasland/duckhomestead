@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import {
   phenotype,
@@ -10,9 +10,12 @@ import {
   type Genotype,
 } from '../src/game/state';
 import { AXES } from '../src/game/state';
-import { placeStation } from '../src/game/actions';
+import { buildGeneReader, createPair, placeStation, setGenomeTarget } from '../src/game/actions';
+import { runBreeding } from '../src/game/breeding';
 import { serialize, deserialize } from '../src/game/save';
-import { build, fullSetup, stockAll, run, setHens } from './helpers';
+import { layMult, targetMatch } from '../src/game/genetics';
+import type { Duck } from '../src/game/state';
+import { build, fullSetup, stockAll, run, setHens, FLAT_GENOME, genome } from './helpers';
 
 describe('Bl-locus phenotype', () => {
   it('maps blue-allele count to color', () => {
@@ -61,15 +64,15 @@ describe('adult selectors', () => {
     const s = build({ coop: 1 }); // seeded: 1 drake + 2 hens, all adult
     expect(adultDucks(s).length).toBe(3);
     expect(adultLayers(s).length).toBe(2);
-    s.ducks.push({ id: 'x', genotype: ['bl', 'bl'] as Genotype, vigor: 1, sex: 'hen', stage: 'duckling', ageTicks: 0 });
+    s.ducks.push({ id: 'x', genotype: ['bl', 'bl'] as Genotype, genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'duckling', ageTicks: 0 });
     expect(adultLayers(s).length).toBe(2); // ducklings don't lay
   });
 });
 
-describe('GUARDRAIL: vigor & flock drive output/demand, never the nutrition math', () => {
-  it('vigor scales egg output but leaves requirement + throttle identical', () => {
-    const lo = setHens(stockAll(fullSetup()), 2, 1.0);
-    const hi = setHens(stockAll(fullSetup()), 2, 2.0);
+describe('GUARDRAIL: genome & flock drive output/demand, never the nutrition math', () => {
+  it('genome layMult scales egg output but leaves requirement + throttle identical', () => {
+    const lo = setHens(stockAll(fullSetup()), 2, FLAT_GENOME); // layMult 1.0
+    const hi = setHens(stockAll(fullSetup()), 2, genome('LLLLLL')); // layMult 1.72
     run(lo, 200);
     run(hi, 200);
     expect(hi.nutrition!.requirement).toEqual(lo.nutrition!.requirement); // same demand
@@ -78,7 +81,9 @@ describe('GUARDRAIL: vigor & flock drive output/demand, never the nutrition math
     const hi0 = hi.resources.eggs;
     run(lo, 60);
     run(hi, 60);
-    expect((hi.resources.eggs - hi0) / (lo.resources.eggs - lo0)).toBeCloseTo(2, 1); // ~2x lay
+    // Lay ratio tracks the genome layMult ratio exactly — output only, no nutrition shift.
+    const expected = layMult(genome('LLLLLL')) / layMult(FLAT_GENOME);
+    expect((hi.resources.eggs - hi0) / (lo.resources.eggs - lo0)).toBeCloseTo(expected, 1);
   });
 
   it('layer requirement scales with adult-duck count (not coops)', () => {
@@ -94,16 +99,81 @@ describe('GUARDRAIL: vigor & flock drive output/demand, never the nutrition math
   it('never mutates the nutrition matrix / requirement constants', () => {
     const matrix = JSON.stringify(BALANCE.NUTRITION.INGREDIENT);
     const req = JSON.stringify(BALANCE.NUTRITION.REQUIREMENT);
-    run(setHens(stockAll(fullSetup()), 4, 2.0), 120);
+    run(setHens(stockAll(fullSetup()), 4, genome('LLLLLL')), 120);
     expect(JSON.stringify(BALANCE.NUTRITION.INGREDIENT)).toBe(matrix);
     expect(JSON.stringify(BALANCE.NUTRITION.REQUIREMENT)).toBe(req);
+  });
+});
+
+describe('gene reader: reveals genomes passively / in bulk (never per-duck)', () => {
+  it('builds once, costs eggs, and reveals the WHOLE current flock at once', () => {
+    const s = build({ coop: 1 }); // seeded flock, genomes hidden
+    expect(s.ducks.every((d) => !d.genomeKnown)).toBe(true);
+    s.resources.eggs = BALANCE.GENOME.READER_COST_EGGS;
+    const r = buildGeneReader(s);
+    expect(r.ok).toBe(true);
+    expect(s.geneReader).toBe(true);
+    expect(s.resources.eggs).toBe(0);
+    expect(s.ducks.every((d) => d.genomeKnown)).toBe(true); // bulk reveal
+    // a second build is rejected
+    expect(buildGeneReader(s).ok).toBe(false);
+  });
+
+  it('rejects the build when eggs are short', () => {
+    const s = build({ coop: 1 });
+    s.resources.eggs = BALANCE.GENOME.READER_COST_EGGS - 1;
+    expect(buildGeneReader(s).ok).toBe(false);
+    expect(s.geneReader).toBe(false);
+  });
+
+  it('once built, every newly hatched duck auto-reads on arrival', () => {
+    const s = stockAll(build({ coop: 2 }));
+    s.resources.eggs = 1e7;
+    buildGeneReader(s);
+    const drake = s.ducks.find((d) => d.sex === 'drake')!;
+    const hen = s.ducks.find((d) => d.sex === 'hen')!;
+    createPair(s, drake.id, hen.id);
+    run(s, 300); // a clutch hatches
+    const offspring = s.ducks.filter((d) => d.id !== drake.id && d.id !== hen.id);
+    expect(offspring.length).toBeGreaterThan(0);
+    expect(offspring.every((d) => d.genomeKnown)).toBe(true);
+  });
+});
+
+describe('god-clone target + DING', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('setGenomeTarget validates length + gene set', () => {
+    const s = build({ coop: 1 });
+    expect(setGenomeTarget(s, genome('HHHHHH')).ok).toBe(true);
+    expect(s.genomeTarget).toEqual(genome('HHHHHH'));
+    expect(setGenomeTarget(s, genome('HHH')).ok).toBe(false); // too short
+    expect(setGenomeTarget(s, ['L', 'L', 'L', 'L', 'L', 'X'] as never).ok).toBe(false); // bad gene
+    expect(s.genomeTarget).toEqual(genome('HHHHHH')); // unchanged by a rejected set
+  });
+
+  it('queues a god-clone DING when a hatch first perfectly matches the target', () => {
+    const s = build({ coop: 1 }); // cap 4
+    s.genomeTarget = genome('LLLLLL');
+    // Complementary parents (each only half-matches → no god clone in the flock yet).
+    const drake: Duck = { id: 'D', genotype: ['Bl', 'bl'], genome: genome('LLLDDD'), genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 };
+    const hen: Duck = { id: 'H', genotype: ['Bl', 'bl'], genome: genome('DDDLLL'), genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
+    s.ducks = [drake, hen];
+    s.nextDuckId = 50;
+    s.breedingPairs = [{ id: 'p', drakeId: 'D', henId: 'H', clutchProgress: 0, incubating: [BALANCE.BREEDING.INCUBATE_S - 0.5] }];
+    // rng 0.5 makes each slot inherit the Lay parent and never mutate → all-L child.
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    runBreeding(s, 1); // the egg hatches this step
+    const child = s.ducks.find((d) => d.id !== 'D' && d.id !== 'H')!;
+    expect(targetMatch(child.genome, s.genomeTarget)).toBe(BALANCE.GENOME.SLOTS); // a god clone
+    expect(s.pendingGodClone).toBe(1); // the DING was queued
   });
 });
 
 describe('save round-trip', () => {
   it('preserves the flock + dex + id counter', () => {
     const s = build({ coop: 1 });
-    s.ducks[0].vigor = 1.37;
+    s.ducks[0].genome = genome('LVHDLV');
     s.ducks[0].genotype = ['Bl', 'Bl'];
     const r = deserialize(serialize(s), 0);
     expect(r.ducks).toEqual(s.ducks);

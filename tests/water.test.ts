@@ -21,7 +21,7 @@ function ducks(n: number, stage: Duck['stage'] = 'adult'): Duck[] {
   return Array.from({ length: n }, (_, i): Duck => ({
     id: `w${i}`,
     genotype: ['bl', 'bl'] as Genotype,
-    vigor: 1,
+    genome: ['D', 'D', 'D', 'D', 'D', 'D'],
     sex: i % 2 ? 'hen' : 'drake',
     stage,
     ageTicks: 0,

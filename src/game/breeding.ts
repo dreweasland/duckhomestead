@@ -1,5 +1,5 @@
 import { BALANCE } from '../config/balance';
-import { breedGenotype, breedVigor, populationMeanVigor, recordColor } from './genetics';
+import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
 import { coopCapacity, phenotype, type Duck, type GameState } from './state';
 
 const B = BALANCE.BREEDING;
@@ -31,7 +31,6 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
     if (pair.clutchProgress > B.CLUTCH_INTERVAL_S) pair.clutchProgress = B.CLUTCH_INTERVAL_S; // cap if queue full
 
     // Incubate; hatch into ducklings when housing allows.
-    const popMean = populationMeanVigor(state);
     for (let i = pair.incubating.length - 1; i >= 0; i--) {
       pair.incubating[i] += step;
       if (pair.incubating[i] < B.INCUBATE_S) continue;
@@ -40,10 +39,17 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
         continue;
       }
       const genotype = breedGenotype(drake.genotype, hen.genotype);
+      const genome = breedGenome(drake.genome, hen.genome);
+      // God-clone DING fires when a hatch first achieves the target and the flock
+      // had none — so it re-fires if you lose every god clone and rebreed one.
+      const hadGodClone = state.ducks.some((d) => isGodClone(d.genome, state.genomeTarget));
       const duckling: Duck = {
         id: `d${state.nextDuckId++}`,
         genotype,
-        vigor: breedVigor(drake.vigor, hen.vigor, popMean),
+        genome,
+        // A built gene-reader auto-reads every new duck (passive/in bulk) — never
+        // a per-duck click. Without it the genome stays hidden ("?").
+        genomeKnown: state.geneReader,
         sex: Math.random() < 0.5 ? 'drake' : 'hen',
         stage: 'duckling',
         ageTicks: 0,
@@ -53,13 +59,17 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
       if (recordColor(state, phenotype(genotype))) {
         (state.pendingDex ??= []).push(phenotype(genotype));
       }
+      if (!hadGodClone && isGodClone(genome, state.genomeTarget)) {
+        state.pendingGodClone = (state.pendingGodClone ?? 0) + 1;
+      }
     }
   }
 
-  // ── Maturation: duckling -> juvenile -> adult (matureRate gates the speed) ──
+  // ── Maturation: duckling -> juvenile -> adult (matureRate gates the speed,
+  //    the duck's own V genes — maturationMult — speed it up). ──
   for (const d of state.ducks) {
     if (d.stage === 'adult') continue;
-    d.ageTicks += step * matureRate;
+    d.ageTicks += step * matureRate * maturationMult(d.genome);
     if (d.stage === 'duckling' && d.ageTicks >= B.MATURE_DUCKLING_S) {
       d.stage = 'juvenile';
       d.ageTicks = 0;

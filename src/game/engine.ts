@@ -2,6 +2,7 @@ import { BALANCE, type StationType } from '../config/balance';
 import {
   autoFillRack,
   buildDeterrent,
+  buildGeneReader,
   buildSecureCoop,
   repairDeterrents,
   collectAll,
@@ -15,6 +16,7 @@ import {
   removePair,
   moveStation,
   placeStation,
+  setGenomeTarget,
   rerollModule,
   removeStation,
   salvageModule,
@@ -50,6 +52,7 @@ import {
 } from './prestige';
 import {
   type Color,
+  type Gene,
   type GameState,
   type Ingredient,
   type Module,
@@ -178,6 +181,26 @@ export class GameEngine {
     for (const color of pending) this.emitDex({ color });
     this.state.pendingDex = [];
   }
+  /** Promote any god-clone hatch (a duck perfectly matching the target) to a
+   *  can't-miss milestone DING — the payoff of the whole min/max grind. */
+  private drainGodClone() {
+    const n = this.state.pendingGodClone ?? 0;
+    if (n <= 0) return;
+    this.state.pendingGodClone = 0;
+    this.emitDing({
+      newRank: this.state.rank,
+      levelsGained: 0,
+      milestones: [
+        {
+          rank: this.state.rank,
+          title: 'God clone!',
+          description:
+            'A duckling hatched with a genome that PERFECTLY matches your god-clone target. The crown of the breeding grind — protect it (secure it) and breed from it.',
+          kind: 'breeding',
+        },
+      ],
+    });
+  }
   /** Surface predator events (telegraph / attack / loss) accrued during ticks.
    *  First contact (the 'introduced' beat) is promoted to a milestone DING so the
    *  player gets a clear, can't-miss "predators now hunt here" moment — always
@@ -223,6 +246,7 @@ export class GameEngine {
         this.accumulator -= this.stepMs;
       }
       this.drainDex(); // fire DINGs for any first-of-color hatches this frame
+      this.drainGodClone(); // fire the god-clone DING for a perfect-target hatch
       this.drainPredatorEvents(); // telegraph / attack / loss feedback this frame
       if (t - this.lastNotify >= this.notifyIntervalMs) {
         this.lastNotify = t;
@@ -410,6 +434,18 @@ export class GameEngine {
   }
   unpair(pairId: string): ActionResult<unknown> {
     const r = removePair(this.state, pairId);
+    this.notify();
+    return r;
+  }
+  /** Build the gene-reader: reveals the whole flock now + auto-reads new ducks. */
+  buildGeneReader(): ActionResult<{ revealed: number }> {
+    const r = buildGeneReader(this.state);
+    this.notify();
+    return r;
+  }
+  /** Set the god-clone target profile (drives quality readouts + the DING). */
+  setGenomeTarget(target: Gene[]): ActionResult<unknown> {
+    const r = setGenomeTarget(this.state, target);
     this.notify();
     return r;
   }

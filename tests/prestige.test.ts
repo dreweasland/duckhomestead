@@ -4,15 +4,16 @@ import {
   initialState,
   zoneUnlocked,
   type Duck,
-  type GameState,
+  type Gene,
   type Genotype,
+  type GameState,
   type Module,
 } from '../src/game/state';
 import {
   championGoal,
-  meanVigor,
+  meanQuality,
   sizeTarget,
-  vigorGate,
+  qualityGate,
   canPrestige,
   prestigeCurrency,
   prestigeReset,
@@ -25,15 +26,24 @@ import { deserialize } from '../src/game/save';
 import { build, fullSetup, stockAll, setHens, run } from './helpers';
 
 const NOW = 1_700_000_000_000;
-const duck = (id: string, v: number, o: Partial<Duck> = {}): Duck => ({
-  id,
-  genotype: ['Bl', 'bl'] as Genotype,
-  vigor: v,
-  sex: 'hen',
-  stage: 'adult',
-  ageTicks: 5,
-  ...o,
-});
+/**
+ * A test duck whose genome matches the default (all-Lay) god-clone target in `q`
+ * of its 6 slots — so meanQuality of a flock of duck(_, q) is exactly q.
+ */
+const duck = (id: string, q: number, o: Partial<Duck> = {}): Duck => {
+  const m = Math.max(0, Math.min(BALANCE.GENOME.SLOTS, Math.round(q)));
+  const genome = Array.from({ length: BALANCE.GENOME.SLOTS }, (_, i): Gene => (i < m ? 'L' : 'D'));
+  return {
+    id,
+    genotype: ['Bl', 'bl'] as Genotype,
+    genome,
+    genomeKnown: true,
+    sex: 'hen',
+    stage: 'adult',
+    ageTicks: 5,
+    ...o,
+  };
+};
 
 /** A deliberately messy, deep-into-the-game run — everything that could dangle. */
 function messyRun(): GameState {
@@ -58,10 +68,10 @@ function messyRun(): GameState {
   s.dust = 44;
   s.nextModuleId = 12;
   s.ducks = [
-    duck('d1', 1.6, { sex: 'drake' }),
-    duck('d2', 1.4, { wounded: true, woundElapsed: 120 }),
-    duck('d3', 1.2, { secured: true }),
-    duck('d4', 0.9, { debuffed: true, stage: 'duckling' }),
+    duck('d1', 5, { sex: 'drake' }),
+    duck('d2', 4, { wounded: true, woundElapsed: 120 }),
+    duck('d3', 3, { secured: true }),
+    duck('d4', 1, { debuffed: true, stage: 'duckling' }),
   ];
   s.nextDuckId = 20;
   s.breedingPairs = [{ id: 'p1', drakeId: 'd1', henId: 'd2', clutchProgress: 30, incubating: [10, 20] }];
@@ -87,8 +97,8 @@ function messyRun(): GameState {
   s.legacyCurrency = 7;
   s.purchasedBoosts = { output: 3, eggValue: 1 };
   s.legacyHall = [
-    { tier: 1, meanVigor: 1.5, bestVigor: 1.6, flockSize: 10, colors: ['blue'], timestamp: 1 },
-    { tier: 2, meanVigor: 1.7, bestVigor: 1.8, flockSize: 14, colors: ['blue', 'black'], timestamp: 2 },
+    { tier: 1, meanQuality: 4.5, bestQuality: 5, flockSize: 10, colors: ['blue'], timestamp: 1 },
+    { tier: 2, meanQuality: 4.8, bestQuality: 6, flockSize: 14, colors: ['blue', 'black'], timestamp: 2 },
   ];
   return s;
 }
@@ -121,6 +131,8 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expect(reset.secureCoops).toBe(0);
     expect(reset.dust).toBe(0);
     expect(reset.rank).toBe(1);
+    expect(reset.geneReader).toBe(false); // a fresh run must re-build the reader
+    expect(reset.genomeTarget).toEqual([...BALANCE.GENOME.DEFAULT_TARGET]);
     expect(reset.predatorsIntroduced).toBe(false);
     expect(reset.ration).toEqual(BALANCE.NUTRITION.DEFAULT_RATION);
     expect(zoneUnlocked(reset, 'yard')).toBe(true);
@@ -135,7 +147,7 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expect(reset.legacyCurrency).toBe(7 + prestigeCurrency(s));
     expect(reset.purchasedBoosts).toEqual({ output: 3, eggValue: 1 });
     expect(reset.legacyHall).toHaveLength(3);
-    expect(reset.legacyHall[2].meanVigor).toBeCloseTo(meanVigor(s), 6);
+    expect(reset.legacyHall[2].meanQuality).toBeCloseTo(meanQuality(s), 6);
     // The next tier's target is strictly larger (rounding makes the exact value
     // the formula at the new tier, not a re-round of the old one).
     expect(sizeTarget(reset)).toBeGreaterThan(sizeTarget(s));
@@ -148,8 +160,8 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
 /** A flock that clears all three tier-0 champion requirements. */
 function championRun(): GameState {
   const s = initialState(0);
-  // 120 ducks (> tier-0 target 100), mean vigor 1.7 (> tier-0 gate 1.5), all colours.
-  s.ducks = Array.from({ length: 120 }, (_, i) => duck(`c${i}`, 1.7));
+  // 120 ducks (> tier-0 target 100), mean quality 5 (> tier-0 gate 4.5), all colours.
+  s.ducks = Array.from({ length: 120 }, (_, i) => duck(`c${i}`, 5));
   s.dexSeen = ['black', 'blue', 'splash'];
   return s;
 }
@@ -157,25 +169,25 @@ function championRun(): GameState {
 describe('champion goal: three concrete requirements', () => {
   it('reports each requirement’s progress + met state', () => {
     const s = initialState(0);
-    s.ducks = [duck('a', 1.5), duck('b', 0.5)]; // mean 1.0
+    s.ducks = [duck('a', 5), duck('b', 1)]; // mean quality 3
     s.dexSeen = ['blue']; // 1 of 3 colours
     const g = championGoal(s);
     expect(g.colors.bred).toBe(1);
     expect(g.colors.met).toBe(false);
-    expect(g.vigor.value).toBeCloseTo(1.0, 6);
-    expect(g.vigor.met).toBe(false); // 1.0 < gate 1.5
+    expect(g.quality.value).toBeCloseTo(3, 6);
+    expect(g.quality.met).toBe(false); // 3 < gate 4.5
     expect(g.size.value).toBe(2);
     expect(g.size.met).toBe(false); // 2 < target 100
     expect(g.readiness).toBeLessThan(1);
   });
 
-  it('CANNOT be brute-forced by flock size alone — vigor + colours still gate it', () => {
+  it('CANNOT be brute-forced by flock size alone — quality + colours still gate it', () => {
     const s = initialState(0);
     // A massive flock of mediocre, single-colour ducks: huge size, no mastery.
-    s.ducks = Array.from({ length: 500 }, (_, i) => duck(`b${i}`, 1.0));
+    s.ducks = Array.from({ length: 500 }, (_, i) => duck(`b${i}`, 1));
     s.dexSeen = ['blue'];
     expect(championGoal(s).size.met).toBe(true); // size is trivially cleared...
-    expect(canPrestige(s)).toBe(false); // ...but vigor + colours block prestige
+    expect(canPrestige(s)).toBe(false); // ...but quality + colours block prestige
     expect(prestigeCurrency(s)).toBe(0);
   });
 
@@ -183,50 +195,51 @@ describe('champion goal: three concrete requirements', () => {
     expect(canPrestige(initialState(0))).toBe(false); // empty run
     const champ = championRun();
     const g = championGoal(champ);
-    expect(g.colors.met && g.vigor.met && g.size.met).toBe(true);
+    expect(g.colors.met && g.quality.met && g.size.met).toBe(true);
     expect(canPrestige(champ)).toBe(true);
   });
 
-  it('currency is ≥ the base grant and scales with BOTH size and vigor overshoot', () => {
-    const champ = championRun(); // 120 ducks vs target 100, vigor 1.7 vs gate 1.5
+  it('currency is ≥ the base grant and scales with BOTH size and quality overshoot', () => {
+    const champ = championRun(); // 120 ducks vs target 100, quality 5 vs gate 4.5
     const Pp = BALANCE.PRESTIGE;
     const expected = Math.round(
       Pp.CURRENCY_AT_THRESHOLD *
         Math.pow(champ.ducks.length / sizeTarget(champ), Pp.CURRENCY_OVERSHOOT_EXP) *
-        Math.pow(meanVigor(champ) / vigorGate(champ), Pp.CURRENCY_VIGOR_EXP),
+        Math.pow(meanQuality(champ) / qualityGate(champ), Pp.CURRENCY_QUALITY_EXP),
     );
     expect(prestigeCurrency(champ)).toBe(expected);
     expect(prestigeCurrency(champ)).toBeGreaterThanOrEqual(Pp.CURRENCY_AT_THRESHOLD);
   });
 
-  it('a higher-vigor flock out-earns a merely-bigger one (vigor now pays)', () => {
-    const lo = championRun(); // vigor 1.7
+  it('a higher-quality flock out-earns a merely-bigger one (quality now pays)', () => {
+    const lo = championRun(); // quality 5
     const hi = championRun();
-    hi.ducks = hi.ducks.map((d) => ({ ...d, vigor: 2.0 })); // same size, championship vigor
+    hi.ducks = hi.ducks.map((d) => ({ ...d, genome: ['L', 'L', 'L', 'L', 'L', 'L'] as Gene[] })); // quality 6
     expect(prestigeCurrency(hi)).toBeGreaterThan(prestigeCurrency(lo));
   });
 
-  it('the vigor gate rises each tier, capped below the ceiling', () => {
+  it('the quality gate rises each tier, capped below the perfect genome', () => {
     const Pp = BALANCE.PRESTIGE;
     const t0 = { ...initialState(0), legacyTier: 0 };
     const t1 = { ...initialState(0), legacyTier: 1 };
-    expect(vigorGate(t1)).toBeGreaterThan(vigorGate(t0));
-    expect(championGoal(t1).vigor.gate).toBe(vigorGate(t1)); // the goal reads the tiered gate
+    expect(qualityGate(t1)).toBeGreaterThan(qualityGate(t0));
+    expect(championGoal(t1).quality.gate).toBe(qualityGate(t1)); // the goal reads the tiered gate
     const tHigh = { ...initialState(0), legacyTier: 99 };
-    expect(vigorGate(tHigh)).toBe(Pp.VIGOR_GATE_MAX); // capped, always reachable
-    expect(vigorGate(tHigh)).toBeLessThan(BALANCE.BREEDING.VIGOR_CEILING);
+    expect(qualityGate(tHigh)).toBe(Pp.QUALITY_GATE_MAX); // capped, always reachable
+    expect(qualityGate(tHigh)).toBeLessThan(BALANCE.GENOME.SLOTS);
   });
 
-  it('a flock that clears tier 0 can FAIL the higher tier-1 vigor gate', () => {
-    // mean vigor 1.52: clears tier-0 gate 1.5, but not tier-1's 1.55.
+  it('a flock that clears tier 0 can FAIL the higher tier-1 quality gate', () => {
+    // mean quality 4.55: clears tier-0 gate 4.5, but not tier-1's 4.6.
     const mk = (tier: number) => {
       const s = { ...initialState(0), legacyTier: tier };
-      s.ducks = Array.from({ length: 200 }, (_, i) => duck(`v${i}`, 1.52));
+      // 110 ducks at quality 5 + 90 at quality 4 → mean 4.55.
+      s.ducks = Array.from({ length: 200 }, (_, i) => duck(`v${i}`, i < 110 ? 5 : 4));
       s.dexSeen = ['black', 'blue', 'splash'];
       return s;
     };
-    expect(championGoal(mk(0)).vigor.met).toBe(true);
-    expect(championGoal(mk(1)).vigor.met).toBe(false);
+    expect(championGoal(mk(0)).quality.met).toBe(true);
+    expect(championGoal(mk(1)).quality.met).toBe(false);
   });
 });
 
@@ -249,19 +262,19 @@ describe('legacy boosts are stackable global scalars with escalating cost', () =
   });
 });
 
-describe('back-compat: legacy Hall entries migrate from the old `score` field', () => {
-  it('an old hall entry (score, no meanVigor) loads with meanVigor defaulted', () => {
+describe('back-compat: legacy Hall entries migrate from older fields', () => {
+  it('an old hall entry (vigor/score era, no meanQuality) loads with meanQuality defaulted', () => {
     const legacy = JSON.stringify({
       version: 1,
       resources: { eggs: 1 },
       stations: [],
       legacyTier: 2,
-      legacyHall: [{ tier: 1, score: 620, bestVigor: 1.7, flockSize: 30, colors: ['blue', 'black'], timestamp: 5 }],
+      legacyHall: [{ tier: 1, meanVigor: 1.7, bestVigor: 1.8, flockSize: 30, colors: ['blue', 'black'], timestamp: 5 }],
     });
     const r = deserialize(legacy, 0);
     expect(r.legacyHall).toHaveLength(1);
-    expect(r.legacyHall[0].meanVigor).toBe(0); // no live data to derive — defaults, doesn't crash
-    expect(typeof r.legacyHall[0].meanVigor).toBe('number');
+    expect(r.legacyHall[0].meanQuality).toBe(0); // no genome data to derive — defaults, doesn't crash
+    expect(typeof r.legacyHall[0].meanQuality).toBe('number');
     expect(r.legacyHall[0].flockSize).toBe(30);
   });
 });
