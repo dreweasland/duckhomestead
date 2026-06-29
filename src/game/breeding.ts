@@ -1,5 +1,5 @@
 import { BALANCE } from '../config/balance';
-import { breedGenome, breedGenotype, maturationMult, recordColor } from './genetics';
+import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
 import { coopCapacity, phenotype, type Duck, type GameState } from './state';
 
 const B = BALANCE.BREEDING;
@@ -39,10 +39,14 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
         continue;
       }
       const genotype = breedGenotype(drake.genotype, hen.genotype);
+      const genome = breedGenome(drake.genome, hen.genome);
+      // God-clone DING fires when a hatch first achieves the target and the flock
+      // had none — so it re-fires if you lose every god clone and rebreed one.
+      const hadGodClone = state.ducks.some((d) => isGodClone(d.genome, state.genomeTarget));
       const duckling: Duck = {
         id: `d${state.nextDuckId++}`,
         genotype,
-        genome: breedGenome(drake.genome, hen.genome),
+        genome,
         // A built gene-reader auto-reads every new duck (passive/in bulk) — never
         // a per-duck click. Without it the genome stays hidden ("?").
         genomeKnown: state.geneReader,
@@ -54,6 +58,9 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
       pair.incubating.splice(i, 1);
       if (recordColor(state, phenotype(genotype))) {
         (state.pendingDex ??= []).push(phenotype(genotype));
+      }
+      if (!hadGodClone && isGodClone(genome, state.genomeTarget)) {
+        state.pendingGodClone = (state.pendingGodClone ?? 0) + 1;
       }
     }
   }

@@ -9,7 +9,7 @@ import {
   tendPowerMult,
 } from './loot';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
-import type { GameState, Module, Rarity, Resource, Station } from './state';
+import type { Gene, GameState, Module, Rarity, Resource, Station } from './state';
 import { isBlockedTile, rackSockets, secureCapacity, seedFlock, stationAt, zoneUnlocked } from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
@@ -396,6 +396,21 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
   const idx = state.breedingPairs.findIndex((p) => p.id === pairId);
   if (idx < 0) return fail('No such pair');
   state.breedingPairs.splice(idx, 1);
+  return done(true);
+}
+
+// ── God-clone target (the player's breeding goal) ─────────────────────
+/**
+ * Set the god-clone target profile the flock is steered toward. Drives the
+ * genome-quality readouts, the Legacy Score, and the god-clone DING. Validated
+ * to GENOME.SLOTS genes from the gene set; rejected otherwise.
+ */
+export function setGenomeTarget(state: GameState, target: Gene[]): ActionResult<unknown> {
+  const genes = BALANCE.GENOME.GENES as readonly string[];
+  if (target.length !== BALANCE.GENOME.SLOTS || !target.every((g) => genes.includes(g))) {
+    return fail('Invalid target profile');
+  }
+  state.genomeTarget = [...target];
   return done(true);
 }
 

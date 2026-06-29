@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import {
   phenotype,
@@ -10,9 +10,11 @@ import {
   type Genotype,
 } from '../src/game/state';
 import { AXES } from '../src/game/state';
-import { buildGeneReader, createPair, placeStation } from '../src/game/actions';
+import { buildGeneReader, createPair, placeStation, setGenomeTarget } from '../src/game/actions';
+import { runBreeding } from '../src/game/breeding';
 import { serialize, deserialize } from '../src/game/save';
-import { layMult } from '../src/game/genetics';
+import { layMult, targetMatch } from '../src/game/genetics';
+import type { Duck } from '../src/game/state';
 import { build, fullSetup, stockAll, run, setHens, FLAT_GENOME, genome } from './helpers';
 
 describe('Bl-locus phenotype', () => {
@@ -135,6 +137,36 @@ describe('gene reader: reveals genomes passively / in bulk (never per-duck)', ()
     const offspring = s.ducks.filter((d) => d.id !== drake.id && d.id !== hen.id);
     expect(offspring.length).toBeGreaterThan(0);
     expect(offspring.every((d) => d.genomeKnown)).toBe(true);
+  });
+});
+
+describe('god-clone target + DING', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('setGenomeTarget validates length + gene set', () => {
+    const s = build({ coop: 1 });
+    expect(setGenomeTarget(s, genome('HHHHHH')).ok).toBe(true);
+    expect(s.genomeTarget).toEqual(genome('HHHHHH'));
+    expect(setGenomeTarget(s, genome('HHH')).ok).toBe(false); // too short
+    expect(setGenomeTarget(s, ['L', 'L', 'L', 'L', 'L', 'X'] as never).ok).toBe(false); // bad gene
+    expect(s.genomeTarget).toEqual(genome('HHHHHH')); // unchanged by a rejected set
+  });
+
+  it('queues a god-clone DING when a hatch first perfectly matches the target', () => {
+    const s = build({ coop: 1 }); // cap 4
+    s.genomeTarget = genome('LLLLLL');
+    // Complementary parents (each only half-matches → no god clone in the flock yet).
+    const drake: Duck = { id: 'D', genotype: ['Bl', 'bl'], genome: genome('LLLDDD'), genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 };
+    const hen: Duck = { id: 'H', genotype: ['Bl', 'bl'], genome: genome('DDDLLL'), genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
+    s.ducks = [drake, hen];
+    s.nextDuckId = 50;
+    s.breedingPairs = [{ id: 'p', drakeId: 'D', henId: 'H', clutchProgress: 0, incubating: [BALANCE.BREEDING.INCUBATE_S - 0.5] }];
+    // rng 0.5 makes each slot inherit the Lay parent and never mutate → all-L child.
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    runBreeding(s, 1); // the egg hatches this step
+    const child = s.ducks.find((d) => d.id !== 'D' && d.id !== 'H')!;
+    expect(targetMatch(child.genome, s.genomeTarget)).toBe(BALANCE.GENOME.SLOTS); // a god clone
+    expect(s.pendingGodClone).toBe(1); // the DING was queued
   });
 });
 

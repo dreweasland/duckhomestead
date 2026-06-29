@@ -227,6 +227,44 @@ function Breeding({ engine, state }: { engine: GameEngine; state: GameState }) {
           </button>
         )}
       </div>
+
+      {/* God-clone target: the profile the flock is steered toward. Click a slot
+          to cycle its gene; readout shows best-match + how many god clones exist. */}
+      {(() => {
+        const SLOTS = target.length;
+        const best = state.ducks.reduce((m, d) => Math.max(m, targetMatch(d.genome, target)), 0);
+        const clones = state.ducks.filter((d) => targetMatch(d.genome, target) === SLOTS).length;
+        const cycle = (i: number) => {
+          const next = [...target];
+          next[i] = GENE_ORDER[(GENE_ORDER.indexOf(target[i]) + 1) % GENE_ORDER.length];
+          engine.setGenomeTarget(next);
+        };
+        return (
+          <div className="mb-1.5 flex items-center gap-1.5 rounded bg-[#171009] px-2 py-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-[#7a6a4a]">Target</span>
+            <span className="inline-flex gap-0.5">
+              {target.map((g, i) => (
+                <button
+                  key={i}
+                  onClick={() => cycle(i)}
+                  title={`Slot ${i + 1}: ${GENE_META[g].label} — click to cycle`}
+                  className="inline-flex items-center justify-center rounded-[2px] font-bold leading-none hover:ring-1 hover:ring-[#ffe9a8]"
+                  style={{ width: 16, height: 16, fontSize: 10, background: GENE_META[g].color, color: '#171009' }}
+                >
+                  {g}
+                </button>
+              ))}
+            </span>
+            <span className="ml-auto text-[10px] text-[#9a8a6a]" title="Best match in the flock toward the target">
+              best <span className="tabular-nums text-[#ffe9a8]">{best}/{SLOTS}</span>
+              {clones > 0 && (
+                <span className="ml-1 text-[#8fe388]">· {clones} god clone{clones > 1 ? 's' : ''}</span>
+              )}
+            </span>
+          </div>
+        );
+      })()}
+
       {state.breedingPairs.map((p) => {
         const dr = byId(p.drakeId);
         const he = byId(p.henId);

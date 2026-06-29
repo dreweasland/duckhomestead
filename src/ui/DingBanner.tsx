@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { DingEvent } from '../game/engine';
-import { CartIcon, ForageIcon, OwlIcon, TendIcon } from './icons';
+import { CartIcon, DuckIcon, ForageIcon, OwlIcon, TendIcon } from './icons';
 import { NotifyRail } from './NotifyRail';
 
 interface Props {
@@ -50,11 +50,13 @@ export function DingBanner({ ding, onDone }: Props) {
                 <TendIcon size={20} />
               ) : milestone.kind === 'predator' ? (
                 <OwlIcon size={20} />
+              ) : milestone.kind === 'breeding' ? (
+                <DuckIcon size={20} />
               ) : (
                 <CartIcon size={20} />
               )}{' '}
               {milestone.title}
-              {milestone.kind === 'predator' ? '!' : ' unlocked!'}
+              {milestone.kind === 'predator' ? '!' : milestone.kind === 'breeding' ? '' : ' unlocked!'}
             </div>
             <div className="mt-0.5 max-w-xs text-xs text-white/90">{milestone.description}</div>
           </div>
