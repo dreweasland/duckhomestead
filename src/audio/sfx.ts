@@ -148,6 +148,46 @@ export function playThreat() {
   note(c, 164, t + 0.16, 0.3, 'sine', 0.14);
 }
 
+/** A rising screech — the owl commits a dive (the scareable wind-up). Tenser
+ *  and brighter than the ambient threat hoot: "it's on the verge." */
+export function playDive() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(330, t);
+  osc.frequency.exponentialRampToValueAtTime(760, t + 0.3); // rising = closing in
+  gain.gain.setValueAtTime(0.12, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.36);
+}
+
+/** A bright flap-and-whoosh — the player scared the owl off in time. The reward
+ *  beat: an upward sweep (it retreats) capped with a little wing-flap thump. */
+export function playScare() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  // Whoosh up and away.
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(520, t);
+  osc.frequency.exponentialRampToValueAtTime(1320, t + 0.22);
+  gain.gain.setValueAtTime(0.16, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.28);
+  // Two quick wing-flap thumps trailing the whoosh.
+  note(c, 196, t + 0.04, 0.07, 'sine', 0.12);
+  note(c, 174, t + 0.13, 0.07, 'sine', 0.1);
+}
+
 /** A sharp descending screech-thud — an attack landed (a duck was hurt/lost). */
 export function playAttack() {
   const c = audio();

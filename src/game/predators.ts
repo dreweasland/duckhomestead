@@ -159,17 +159,10 @@ function wearDeterrents(state: GameState, amount: number): void {
   state.deterrentIntegrity = Math.max(0, state.deterrentIntegrity - amount);
 }
 
-/** Resolve one attack attempt for a predator during its open window. */
-function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, rng: () => number): void {
-  const success = attackChance(state, def, opts.mode === 'online');
-  if (rng() >= success) return; // attack missed (defenses/presence held)
-
-  // A breach — the attack got past the floor — tears the netting extra.
-  wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
-
-  const target = pickTarget(state, rng);
-  if (!target) return; // nothing exposed (all secured / none eligible) — no effect
-
+/** Land a hit that got past the floor onto a specific (already-chosen) target:
+ *  a snatch (brutality dial), a shrugged-off resist, or a soft wound. Shared by
+ *  offline immediate attacks and online telegraphed strikes. */
+function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target: Duck, rng: () => number): void {
   // Brutality dial: a rare landed attack may skip the wound and take the duck
   // outright. Default OFF — every death otherwise passes through a wound.
   if (P.ALLOW_INSTANT_SNATCH && rng() < P.INSTANT_SNATCH_CHANCE && permitPermanentLoss(opts)) {
@@ -187,6 +180,82 @@ function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, r
   emit(state, { kind: 'wound', predatorId: def.id, duckId: target.id });
 }
 
+/** Resolve one attack attempt immediately (offline catch-up): roll against the
+ *  built floor, pick a target, land the hit. No telegraph — the player isn't
+ *  here to react, so the dive is the resolution. */
+function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, rng: () => number): void {
+  const success = attackChance(state, def, opts.mode === 'online');
+  if (rng() >= success) return; // attack missed (defenses/presence held)
+
+  // A breach — the attack got past the floor — tears the netting extra.
+  wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
+
+  const target = pickTarget(state, rng);
+  if (!target) return; // nothing exposed (all secured / none eligible) — no effect
+  landHit(state, def, opts, target, rng);
+}
+
+/** Commit a telegraphed strike (online): pick a target NOW and open a visible
+ *  wind-up dive. Nothing lands yet — the player gets STRIKE_WINDUP_SEC to scare
+ *  the owl off. The roll happens only when the wind-up expires (resolveStrike). */
+function beginStrike(state: GameState, def: PredatorDef, ps: PredatorState, rng: () => number): void {
+  if (ps.strike) return; // a dive is already in flight — don't stack
+  const target = pickTarget(state, rng);
+  if (!target) return; // nothing exposed — no dive
+  const id = (state.predatorStrikeSeq = (state.predatorStrikeSeq ?? 0) + 1);
+  ps.strike = {
+    targetId: target.id,
+    windupRemaining: P.STRIKE_WINDUP_SEC,
+    windupTotal: P.STRIKE_WINDUP_SEC,
+    id,
+  };
+  emit(state, { kind: 'winding', predatorId: def.id, duckId: target.id });
+}
+
+/** A telegraphed strike's wind-up expired without a scare — resolve it now. Rolls
+ *  against the built floor + passive presence (you were online, just didn't
+ *  react), then lands on the original target if it's still exposed. The target
+ *  may have been secured/treated/lost during the dive, in which case it slips
+ *  away harmlessly — re-validate before biting. */
+function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, ps: PredatorState, rng: () => number): void {
+  const strike = ps.strike;
+  if (!strike) return;
+  const success = attackChance(state, def, true); // online: passive presence still helps
+  if (rng() >= success) return; // missed — defenses/presence held
+
+  wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
+  const target = state.ducks.find((d) => d.id === strike.targetId && !d.secured && !d.wounded);
+  if (!target) return; // slipped away (secured/treated/gone) — the dive misses
+  landHit(state, def, opts, target, rng);
+}
+
+/** Player intervention (online, active): scare an in-flight strike off before it
+ *  lands. Foils it entirely — the duck is safe. Returns the spared duck's id, or
+ *  null if there was no dive to scare. This is the real "be present" save. */
+export function scareOff(state: GameState, predatorId: string): string | null {
+  const ps = state.predators[predatorId];
+  if (!ps?.strike) return null;
+  const duckId = ps.strike.targetId;
+  ps.strike = undefined;
+  emit(state, { kind: 'scared', predatorId, duckId });
+  return duckId;
+}
+
+/** The in-flight telegraphed strike for the UI's interactive owl, or null when no
+ *  dive is committed. Pure read off GameState (the UI never simulates). */
+export interface ActiveStrike {
+  def: PredatorDef;
+  predatorId: string;
+  strike: NonNullable<PredatorState['strike']>;
+}
+export function activeStrike(state: GameState): ActiveStrike | null {
+  for (const def of PREDATOR_DEFS) {
+    const ps = state.predators[def.id];
+    if (ps?.strike) return { def, predatorId: def.id, strike: ps.strike };
+  }
+  return null;
+}
+
 /** Advance one predator's window machine by raw `dt` seconds and resolve any
  *  attacks whose moment falls in this step. Windows are wall-clock danger, so
  *  `dt` is REAL seconds (never the offline rate-scaled step). */
@@ -198,15 +267,32 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     attacksFired: 0,
   });
 
+  // Telegraphed strikes are an online affair. Offline catch-up resolves attacks
+  // immediately (no player to react), so clear any stale dive a crash left mid-air.
+  if (opts.mode === 'offline') {
+    ps.strike = undefined;
+  } else if (ps.strike) {
+    // Advance an in-flight dive's wind-up; resolve it the instant it lands. Done
+    // first so a dive committed near the window's close still gets to bite (the
+    // owl already committed) even as the window itself ticks shut this step.
+    ps.strike.windupRemaining -= dt;
+    if (ps.strike.windupRemaining <= 0) {
+      resolveStrike(state, def, opts, ps, rng);
+      ps.strike = undefined;
+    }
+  }
+
   if (windowOpen(ps)) {
     ps.windowRemaining = Math.max(0, ps.windowRemaining - dt);
     ps.windowElapsed += dt;
     // Attacks are staggered across the window so a player who reacts to the
-    // telegraph (secure / be present) is covered before they land.
+    // telegraph (secure / be present) is covered before they land. Online each
+    // attack opens a visible, scareable dive; offline it resolves at once.
     const n = def.attacksPerWindow;
     while (ps.attacksFired < n && ps.windowElapsed >= ((ps.attacksFired + 1) * def.windowDurationSec) / (n + 1)) {
       ps.attacksFired += 1;
-      resolveAttack(state, def, opts, rng);
+      if (opts.mode === 'online') beginStrike(state, def, ps, rng);
+      else resolveAttack(state, def, opts, rng);
     }
     if (ps.windowRemaining <= 0) {
       // Window closed — schedule the next interval.

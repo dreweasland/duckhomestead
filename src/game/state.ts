@@ -285,6 +285,9 @@ export interface GameState {
   /** Transient: predator events accrued this tick, drained by the engine (banners
    *  + SFX) and aggregated by offline catch-up. Never serialized meaningfully. */
   pendingPredatorEvents?: PredatorEvent[];
+  /** Monotonic counter for telegraphed strikes, so each dive carries a distinct
+   *  id the UI can key its swoop animation on. Runtime-only. */
+  predatorStrikeSeq?: number;
 
   // ── Phase 4e: prestige (META — the ONLY state that survives a reset) ──
   /** Times prestiged. Drives the current Legacy Score threshold. */
@@ -327,6 +330,24 @@ export interface PredatorState {
   windowElapsed: number;
   /** Attacks already resolved in the current window. */
   attacksFired: number;
+  /** Online only: an in-flight, telegraphed strike — the owl is visibly diving at
+   *  a duck and will land when the wind-up expires unless the player scares it.
+   *  Never set offline (catch-up resolves immediately) and dropped on load, so it
+   *  is pure runtime feedback, never authoritative. */
+  strike?: PendingStrike;
+}
+
+/** A telegraphed strike mid-dive: which duck, and how long until it lands. The
+ *  reaction window for the active scare (clicking the owl). */
+export interface PendingStrike {
+  /** The duck being dived on (re-validated at landing — it may slip away). */
+  targetId: string;
+  /** Seconds left before the strike lands (counts down). */
+  windupRemaining: number;
+  /** The full wind-up duration (for the UI dive progress). */
+  windupTotal: number;
+  /** Monotonic id so the UI can key one dive's animation distinctly from the next. */
+  id: number;
 }
 
 /** Transient predator events for UI feedback + the away summary. Not authoritative. */
@@ -334,6 +355,10 @@ export type PredatorEvent =
   | { kind: 'introduced' }
   | { kind: 'incoming'; predatorId: string }
   | { kind: 'open'; predatorId: string }
+  // The owl committed a dive (online): the telegraphed wind-up began — scare it!
+  | { kind: 'winding'; predatorId: string; duckId: string }
+  // The player scared the owl off mid-dive: the strike was foiled (no wound).
+  | { kind: 'scared'; predatorId: string; duckId: string }
   | { kind: 'wound'; predatorId: string; duckId: string }
   | { kind: 'snatched'; predatorId: string; duckId: string }
   | { kind: 'escalated'; duckId: string };

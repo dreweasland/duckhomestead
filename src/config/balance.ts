@@ -302,9 +302,19 @@ export const BALANCE = {
     /** Built defenses alone can never exceed this floor (can't be 100% passive —
      *  presence and securing remain the levers for the rest). */
     DEFENSE_FLOOR_CAP: 0.7,
-    /** Active cover applied to attack success while the player is PRESENT (online)
-     *  during an open window. Absence removes it — only the built floor remains. */
+    /** Passive cover applied to attack success while the player is PRESENT (online)
+     *  during an open window — a partial "I'm watching" deterrent that holds even
+     *  if you don't react. Absence removes it; the built floor is all that's left.
+     *  The FULL save is the active scare (see STRIKE_WINDUP_SEC) — presence is the
+     *  floor under that, not a substitute for it. */
     PRESENCE_FACTOR: 0.6,
+    /** Online only: the active "be present" save. When a strike is committed
+     *  during an open window the owl makes a VISIBLE dive for this many seconds
+     *  before it lands — the reaction window in which clicking (scaring) the owl
+     *  foils the strike entirely. Let it expire and the strike resolves against
+     *  the built floor + passive presence only. This is the real work behind
+     *  "or be present": presence that you DO, not presence you merely have. */
+    STRIKE_WINDUP_SEC: 2.6,
 
     /** A wound escalates to a PERMANENT loss this many seconds after it lands if
      *  the duck is never treated. The save is the active Treat action. */

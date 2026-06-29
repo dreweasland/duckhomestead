@@ -1,4 +1,4 @@
-import { currentThreat } from '../game/predators';
+import { activeStrike, currentThreat } from '../game/predators';
 import { defenseFloor, secureCapacity, type GameState } from '../game/state';
 import { OwlIcon, ShieldIcon } from './icons';
 
@@ -14,6 +14,7 @@ export function PredatorBanner({ state, onOpen }: { state: GameState; onOpen: ()
   if (!threat) return null;
 
   const open = threat.phase === 'open';
+  const diving = open && activeStrike(state) !== null;
   const secured = state.ducks.filter((d) => d.secured).length;
   const cap = secureCapacity(state);
   const floorPct = Math.round(defenseFloor(state) * 100);
@@ -25,13 +26,17 @@ export function PredatorBanner({ state, onOpen }: { state: GameState; onOpen: ()
         type="button"
         onClick={onOpen}
         className={`pointer-events-auto flex w-full items-center justify-center gap-2.5 px-4 py-1.5 text-xs font-bold shadow-lg ${
-          open
-            ? 'predator-pulse bg-[#5a1f1f] text-[#ffd9d9] ring-1 ring-[#e26d6d]'
-            : 'bg-[#5a4320] text-[#ffe9a8] ring-1 ring-[#e2b94f]'
+          diving
+            ? 'predator-pulse bg-[#6e1414] text-[#ffe2e2] ring-1 ring-[#ff8a8a]'
+            : open
+              ? 'predator-pulse bg-[#5a1f1f] text-[#ffd9d9] ring-1 ring-[#e26d6d]'
+              : 'bg-[#5a4320] text-[#ffe9a8] ring-1 ring-[#e2b94f]'
         }`}
       >
         <OwlIcon size={18} />
-        {open ? (
+        {diving ? (
+          <span>{threat.def.name.toUpperCase()} DIVING — tap the owl on the board to scare it off!</span>
+        ) : open ? (
           <span>
             {threat.def.name.toUpperCase()} HUNTING — {Math.ceil(threat.seconds)}s left.{' '}
             {exposed > 0 ? `${exposed} exposed` : 'all covered'}
@@ -45,7 +50,9 @@ export function PredatorBanner({ state, onOpen }: { state: GameState; onOpen: ()
           <ShieldIcon size={11} /> {secured}/{cap}
           <span className="opacity-60">·</span>floor {floorPct}%
         </span>
-        <span className="ml-1 text-[10px] uppercase tracking-wider opacity-70">tap to defend</span>
+        {!diving && (
+          <span className="ml-1 text-[10px] uppercase tracking-wider opacity-70">tap to defend</span>
+        )}
       </button>
     </div>
   );

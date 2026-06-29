@@ -89,7 +89,8 @@ export function WatchPanel({
         >
           {threat?.phase === 'open' ? (
             <span className="font-bold">
-              {threat.def.name} hunting now — {Math.ceil(threat.seconds)}s left. Secure or be present.
+              {threat.def.name} hunting now — {Math.ceil(threat.seconds)}s left. Watch the board and
+              tap the owl to scare each dive off — or secure your breeders.
             </span>
           ) : threat?.phase === 'incoming' ? (
             <span className="font-bold">
@@ -251,9 +252,11 @@ export function WatchPanel({
         )}
 
         <div className="mt-3 text-[10px] leading-relaxed text-[#7a6a4a]">
-          Built deterrents protect even while you’re away. Being here during a window adds cover.
-          Securing a breeder takes it off the menu entirely. A wound only becomes permanent if left
-          untended — so every loss is one you could have prevented.
+          Built deterrents protect even while you’re away. Being here is active: when the owl dives
+          during a window, tap it on the board to scare it off and foil the strike — presence you
+          <span className="text-[#bfe8a8]"> do</span>, not just have. Securing a breeder takes it off
+          the menu entirely. A wound only becomes permanent if left untended — so every loss is one
+          you could have prevented.
         </div>
       </div>
     </div>

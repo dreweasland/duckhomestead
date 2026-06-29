@@ -115,3 +115,108 @@ body {
 .predator-pulse {
   animation: predator-pulse 1s ease-in-out infinite;
 }
+
+/* The interactive owl's DIVE: it drops in from the top of the board, growing and
+   tilting as it closes on the flock. Driven by inline animation-duration set to
+   the strike's wind-up, so the visual lands exactly when the strike would. The
+   owl is keyed by strike id, so each dive restarts this from the top. */
+@keyframes owl-swoop {
+  0% {
+    top: -22%;
+    transform: translate(-50%, -50%) scale(0.55) rotate(-10deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    top: 58%;
+    transform: translate(-50%, -50%) scale(1.5) rotate(8deg);
+    opacity: 1;
+  }
+}
+.owl-swoop {
+  animation: owl-swoop linear both;
+}
+
+/* A menacing wing-beat wobble layered on the dive so the owl reads as alive and
+   "on the verge" — fast, agitated. */
+@keyframes owl-flap {
+  0%,
+  100% {
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55)) brightness(1);
+  }
+  50% {
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45)) brightness(1.2);
+  }
+}
+.owl-flap {
+  animation: owl-flap 0.32s ease-in-out infinite;
+}
+
+/* Danger vignette: a red edge-glow that pulses over the board while a dive is in
+   flight — the unmissable "an attack is happening NOW" cue. */
+@keyframes danger-vignette {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0);
+    opacity: 0.65;
+  }
+  50% {
+    box-shadow: inset 0 0 64px 8px rgba(226, 109, 109, 0.55);
+    opacity: 1;
+  }
+}
+.danger-vignette {
+  animation: danger-vignette 0.7s ease-in-out infinite;
+}
+
+/* The targeting reticle that sits under the dive's landing spot — spins + pulses
+   so the threatened ground is obvious. */
+@keyframes reticle-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(180deg) scale(1.12);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg) scale(1);
+  }
+}
+.reticle-spin {
+  animation: reticle-spin 1.4s linear infinite;
+}
+
+/* Scared-off puff: a quick pop-and-fade when the owl is driven away. */
+@keyframes scare-puff {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  30% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -90%) scale(1.4);
+    opacity: 0;
+  }
+}
+.scare-puff {
+  animation: scare-puff 0.6s ease-out both;
+}
+
+/* The dive fuse: depletes left-to-right over the wind-up so the reaction window
+   is legible. Duration is set inline to the strike's wind-up. */
+@keyframes owl-fuse {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+.owl-fuse {
+  animation: owl-fuse linear both;
+}

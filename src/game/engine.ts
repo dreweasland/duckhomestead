@@ -31,6 +31,7 @@ import {
   type XpResult,
 } from './actions';
 import { zoneDef } from '../config/balance';
+import { scareOff } from './predators';
 import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
@@ -530,6 +531,17 @@ export class GameEngine {
     return r;
   }
 
+  /** Scare an in-flight owl dive off before it lands — the active "be present"
+   *  save. Foils the strike entirely (the targeted duck is spared). Returns the
+   *  spared duck's id, or null if there was no dive to scare. Drains the 'scared'
+   *  event so banners/SFX fire. */
+  scare(predatorId = 'owl'): string | null {
+    const duckId = scareOff(this.state, predatorId);
+    if (duckId) this.drainPredatorEvents();
+    this.notify();
+    return duckId;
+  }
+
   /** Active-only intervention: clear one duck's niacin leg debuff. */
   dose(): ActionResult<unknown> {
     const r = doseNiacin(this.state);
@@ -589,6 +601,24 @@ export class GameEngine {
   }
   devClearCooldowns() {
     for (const s of this.state.stations) s.tendCooldownRemaining = 0;
+    this.notify();
+  }
+  /** Force the owl's window open right now (skips the schedule) so the interactive
+   *  dive can be seen without waiting. Marks predators introduced + active. */
+  devOpenPredatorWindow() {
+    this.state.predatorsIntroduced = true;
+    const owl = BALANCE.PREDATORS.OWL;
+    const firstAttackAt = owl.windowDurationSec / (owl.attacksPerWindow + 1);
+    const ps = this.state.predators.owl;
+    if (ps) {
+      ps.timeToNextWindow = 0;
+      ps.windowRemaining = owl.windowDurationSec;
+      // Park just shy of the first staggered attack so a dive commits within a
+      // second (no 20s wait to see the feature).
+      ps.windowElapsed = Math.max(0, firstAttackAt - 0.5);
+      ps.attacksFired = 0;
+      ps.strike = undefined;
+    }
     this.notify();
   }
 }
