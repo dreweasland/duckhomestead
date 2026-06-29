@@ -9,6 +9,7 @@ import {
   collectStation,
   createPair,
   cullDuck,
+  cullDucks,
   doseNiacin,
   gainXP,
   installModule,
@@ -401,6 +402,12 @@ export class GameEngine {
   /** Cull (release) a duck — the selection lever that raises the live pop mean. */
   cull(duckId: string): ActionResult<unknown> {
     const r = cullDuck(this.state, duckId);
+    this.notify();
+    return r;
+  }
+  /** Bulk release ducks in one sweep (skips secured + paired keepers). */
+  cullMany(duckIds: string[]): ActionResult<{ released: number }> {
+    const r = cullDucks(this.state, duckIds);
     this.notify();
     return r;
   }

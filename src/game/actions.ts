@@ -362,6 +362,19 @@ export function cullDuck(state: GameState, duckId: string): ActionResult<unknown
   return done(true);
 }
 
+/**
+ * Bulk release the given ducks in one sweep — the selection lever at scale. NEVER
+ * releases a secured (prize) or paired (in-use) bird: those are protected keepers,
+ * use the per-duck release for them. Returns how many were actually released.
+ */
+export function cullDucks(state: GameState, duckIds: string[]): ActionResult<{ released: number }> {
+  const ids = new Set(duckIds);
+  const paired = new Set(state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
+  const before = state.ducks.length;
+  state.ducks = state.ducks.filter((d) => !(ids.has(d.id) && !d.secured && !paired.has(d.id)));
+  return done({ released: before - state.ducks.length });
+}
+
 // ── Breeding pairs (active selection) ─────────────────────────────────
 export function createPair(state: GameState, drakeId: string, henId: string): ActionResult<unknown> {
   const drake = state.ducks.find((d) => d.id === drakeId);

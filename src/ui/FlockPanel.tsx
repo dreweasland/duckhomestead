@@ -224,6 +224,14 @@ export function FlockPanel({
   // Cross-cutting filters (compose with the color tab): sex and life stage.
   const [sexFilter, setSexFilter] = useState<'all' | Duck['sex']>('all');
   const [stageFilter, setStageFilter] = useState<'all' | Duck['stage']>('all');
+  // Bulk-release cutoff (vigor), defaulting to the flock mean — the classic
+  // "cull below average" selection move. Two-click confirm via armedBulk.
+  const popMean = populationMeanVigor(state);
+  const [cullVigor, setCullVigor] = useState<number>(() => {
+    const m = populationMeanVigor(state);
+    return Math.round((Number.isFinite(m) && m > 0 ? m : 1) * 100) / 100;
+  });
+  const [armedBulk, setArmedBulk] = useState(false);
   const shown = ducks.filter(
     (d) =>
       phenotype(d.genotype) === colorTab &&
@@ -312,6 +320,69 @@ export function FlockPanel({
                 ]}
               />
             </div>
+
+            {/* Bulk release: cull the SHOWN set (current filters) below a vigor
+                cutoff in one sweep. Protects secured (prize) + paired (in-use)
+                birds — use the per-row release for those. */}
+            {shown.length > 0 && (() => {
+              const isPaired = (id: string) =>
+                state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
+              const eligible = shown.filter((d) => !d.secured && !isPaired(d.id) && d.vigor < cullVigor);
+              const n = eligible.length;
+              const VF = BALANCE.BREEDING.VIGOR_FLOOR;
+              const VC = BALANCE.BREEDING.VIGOR_CEILING;
+              const step = (delta: number) =>
+                setCullVigor((v) => Math.max(VF, Math.min(VC, Math.round((v + delta) * 100) / 100)));
+              return (
+                <div className="mb-2 rounded-md bg-[#1f1812] px-2.5 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-[#9a8a6a]">Release shown under</span>
+                    <button
+                      onClick={() => step(-0.05)}
+                      className="rounded bg-[#2a2018] px-1.5 py-0.5 text-sm font-bold leading-none text-[#c9b88f] hover:bg-[#33271c]"
+                      aria-label="Lower cutoff"
+                    >
+                      −
+                    </button>
+                    <span className="w-11 text-center tabular-nums text-xs font-bold text-[#ffe9a8]">
+                      ×{cullVigor.toFixed(2)}
+                    </span>
+                    <button
+                      onClick={() => step(0.05)}
+                      className="rounded bg-[#2a2018] px-1.5 py-0.5 text-sm font-bold leading-none text-[#c9b88f] hover:bg-[#33271c]"
+                      aria-label="Raise cutoff"
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (n === 0) return;
+                        if (!armedBulk) {
+                          setArmedBulk(true);
+                          window.setTimeout(() => setArmedBulk(false), 2500);
+                          return;
+                        }
+                        engine.cullMany(eligible.map((d) => d.id));
+                        setArmedBulk(false);
+                      }}
+                      disabled={n === 0}
+                      className={`ml-auto rounded px-2 py-1 text-[10px] font-bold transition ${
+                        n === 0
+                          ? 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+                          : armedBulk
+                            ? 'bg-[#d95f5f] text-[#fff4d6]'
+                            : 'bg-[#3a2418] text-[#e8a35a] hover:bg-[#4a3020]'
+                      }`}
+                    >
+                      {n === 0 ? 'none below' : armedBulk ? `Release ${n}? · sure` : `Release ${n}`}
+                    </button>
+                  </div>
+                  <div className="mt-1 text-[9px] text-[#7a6a4a]">
+                    flock mean ×{popMean.toFixed(2)} · keeps secured + paired birds
+                  </div>
+                </div>
+              );
+            })()}
 
             {shown.length === 0 ? (
               <div className="py-6 text-center text-sm text-[#9a8a6a]">

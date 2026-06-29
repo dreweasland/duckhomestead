@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
-import { createPair, cullDuck, removePair } from '../src/game/actions';
+import { createPair, cullDuck, cullDucks, removePair } from '../src/game/actions';
 import { breedVigor, populationMeanVigor } from '../src/game/genetics';
 import { runOfflineCatchUp, serialize, deserialize } from '../src/game/save';
 import { phenotype, type Duck, type GameState } from '../src/game/state';
@@ -123,6 +123,29 @@ describe('culling = the selection lever (live pop mean)', () => {
     expect(s.ducks.some((d) => d.id === lowest.id)).toBe(false);
     expect(populationMeanVigor(s)).toBeGreaterThan(before); // removing the worst lifts the anchor
     if (lowest.id === drake.id || lowest.id === hen.id) expect(s.breedingPairs).toHaveLength(0);
+  });
+
+  it('cullDucks bulk-releases the set but protects secured + paired keepers', () => {
+    const s = build({ coop: 4 });
+    const mk = (id: string, v: number, extra: Partial<Duck> = {}): Duck => ({
+      id, genotype: ['Bl', 'bl'], vigor: v, sex: 'hen', stage: 'adult', ageTicks: 0, ...extra,
+    });
+    s.ducks = [
+      mk('lo1', 0.7),
+      mk('lo2', 0.8),
+      mk('keepSecured', 0.6, { secured: true }), // low but secured -> protected
+      mk('keepPairedD', 0.5, { sex: 'drake' }), // low but paired -> protected
+      mk('keepPairedH', 0.9),
+      mk('hi', 1.6),
+    ];
+    createPair(s, 'keepPairedD', 'keepPairedH');
+
+    // Release everything offered, including the protected ones — they must survive.
+    const r = cullDucks(s, ['lo1', 'lo2', 'keepSecured', 'keepPairedD', 'hi']);
+    expect(r.ok && r.value.released).toBe(3); // lo1, lo2, hi
+    const ids = s.ducks.map((d) => d.id).sort();
+    expect(ids).toEqual(['keepPairedD', 'keepPairedH', 'keepSecured']);
+    expect(s.breedingPairs).toHaveLength(1); // the pair is intact
   });
 
   it('live mean + culling walks toward the ceiling; no culling stalls near the seed mean', () => {
