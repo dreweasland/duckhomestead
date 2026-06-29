@@ -9,7 +9,8 @@ import {
   playThreat,
   playUpgrade,
 } from './audio/sfx';
-import type { StationType } from './config/balance';
+import { zoneDef, type StationType } from './config/balance';
+import { IrrigationBoard } from './ui/IrrigationBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
 import { thresholdProgress } from './game/prestige';
@@ -216,15 +217,20 @@ export default function App() {
                   </div>
                 }
               >
-                <GameCanvas
-                  key={activeZone}
-                  engine={engine}
-                  selectedId={selectedId}
-                  zoneId={activeZone}
-                  unlocked={zoneUnlocked(state, activeZone)}
-                  buildType={buildType}
-                  onTileClick={onTileClick}
-                />
+                {zoneDef(activeZone)?.irrigation && zoneUnlocked(state, activeZone) ? (
+                  // The pasture is the irrigation puzzle, not a build grid.
+                  <IrrigationBoard engine={engine} state={state} />
+                ) : (
+                  <GameCanvas
+                    key={activeZone}
+                    engine={engine}
+                    selectedId={selectedId}
+                    zoneId={activeZone}
+                    unlocked={zoneUnlocked(state, activeZone)}
+                    buildType={buildType}
+                    onTileClick={onTileClick}
+                  />
+                )}
               </ErrorBoundary>
             </div>
           </div>
