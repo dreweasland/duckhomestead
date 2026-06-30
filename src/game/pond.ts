@@ -225,6 +225,9 @@ export function pondFeatureUpgradeCost(state: GameState, x: number, y: number): 
 export function upgradePondFeature(state: GameState, x: number, y: number): PondResult {
   const f = featAt(state, x, y);
   if (!f) return fail('Nothing there');
+  // A spring (baseProvision 0) is positional — its level never scales anything, so
+  // upgrading it would just burn eggs. Its bonus to pools rides the POOL's level.
+  if (F[f.type].baseProvision <= 0) return fail('Springs feed pools — they can’t be upgraded');
   const cost = pondFeatureUpgradeCost(state, x, y);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;

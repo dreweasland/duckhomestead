@@ -76,6 +76,17 @@ describe('provision = layoutBase × circulationHealth, scored vs the flock', () 
     expect(s.resources.eggs).toBe(1e7 - W.FEATURES.deepZone.costEggs - cost); // place + upgrade
   });
 
+  it('a spring cannot be upgraded — positional, no own provision to scale (no wasted eggs)', () => {
+    const s = initialState(0);
+    s.zones.pond.unlocked = true;
+    s.resources.eggs = 1e6;
+    placePondFeature(s, 'spring', 0, 0);
+    const r = upgradePondFeature(s, 0, 0);
+    expect(r.ok).toBe(false);
+    expect(s.pond.features[0].level ?? 1).toBe(1); // not leveled
+    expect(s.resources.eggs).toBe(1e6 - W.FEATURES.spring.costEggs); // only the place cost spent
+  });
+
   it('the legacy Water Capacity boost scales provision past the fixed-pond ceiling', () => {
     const s = initialState(0);
     const base = waterProvision(s);

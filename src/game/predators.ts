@@ -405,12 +405,16 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
  *  Phase 4d: water access stretches/tightens the recovery window (the timer
  *  multiplier stays > 0, so there is always time to treat — no new death path). */
 function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void {
-  const threshold = P.WOUND_ESCALATE_SEC * waterWoundMult(state);
   // Iterate the live array (no per-tick copy); defer removals so we never mutate
   // state.ducks mid-loop. `lost` stays null unless something actually escalates.
+  // The escalation threshold pulls in the whole water chain (waterWoundMult →
+  // waterProvision/featureProvisions), so compute it lazily — only once we hit a
+  // wounded duck. The common no-wounds tick then skips it entirely.
+  let threshold = -1;
   let lost: string[] | null = null;
   for (const d of state.ducks) {
     if (!d.wounded) continue;
+    if (threshold < 0) threshold = P.WOUND_ESCALATE_SEC * waterWoundMult(state);
     d.woundElapsed = (d.woundElapsed ?? 0) + dt;
     if (d.woundElapsed < threshold) continue;
     if (permitPermanentLoss(opts)) {

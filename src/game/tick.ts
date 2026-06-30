@@ -80,20 +80,11 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   const rateMult = opts.mode === 'offline' ? BALANCE.OFFLINE_RATE_MULT : 1;
   const willHaul = opts.autoHaul || opts.mode === 'offline';
 
-  // Process producers -> mill -> coop so resources made this step can be hauled
-  // and consumed downstream within the same step when hauling is active.
-  const order: Record<string, number> = {
-    plot: 0,
-    peaPatch: 0,
-    mealwormFarm: 0,
-    yeastVat: 0,
-    oysterSource: 0,
-    mill: 1,
-    coop: 2,
-  };
-  const stations = [...state.stations].sort((a, b) => order[a.type] - order[b.type]);
-
-  for (const station of stations) {
+  // Only raw producers run in this loop — mills (formulation) and coops
+  // (nutrition-throttled laying) are handled by runNutrition below. Producers have
+  // no inputs and no cross-dependencies, so they need no ordering; iterate the live
+  // array directly (no per-tick copy/sort).
+  for (const station of state.stations) {
     // Tend cooldown ticks down in real seconds regardless of rate.
     if (station.tendCooldownRemaining > 0) {
       station.tendCooldownRemaining = Math.max(0, station.tendCooldownRemaining - dt);
