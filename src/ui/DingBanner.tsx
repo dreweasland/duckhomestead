@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { DingEvent } from '../game/engine';
 import { CartIcon, DuckIcon, ForageIcon, OwlIcon, TendIcon } from './icons';
-import { NotifyRail } from './NotifyRail';
 
 interface Props {
   ding: DingEvent | null;
@@ -26,16 +25,15 @@ export function DingBanner({ ding, onDone }: Props) {
   const milestone = ding.milestones[0];
 
   return (
-    <NotifyRail top="top-4">
-        <button
-          type="button"
-          onClick={onDone}
-          className={`ding-pop pointer-events-auto cursor-pointer rounded-xl px-6 py-4 text-center shadow-2xl ${
-          milestone
-            ? 'bg-gradient-to-br from-[#6b4f9e] to-[#3a2e64] ring-2 ring-[#cdbcff]'
-            : 'bg-gradient-to-br from-[#e2b94f] to-[#b87333] ring-2 ring-[#fff4d6]'
-        }`}
-      >
+    <button
+      type="button"
+      onClick={onDone}
+      className={`ding-pop pointer-events-auto w-full max-w-sm cursor-pointer rounded-xl px-6 py-4 text-center shadow-2xl ${
+        milestone
+          ? 'bg-gradient-to-br from-[#6b4f9e] to-[#3a2e64] ring-2 ring-[#cdbcff]'
+          : 'bg-gradient-to-br from-[#e2b94f] to-[#b87333] ring-2 ring-[#fff4d6]'
+      }`}
+    >
         <div className="text-3xl font-black tracking-widest text-white drop-shadow">DING!</div>
         <div className="text-sm font-bold text-white/90">
           Homestead Rank {ding.newRank}
@@ -61,8 +59,7 @@ export function DingBanner({ ding, onDone }: Props) {
             <div className="mt-0.5 max-w-xs text-xs text-white/90">{milestone.description}</div>
           </div>
         )}
-          <div className="mt-2 text-[10px] uppercase tracking-wider text-white/60">tap to dismiss</div>
-        </button>
-    </NotifyRail>
+      <div className="mt-2 text-[10px] uppercase tracking-wider text-white/60">tap to dismiss</div>
+    </button>
   );
 }

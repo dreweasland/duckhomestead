@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import type { LootEvent } from '../game/engine';
 import { RARITIES } from '../game/state';
 import { fmtMagnitude, RARITY_COLOR, STAT_META } from './lootUi';
-import { NotifyRail } from './NotifyRail';
 
 interface Props {
   loot: LootEvent | null;
@@ -30,17 +29,16 @@ export function LootBanner({ loot, onDone }: Props) {
   const big = tier >= 3; // epic / legendary
 
   return (
-    <NotifyRail top="top-2">
-        <button
-          type="button"
-          onClick={onDone}
-          className="ding-pop pointer-events-auto cursor-pointer rounded-xl px-5 py-3 text-center shadow-2xl"
-          style={{
-            background: `linear-gradient(160deg, ${color}, #1f1812 80%)`,
-            boxShadow: `0 0 ${big ? 28 : 12}px ${color}${big ? 'cc' : '77'}`,
-            border: `2px solid ${color}`,
-          }}
-        >
+    <button
+      type="button"
+      onClick={onDone}
+      className="ding-pop pointer-events-auto cursor-pointer rounded-xl px-5 py-3 text-center shadow-2xl"
+      style={{
+        background: `linear-gradient(160deg, ${color}, #1f1812 80%)`,
+        boxShadow: `0 0 ${big ? 28 : 12}px ${color}${big ? 'cc' : '77'}`,
+        border: `2px solid ${color}`,
+      }}
+    >
           <div className="text-[10px] font-bold uppercase tracking-widest text-white/80">
             {source === 'milestone' ? 'Milestone reward' : 'Loot drop'}
           </div>
@@ -53,8 +51,7 @@ export function LootBanner({ loot, onDone }: Props) {
           <div className="text-sm font-bold text-white">
             {meta.label} {fmtMagnitude(module)}
           </div>
-          <div className="text-[10px] text-white/70">{meta.blurb}</div>
-        </button>
-    </NotifyRail>
+      <div className="text-[10px] text-white/70">{meta.blurb}</div>
+    </button>
   );
 }
