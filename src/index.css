@@ -220,3 +220,44 @@ body {
 .owl-fuse {
   animation: owl-fuse linear both;
 }
+
+/* Respect the OS "reduce motion" setting: kill the looping, spinning, and flashing
+   animations (motion-sensitivity / photosensitivity) while keeping every threat cue
+   VISIBLE as a static state, so the owl encounter stays fully playable. The owl and
+   reticle rely on their keyframes for final position, so we restore those statically
+   rather than just dropping the animation. The fuse (essential reaction-window
+   feedback) and brief one-shot toasts are left intact. */
+@media (prefers-reduced-motion: reduce) {
+  /* Full-screen flash — drop entirely (photosensitivity). */
+  .milestone-flash {
+    animation: none;
+    opacity: 0;
+  }
+  /* Continuous brightness / wing-beat pulses — hold a static state. */
+  .predator-pulse {
+    animation: none;
+    filter: brightness(1.2);
+  }
+  .owl-flap {
+    animation: none;
+  }
+  /* Danger vignette — a static red edge-glow instead of a pulse. */
+  .danger-vignette {
+    animation: none;
+    box-shadow: inset 0 0 64px 8px rgba(226, 109, 109, 0.55);
+    opacity: 1;
+  }
+  /* Targeting reticle — stop the spin, keep it centered on the spot. */
+  .reticle-spin {
+    animation: none;
+    transform: translate(-50%, -50%);
+  }
+  /* The diving owl — no swoop; drop it straight onto the landing spot, fully
+     visible and clickable, so the scare interaction still works. */
+  .owl-swoop {
+    animation: none;
+    top: var(--spot-top, 58%);
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 1;
+  }
+}

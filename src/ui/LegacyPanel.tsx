@@ -13,6 +13,7 @@ import {
 import { COLORS, type Color, type GameState } from '../game/state';
 import { playDing, playUpgrade } from '../audio/sfx';
 import { ColorSwatch, COLOR_META } from './FlockPanel';
+import { useEscapeKey } from './useEscapeKey';
 import { CheckIcon, CloseIcon, DuckIcon, LegacyIcon } from './icons';
 
 /** One champion requirement: icon, label, value, a progress bar, and met state. */
@@ -80,6 +81,7 @@ export function LegacyPanel({
   state: GameState;
   onClose: () => void;
 }) {
+  useEscapeKey(onClose);
   const [armed, setArmed] = useState(false);
   const [result, setResult] = useState<{ tier: number; granted: number } | null>(null);
 
