@@ -235,6 +235,9 @@ function FlockHealth({ engine, state }: { engine: GameEngine; state: GameState }
       : `OK · ratio matters at ${minFlock}+`;
   // Bar: current drakes vs the healthy max (ideal = full bar; over = red overflow).
   const fill = Math.min(1, r.drakes / Math.max(1, r.maxHealthyDrakes));
+  // Ducks currently carrying an overcrowding wound (persist until treated) — the
+  // flock-context surfacing of the injuries (treat them in The Watch).
+  const injured = state.ducks.filter((d) => d.wounded && d.woundSource === 'overcrowd').length;
   return (
     <div className={`mb-3 rounded-md px-3 py-2 ${r.injuring ? 'bg-[#2a1818] ring-1 ring-[#5a2a2a]' : 'bg-[#1f1812]'}`}>
       <div className="mb-1 flex items-center justify-between">
@@ -250,6 +253,11 @@ function FlockHealth({ engine, state }: { engine: GameEngine; state: GameState }
       <div className="h-1.5 overflow-hidden rounded-full bg-[#0f0b07]">
         <div className="h-full rounded-full" style={{ width: `${fill * 100}%`, background: color }} />
       </div>
+      {injured > 0 && (
+        <div className="mt-1.5 flex items-center gap-1 text-[10px] font-bold text-[#e8a3a3]">
+          <WoundIcon size={11} /> {injured} injured by overcrowding — treat in The Watch.
+        </div>
+      )}
       {r.injuring && (
         <>
           <p className="mt-1.5 text-[10px] leading-relaxed text-[#e8a35a]">
@@ -538,10 +546,14 @@ export function FlockPanel({
   const [querySlot, setQuerySlot] = useState<number>(-1); // -1 = any slot
   const [queryGene, setQueryGene] = useState<Gene | 'any'>('any');
   // Bulk-release cutoff: release READ ducks whose match-to-target is below this
-  // (an unread duck is never bulk-culled — you can't judge a "?"). Defaults to
-  // half the slots. Two-click confirm via armedBulk.
+  // (an unread duck is never bulk-culled — you can't judge a "?"). Defaults to the
+  // BEST match currently in the flock, so it pre-selects "keep only my top tier"
+  // (with a perfect god clone present, that's SLOTS/SLOTS — cull everything that
+  // isn't a perfect clone). Two-click confirm via armedBulk.
   const SLOTS = target.length;
-  const [cullQuality, setCullQuality] = useState<number>(Math.ceil(SLOTS / 2));
+  const [cullQuality, setCullQuality] = useState<number>(() =>
+    state.ducks.reduce((m, d) => (d.genomeKnown ? Math.max(m, targetMatch(d.genome, target)) : m), 0),
+  );
   const [armedBulk, setArmedBulk] = useState(false);
 
   const geneQueryActive = queryGene !== 'any';

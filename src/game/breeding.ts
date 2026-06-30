@@ -17,7 +17,9 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
     state.overcrowdStress = 0; // healthy ratio (or below the gate) — stress relaxes
     return;
   }
-  state.overcrowdStress = (state.overcrowdStress ?? 0) + step * r.excess; // worse the more over-drake
+  // Worse the more over-drake, but the speed-up is capped so a hugely over-drake
+  // flock injures at a steady ~1/min rather than flooding faster than you can react.
+  state.overcrowdStress = (state.overcrowdStress ?? 0) + step * Math.min(r.excess, B.OVERCROWD_RATE_CAP);
   const onset = B.OVERCROWD_INJURY_ONSET_S;
   while (state.overcrowdStress >= onset) {
     state.overcrowdStress -= onset;
@@ -29,6 +31,7 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
     }
     const victim = pool[Math.floor(rng() * pool.length)];
     victim.wounded = true;
+    victim.woundSource = 'overcrowd';
     victim.woundElapsed = 0;
     (state.pendingPredatorEvents ??= []).push({ kind: 'crowdInjury', duckId: victim.id });
   }

@@ -68,6 +68,7 @@ export function featureProvisions(state: GameState): Map<string, number> {
   for (const f of feats) {
     let p = F[f.type].baseProvision;
     if (f.type === 'bathingPool' && adjSpring(f.x, f.y)) p += F.bathingPool.springBonus;
+    p *= Math.pow(W.UPGRADE.provisionMult, (f.level ?? 1) - 1); // upgrades scale the feature's water
     const quality = 1 + F.plantBed.adjacentQualityBonus * adjPlantBeds(f.x, f.y);
     out.set(cellKey(f.x, f.y), p * quality);
   }
@@ -202,6 +203,25 @@ export function placePondFeature(
   state.resources.eggs -= cost;
   state.pond.features.push({ x, y, type });
   state.pond.freshness[cellKey(x, y)] = 1; // a new feature starts fresh
+  return ok();
+}
+
+/** Egg cost to upgrade the provision feature at (x,y) to its next level. */
+export function pondFeatureUpgradeCost(state: GameState, x: number, y: number): number {
+  const f = featAt(state, x, y);
+  if (!f) return 0;
+  return Math.round(F[f.type].costEggs * Math.pow(W.UPGRADE.costGrowth, f.level ?? 1));
+}
+
+/** Upgrade a provision feature (+1 level → more water). The pre-prestige water
+ *  scaler and a deep, escalating egg sink. */
+export function upgradePondFeature(state: GameState, x: number, y: number): PondResult {
+  const f = featAt(state, x, y);
+  if (!f) return fail('Nothing there');
+  const cost = pondFeatureUpgradeCost(state, x, y);
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  f.level = (f.level ?? 1) + 1;
   return ok();
 }
 

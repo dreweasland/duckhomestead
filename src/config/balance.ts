@@ -253,6 +253,16 @@ export const BALANCE = {
       plantBed: { costEggs: 80, baseProvision: 1, adjacentQualityBonus: 0.25 }, // +25% to each adjacent feature
       deepZone: { costEggs: 180, baseProvision: 6, wantsCirculation: true }, // high provision; fouls fastest
     },
+    /**
+     * Pond feature UPGRADES — the pre-prestige water scaler + a deep egg sink.
+     * Each level multiplies a feature's provision; the cost escalates per level
+     * (base = the feature's place cost). Lets a maxed layout keep scaling water
+     * past the fixed-canvas ceiling without waiting for prestige.
+     */
+    UPGRADE: {
+      provisionMult: 1.5, // provision ×= this per level above 1
+      costGrowth: 1.7, // upgrade cost = placeCost × costGrowth^level
+    },
     /** Circulation FLOW features (Stage 2). A fountain is "live" (projects
      *  coverage) only on a path that connects an intake to an outflow. */
     FLOW: {
@@ -481,7 +491,10 @@ export const BALANCE = {
      */
     OVERCROWD_MIN_FLOCK: 10, // ratio health is dormant below this flock size
     IDEAL_HENS_PER_DRAKE: 4, // healthy: ≤ 1 drake per this many hens
-    OVERCROWD_INJURY_ONSET_S: 100, // seconds per injury at 1 excess drake (faster with more)
+    OVERCROWD_INJURY_ONSET_S: 240, // seconds per injury at 1 excess drake (faster with more)
+    OVERCROWD_RATE_CAP: 4, // …but the excess speed-up is capped here, so a badly over-drake
+    // flock injures at most ~1/min (240/4) instead of a flood. With the cap:
+    //   1 excess → 1 injury / 4 min · 2 → /2 min · 3 → /80s · 4+ → /60s (capped).
     /** Starting flock seeded into the first coop (Blue carriers, mixed genome). */
     SEED_DRAKES: 1,
     SEED_HENS: 2,
@@ -585,6 +598,10 @@ export const BALANCE = {
       output: { perLevel: 0.05, baseCost: 5, costGrowth: 1.5 }, // +5% station output / level
       stationSpeed: { perLevel: 0.05, baseCost: 5, costGrowth: 1.5 }, // +5% cycle speed / level
       eggValue: { perLevel: 0.08, baseCost: 8, costGrowth: 1.6 }, // +8% eggs laid / level
+      // The Pond canvas is a fixed size, so layout provision caps out (~216 ducks
+      // watered). This scales total water provision so a huge end-game flock can
+      // still be kept watered — the meta lever past the layout ceiling.
+      waterProvision: { perLevel: 0.1, baseCost: 6, costGrowth: 1.5 }, // +10% water provision / level
     } as Record<string, { perLevel: number; baseCost: number; costGrowth: number }>,
   },
 

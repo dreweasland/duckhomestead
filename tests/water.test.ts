@@ -10,6 +10,7 @@ import {
   waterWoundMult,
 } from '../src/game/water';
 import { unlockZone } from '../src/game/actions';
+import { placePondFeature, pondFeatureUpgradeCost, upgradePondFeature } from '../src/game/pond';
 import { runPredators } from '../src/game/predators';
 import { serialize, deserialize, runOfflineCatchUp } from '../src/game/save';
 import { setHens, stockAll, fullSetup, run } from './helpers';
@@ -58,6 +59,31 @@ describe('provision = layoutBase × circulationHealth, scored vs the flock', () 
     s.ducks = ducks(3); // 6 / (3 × 1) = 2.0
     expect(flockRequirement(s)).toBeCloseTo(3 * W.REQUIREMENT_PER_DUCK, 6);
     expect(waterAccess(s)).toBeCloseTo(W.YARD_BASELINE_PROVISION / 3, 6);
+  });
+
+  it('upgrading a pond feature scales its provision (the pre-prestige water sink)', () => {
+    const s = initialState(0);
+    s.zones.pond.unlocked = true;
+    s.resources.eggs = 1e7;
+    placePondFeature(s, 'deepZone', 0, 0);
+    const featProv = waterProvision(s) - W.YARD_BASELINE_PROVISION; // the deepZone's contribution
+    const cost = pondFeatureUpgradeCost(s, 0, 0);
+    expect(cost).toBe(Math.round(W.FEATURES.deepZone.costEggs * W.UPGRADE.costGrowth)); // level 1 → ^1
+    expect(upgradePondFeature(s, 0, 0).ok).toBe(true);
+    expect(s.pond.features[0].level).toBe(2);
+    const after = waterProvision(s) - W.YARD_BASELINE_PROVISION;
+    expect(after).toBeCloseTo(featProv * W.UPGRADE.provisionMult, 6);
+    expect(s.resources.eggs).toBe(1e7 - W.FEATURES.deepZone.costEggs - cost); // place + upgrade
+  });
+
+  it('the legacy Water Capacity boost scales provision past the fixed-pond ceiling', () => {
+    const s = initialState(0);
+    const base = waterProvision(s);
+    const lvls = 5;
+    s.purchasedBoosts.waterProvision = lvls; // +10%/level
+    const expected = base * (1 + BALANCE.PRESTIGE.BOOSTS.waterProvision.perLevel * lvls);
+    expect(waterProvision(s)).toBeCloseTo(expected, 6);
+    expect(waterProvision(s)).toBeGreaterThan(base); // a bigger flock can now be watered
   });
 });
 

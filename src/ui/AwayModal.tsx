@@ -2,7 +2,7 @@ import { BALANCE } from '../config/balance';
 import type { AwaySummary } from '../game/save';
 import type { Resource } from '../game/state';
 import { fmt, fmtDuration } from './format';
-import { HealIcon, OwlIcon, RESOURCE_ICON } from './icons';
+import { DuckIcon, HealIcon, OwlIcon, RESOURCE_ICON } from './icons';
 
 export function AwayModal({ away, onClose }: { away: AwaySummary; onClose: () => void }) {
   const entries = (Object.keys(away.produced) as Resource[]).filter(
@@ -64,6 +64,31 @@ export function AwayModal({ away, onClose }: { away: AwaySummary; onClose: () =>
             <div className="mt-1 text-[10px] text-[#8a6a6a]">
               Secured breeders stayed safe. Build deterrents and secure prize birds to harden the
               homestead.
+            </div>
+          </div>
+        )}
+
+        {away.overcrowd && (away.overcrowd.injured > 0 || away.overcrowd.lost > 0) && (
+          <div className="mt-3 rounded-md bg-[#2a1f14] px-3 py-2 text-xs ring-1 ring-[#5a3a22]">
+            <div className="flex items-center gap-1.5 font-bold text-[#e8c45a]">
+              <DuckIcon size={15} /> The flock got overcrowded
+            </div>
+            <div className="mt-1 text-[#d8b87a]">
+              {away.overcrowd.lost > 0 && (
+                <span>
+                  {away.overcrowd.lost} duck{away.overcrowd.lost > 1 ? 's' : ''} lost
+                  {away.overcrowd.injured > 0 ? ' · ' : '.'}
+                </span>
+              )}
+              {away.overcrowd.injured > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  {away.overcrowd.injured} injured — <HealIcon size={11} /> treat them, and cull
+                  surplus drakes.
+                </span>
+              )}
+            </div>
+            <div className="mt-1 text-[10px] text-[#8a7a5a]">
+              Too many drakes harass the flock. Keep ~1 drake per 4 hens (Flock panel) to stop it.
             </div>
           </div>
         )}

@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { runOvercrowding } from '../src/game/breeding';
+import { runOfflineCatchUp } from '../src/game/save';
 import { flockRatio, initialState, type Duck, type GameState } from '../src/game/state';
 import { FLAT_GENOME } from './helpers';
+
+const HOUR = 3600 * 1000;
 
 const B = BALANCE.BREEDING;
 
@@ -86,5 +89,18 @@ describe('runOvercrowding', () => {
     for (const d of s.ducks) d.secured = true;
     runOvercrowding(s, B.OVERCROWD_INJURY_ONSET_S * 10, always);
     expect(s.ducks.every((d) => !d.wounded)).toBe(true);
+  });
+
+  it('offline injuries are attributed to the flock (overcrowd), not the owl', () => {
+    const s = makeFlock(8, 6); // over-drake, breeding established
+    s.rank = 5;
+    s.predatorsIntroduced = false; // first-contact grace → no predator toll offline
+    s.lastSeen = -2 * HOUR;
+    const away = runOfflineCatchUp(s, 0);
+    expect(away.overcrowd).toBeDefined();
+    expect((away.overcrowd?.injured ?? 0) + (away.overcrowd?.lost ?? 0)).toBeGreaterThan(0);
+    expect(away.predator).toBeUndefined(); // not blamed on the owl
+    // Any wound carried home is tagged as overcrowding, not predator.
+    expect(s.ducks.filter((d) => d.wounded).every((d) => d.woundSource === 'overcrowd')).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { BALANCE } from '../config/balance';
 import type { GameState } from './state';
 import { flockWaterSynergy } from './genetics';
 import { circulationHealth, pondLayoutBase } from './pond';
+import { waterProvisionBoostMult } from './prestige';
 
 /**
  * water.ts — the provision → wellness bridge of THE WATER SYSTEM.
@@ -23,9 +24,11 @@ import { circulationHealth, pondLayoutBase } from './pond';
 
 const W = BALANCE.WATER;
 
-/** Total water provision the system supplies: layout × circulation freshness. */
+/** Total water provision the system supplies: layout × circulation freshness, ×
+ *  the legacy water boost (the meta lever that scales provision past the fixed
+ *  Pond canvas's layout ceiling — so a huge end-game flock can stay watered). */
 export function waterProvision(state: GameState): number {
-  return pondLayoutBase(state) * circulationHealth(state);
+  return pondLayoutBase(state) * circulationHealth(state) * waterProvisionBoostMult(state);
 }
 
 /** What the flock asks of the water (heads × per-duck requirement). */
