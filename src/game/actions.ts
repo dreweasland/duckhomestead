@@ -68,9 +68,12 @@ export function stationStatus(
 export function outputPerCycle(
   state: GameState,
   station: Station,
+  // The level-independent throughput scalar (rack yield × legacy output). Accept it
+  // precomputed so a caller looping over many stations builds it once, not per call.
+  throughputMult = yieldMult(state) * outputBoostMult(state),
 ): { resource: Resource; amount: number }[] {
   const def = STATION_DEFS[station.type];
-  const m = UPGRADE_OUTPUT(station.level) * yieldMult(state) * outputBoostMult(state);
+  const m = UPGRADE_OUTPUT(station.level) * throughputMult;
   return (Object.keys(def.outputs) as Resource[])
     .map((resource) => ({ resource, amount: (def.outputs[resource] ?? 0) * m }))
     .filter((o) => o.amount > 0);
@@ -89,12 +92,17 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
   if (resource === 'eggs') {
     inflow = state.nutrition?.eggRate ?? 0;
   } else {
+    // Hoist the loop-invariant throughput multipliers (each O(rack)) — they were
+    // recomputed per station (and again inside outputPerCycle).
+    const cm = cycleMult(state);
+    const sbm = speedBoostMult(state);
+    const tput = yieldMult(state) * outputBoostMult(state);
     for (const s of state.stations) {
       const def = STATION_DEFS[s.type];
       if (!(resource in def.outputs)) continue;
-      const eff = (def.cycleSeconds * cycleMult(state)) / speedBoostMult(state);
+      const eff = (def.cycleSeconds * cm) / sbm;
       if (eff <= 0) continue;
-      const out = outputPerCycle(state, s).find((o) => o.resource === resource);
+      const out = outputPerCycle(state, s, tput).find((o) => o.resource === resource);
       if (out) inflow += out.amount / eff;
     }
   }
