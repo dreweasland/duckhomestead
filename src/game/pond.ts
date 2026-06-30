@@ -78,10 +78,12 @@ export function featureProvisions(state: GameState): Map<string, number> {
   return out;
 }
 
-/** layoutBase = always-on baseline + Σ feature provision (arrangement-scored). */
-export function pondLayoutBase(state: GameState): number {
+/** layoutBase = always-on baseline + Σ feature provision (arrangement-scored).
+ *  Accepts a precomputed provisions map so a caller that also needs
+ *  circulationHealth (i.e. waterProvision) builds it once, not twice. */
+export function pondLayoutBase(state: GameState, provs = featureProvisions(state)): number {
   let base = W.YARD_BASELINE_PROVISION;
-  for (const p of featureProvisions(state).values()) base += p;
+  for (const p of provs.values()) base += p;
   return base;
 }
 
@@ -94,7 +96,10 @@ export function pondLayoutBase(state: GameState): number {
  */
 export function liveFountains(state: GameState): FlowFeature[] {
   const flow = state.pond.flow;
-  const at = (x: number, y: number) => flow.find((f) => f.x === x && f.y === y);
+  // Index by cell once so BFS neighbor lookups are O(1) — this was O(flow²) via a
+  // per-neighbor `flow.find`, and it runs every tick (runCirculation) + per render.
+  const byCell = new Map<string, FlowFeature>(flow.map((f) => [cellKey(f.x, f.y), f]));
+  const at = (x: number, y: number) => byCell.get(cellKey(x, y));
   const k = (f: FlowFeature) => cellKey(f.x, f.y);
   const seen = new Set<string>();
   const live: FlowFeature[] = [];
@@ -134,9 +139,8 @@ export function isCovered(live: FlowFeature[], x: number, y: number): boolean {
  * feature contributes in proportion to how well it's circulated. Returns 1 while
  * Waterworks is locked (the pond stays passively clean) or the pond is empty.
  */
-export function circulationHealth(state: GameState): number {
+export function circulationHealth(state: GameState, provs = featureProvisions(state)): number {
   if (!zoneUnlocked(state, WORKS_ZONE)) return 1;
-  const provs = featureProvisions(state);
   let weighted = W.YARD_BASELINE_PROVISION; // baseline: always fresh
   let total = W.YARD_BASELINE_PROVISION;
   for (const [key, p] of provs) {
