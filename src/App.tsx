@@ -16,7 +16,7 @@ import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
 import { championReadiness } from './game/prestige';
 import { LegacyPanel, legacyReady } from './ui/LegacyPanel';
-import { defenseFloor, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
+import { defenseFloor, flockRatio, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
 import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
@@ -98,7 +98,7 @@ export default function App() {
         if (e.kind === 'scared') return; // the scare's own whoosh plays at the click
         if (e.kind === 'winding' || e.kind === 'feint') playDive(); // a dive (re)commits — scare it!
         else if (e.kind === 'incoming' || e.kind === 'open') playThreat();
-        else playAttack();
+        else playAttack(); // wound / snatched / escalated / crowdInjury — a duck got hurt
       }),
     [engine],
   );
@@ -409,17 +409,27 @@ export default function App() {
               </span>
             </button>
           )}
-          {state.ducks.length > 0 && (
-            <button
-              onClick={() => setFlockOpen(true)}
-              className="flex items-center justify-between rounded-md bg-[#26323a] px-3 py-2 text-sm font-bold text-[#a8d0e8] transition hover:bg-[#2e3c46]"
-            >
-              <span className="flex items-center gap-1.5">
-                <DuckIcon size={16} /> Flock
-              </span>
-              <span className="tabular-nums">{state.ducks.length} ducks</span>
-            </button>
-          )}
+          {state.ducks.length > 0 &&
+            (() => {
+              const ratio = flockRatio(state);
+              return (
+                <button
+                  onClick={() => setFlockOpen(true)}
+                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${
+                    ratio.injuring
+                      ? 'bg-[#5a2a2a] text-[#ffd9d9] ring-1 ring-[#e26d6d] hover:bg-[#6a3434]'
+                      : 'bg-[#26323a] text-[#a8d0e8] hover:bg-[#2e3c46]'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <DuckIcon size={16} /> Flock
+                  </span>
+                  <span className="tabular-nums">
+                    {ratio.injuring ? `${ratio.excess} excess drake${ratio.excess > 1 ? 's' : ''}` : `${state.ducks.length} ducks`}
+                  </span>
+                </button>
+              );
+            })()}
           {(state.ducks.length > 0 || state.legacyTier > 0) && (
             <button
               onClick={() => setLegacyOpen(true)}

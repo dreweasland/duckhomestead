@@ -219,6 +219,32 @@ export const adultDucks = (state: GameState): Duck[] => state.ducks.filter(isAdu
 /** Adult drakes — breeding males that eat the maintenance ration (no calcium). */
 export const adultDrakes = (state: GameState): Duck[] =>
   state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'drake');
+
+/** Flock RATIO health: adult hen/drake counts vs the ideal drake:hen ratio. Past
+ *  the flock-size gate, drakes beyond `maxHealthyDrakes` are `excess` and the
+ *  flock is `injuring` (overcrowding stress accrues). Pure read — drives the sim,
+ *  the Flock Health card, and the Flock-button warning. */
+export function flockRatio(state: GameState): {
+  hens: number;
+  drakes: number;
+  flock: number;
+  gated: boolean;
+  maxHealthyDrakes: number;
+  excess: number;
+  injuring: boolean;
+} {
+  const B = BALANCE.BREEDING;
+  const adults = state.ducks.filter(isAdult);
+  const hens = adults.filter((d) => d.sex === 'hen').length;
+  const drakes = adults.filter((d) => d.sex === 'drake').length;
+  const flock = state.ducks.length;
+  // An over-drake flock only ever arises from breeding, so gate on that too (also
+  // keeps a tiny seeded/un-bred flock — and isolated tests — free of ratio stress).
+  const gated = flock >= B.OVERCROWD_MIN_FLOCK && breedingEstablished(state);
+  const maxHealthyDrakes = Math.max(1, Math.floor(hens / B.IDEAL_HENS_PER_DRAKE));
+  const excess = Math.max(0, drakes - maxHealthyDrakes);
+  return { hens, drakes, flock, gated, maxHealthyDrakes, excess, injuring: gated && excess > 0 };
+}
 /** Breeding is "established" — the drake ration only kicks in past this so a
  *  cold-start flock is never taxed. True once the gene reader is built or any
  *  pairing has been made. */
@@ -260,6 +286,8 @@ export interface GameState {
   condition: number;
   /** Seconds of sustained niacin shortfall accrued toward the next leg debuff. */
   niacinShortfall: number;
+  /** Overcrowding stress accrued toward the next ratio-injury (over-drake flock). */
+  overcrowdStress: number;
   /** Global cooldown (s) on the active "Dose Brewer's Yeast" intervention. */
   doseCooldownRemaining: number;
   /** Derived nutrition snapshot (recomputed each tick; not authoritative). */
@@ -415,6 +443,8 @@ export type PredatorEvent =
   | { kind: 'feint'; predatorId: string; duckId: string }
   // The player scared the owl off mid-dive: the strike was foiled (no wound).
   | { kind: 'scared'; predatorId: string; duckId: string }
+  // An over-drake flock injured one of its own (overcrowding — not a predator).
+  | { kind: 'crowdInjury'; duckId: string }
   | { kind: 'wound'; predatorId: string; duckId: string }
   | { kind: 'snatched'; predatorId: string; duckId: string }
   | { kind: 'escalated'; duckId: string };
@@ -521,6 +551,7 @@ export function initialState(now: number): GameState {
     drakeRation: zeroRation(),
     condition: BALANCE.NUTRITION.CONDITION_MAX,
     niacinShortfall: 0,
+    overcrowdStress: 0,
     doseCooldownRemaining: 0,
     inventory: [],
     rack: [],

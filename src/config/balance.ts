@@ -469,6 +469,19 @@ export const BALANCE = {
     DRAKE_BREED_PENALTY_FLOOR: 0.4, // worst-case clutch-rate mult when underfed
     /** Default drake ration — the layer default minus the (unneeded) oyster shell. */
     DEFAULT_DRAKE_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.25, oysterShell: 0 },
+
+    /**
+     * Flock RATIO health — an over-drake flock harasses itself into injury (drakes
+     * fight + over-mate the hens). Past a flock-size gate, drakes beyond the ideal
+     * ratio (1 drake per IDEAL_HENS_PER_DRAKE hens, but always ≥1 stud allowed)
+     * accrue overcrowding stress; each onset interval injures a random non-secured
+     * adult — reusing the predator WOUND (treatable, escalates to loss if ignored).
+     * The fix is the ratio: cull surplus drakes. Small flocks are exempt so a
+     * starter pair is never punished. Stress accrues faster the more over-drake.
+     */
+    OVERCROWD_MIN_FLOCK: 10, // ratio health is dormant below this flock size
+    IDEAL_HENS_PER_DRAKE: 4, // healthy: ≤ 1 drake per this many hens
+    OVERCROWD_INJURY_ONSET_S: 100, // seconds per injury at 1 excess drake (faster with more)
     /** Starting flock seeded into the first coop (Blue carriers, mixed genome). */
     SEED_DRAKES: 1,
     SEED_HENS: 2,

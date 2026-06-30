@@ -1,8 +1,38 @@
 import { BALANCE } from '../config/balance';
 import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
-import { coopCapacity, phenotype, type Duck, type GameState } from './state';
+import { coopCapacity, flockRatio, phenotype, type Duck, type GameState } from './state';
 
 const B = BALANCE.BREEDING;
+
+/**
+ * Flock RATIO health: an over-drake flock harasses itself into injury. Past the
+ * flock-size gate, overcrowding stress accrues (faster the more excess drakes);
+ * each onset interval injures a random non-secured, non-wounded adult — reusing
+ * the predator WOUND (treatable, escalates to a loss if ignored). The fix is the
+ * ratio: cull surplus drakes. Runs online & offline; never grants XP.
+ */
+export function runOvercrowding(state: GameState, step: number, rng: () => number = Math.random): void {
+  const r = flockRatio(state);
+  if (!r.injuring) {
+    state.overcrowdStress = 0; // healthy ratio (or below the gate) — stress relaxes
+    return;
+  }
+  state.overcrowdStress = (state.overcrowdStress ?? 0) + step * r.excess; // worse the more over-drake
+  const onset = B.OVERCROWD_INJURY_ONSET_S;
+  while (state.overcrowdStress >= onset) {
+    state.overcrowdStress -= onset;
+    // Victim: any non-secured, non-wounded adult (drakes fight, hens get over-mated).
+    const pool = state.ducks.filter((d) => d.stage === 'adult' && !d.secured && !d.wounded);
+    if (pool.length === 0) {
+      state.overcrowdStress = 0;
+      break;
+    }
+    const victim = pool[Math.floor(rng() * pool.length)];
+    victim.wounded = true;
+    victim.woundElapsed = 0;
+    (state.pendingPredatorEvents ??= []).push({ kind: 'crowdInjury', duckId: victim.id });
+  }
+}
 
 /**
  * Advance the breeding loop and maturation by `dt` seconds. Pairs lay fertilized

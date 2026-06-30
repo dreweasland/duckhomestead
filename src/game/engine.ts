@@ -32,6 +32,8 @@ import {
   type XpResult,
 } from './actions';
 import { playstylePreset, zoneDef } from '../config/balance';
+import { goodGeneCount } from './genetics';
+import { flockRatio } from './state';
 import { scareOff, type ScareResult } from './predators';
 import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
@@ -483,6 +485,22 @@ export class GameEngine {
   /** Bulk release ducks in one sweep (skips secured + paired keepers). */
   cullMany(duckIds: string[]): ActionResult<{ released: number }> {
     const r = cullDucks(this.state, duckIds);
+    this.notify();
+    return r;
+  }
+  /** Release the surplus drakes that make the flock over-crowded — the worst-genome,
+   *  non-secured, non-paired drakes first (keeps your best studs). The one-tap fix
+   *  for an injuring drake:hen ratio. */
+  cullExcessDrakes(): ActionResult<{ released: number }> {
+    const { excess } = flockRatio(this.state);
+    if (excess <= 0) return { ok: false, reason: 'No excess drakes' };
+    const paired = new Set(this.state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
+    const ids = this.state.ducks
+      .filter((d) => d.stage === 'adult' && d.sex === 'drake' && !d.secured && !paired.has(d.id))
+      .sort((a, b) => goodGeneCount(a.genome) - goodGeneCount(b.genome)) // worst genome first
+      .slice(0, excess)
+      .map((d) => d.id);
+    const r = cullDucks(this.state, ids);
     this.notify();
     return r;
   }
