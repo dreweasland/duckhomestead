@@ -84,6 +84,9 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // (nutrition-throttled laying) are handled by runNutrition below. Producers have
   // no inputs and no cross-dependencies, so they need no ordering; iterate the live
   // array directly (no per-tick copy/sort).
+  // Rack speed modules + the legacy stationSpeed boost are homestead-wide — hoist
+  // them out of the loop (cycleMult is O(rack)) instead of recomputing per station.
+  const cycleScale = cycleMult(state) / speedBoostMult(state);
   for (const station of state.stations) {
     // Tend cooldown ticks down in real seconds regardless of rate.
     if (station.tendCooldownRemaining > 0) {
@@ -94,10 +97,8 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     // runNutrition below, not the generic producer path.
     if (station.type === 'mill' || station.type === 'coop') continue;
 
-    // Rack speed modules + the legacy stationSpeed boost shorten every producer's
-    // cycle (the boost divides cycle time — a global top-level rate scalar).
-    const cycleSeconds =
-      (STATION_DEFS[station.type].cycleSeconds * cycleMult(state)) / speedBoostMult(state);
+    // The boost divides cycle time — a global top-level rate scalar.
+    const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleScale;
     station.cycleProgress += dt * rateMult;
 
     // Run as many cycles as progress allows. If inputs are missing, cap

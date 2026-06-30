@@ -238,6 +238,14 @@ function FlockHealth({ engine, state }: { engine: GameEngine; state: GameState }
   // Ducks currently carrying an overcrowding wound (persist until treated) — the
   // flock-context surfacing of the injuries (treat them in The Watch).
   const injured = state.ducks.filter((d) => d.wounded && d.woundSource === 'overcrowd').length;
+  // What "cull excess" can ACTUALLY release — unsecured, non-paired drakes — capped
+  // at the excess. Paired/secured studs are kept, so this can be < excess.
+  const pairedIds = new Set(state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
+  const cullable = Math.min(
+    r.excess,
+    state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'drake' && !d.secured && !pairedIds.has(d.id))
+      .length,
+  );
   return (
     <div className={`mb-3 rounded-md px-3 py-2 ${r.injuring ? 'bg-[#2a1818] ring-1 ring-[#5a2a2a]' : 'bg-[#1f1812]'}`}>
       <div className="mb-1 flex items-center justify-between">
@@ -264,15 +272,22 @@ function FlockHealth({ engine, state }: { engine: GameEngine; state: GameState }
             Too many drakes — they fight and over-mate the hens, injuring the flock (wounds escalate if
             untended). Cull surplus drakes to fix the ratio.
           </p>
-          <button
-            onClick={() => {
-              if (engine.cullExcessDrakes().ok) playTend();
-            }}
-            className="mt-1.5 w-full rounded-md bg-[#5a3a2a] px-3 py-1.5 text-xs font-bold text-[#ffd9a8] transition hover:bg-[#6a4632]"
-            title="Release the worst-genome surplus drakes (keeps secured + paired studs)"
-          >
-            Cull {r.excess} excess drake{r.excess > 1 ? 's' : ''}
-          </button>
+          {cullable > 0 ? (
+            <button
+              onClick={() => {
+                if (engine.cullExcessDrakes().ok) playTend();
+              }}
+              className="mt-1.5 w-full rounded-md bg-[#5a3a2a] px-3 py-1.5 text-xs font-bold text-[#ffd9a8] transition hover:bg-[#6a4632]"
+              title="Release the worst-genome surplus drakes (keeps secured + paired studs)"
+            >
+              Cull {cullable} excess drake{cullable > 1 ? 's' : ''}
+            </button>
+          ) : (
+            <p className="mt-1.5 text-[10px] text-[#9a8a6a]">
+              Your surplus drakes are all paired or secured — unpair some (or free a secure slot) to
+              cull, then the ratio clears.
+            </p>
+          )}
         </>
       )}
     </div>
