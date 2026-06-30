@@ -5,6 +5,7 @@ import { waterWoundMult } from '../game/water';
 import { defenseFloor, secureCapacity, type GameState } from '../game/state';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, EggIcon, HealIcon, NetIcon, OwlIcon, ShieldIcon } from './icons';
+import { useEscapeKey } from './useEscapeKey';
 
 const P = BALANCE.PREDATORS;
 
@@ -29,6 +30,7 @@ export function WatchPanel({
   state: GameState;
   onClose: () => void;
 }) {
+  useEscapeKey(onClose);
   const eggs = Math.round(state.resources.eggs);
   const floor = defenseFloor(state);
   const floorPct = Math.round(floor * 100);

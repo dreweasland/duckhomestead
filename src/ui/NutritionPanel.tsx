@@ -20,6 +20,7 @@ import {
   waterWoundMult,
 } from '../game/water';
 import { fmt } from './format';
+import { useEscapeKey } from './useEscapeKey';
 import { CloseIcon, RESOURCE_ICON, WaterIcon } from './icons';
 
 const N = BALANCE.NUTRITION;
@@ -232,6 +233,7 @@ export function NutritionPanel({
   state: GameState;
   onClose: () => void;
 }) {
+  useEscapeKey(onClose);
   const [tab, setTab] = useState<'layers' | 'ducklings' | 'drakes'>('layers');
   const n = state.nutrition;
   const coops = state.stations.filter((s) => s.type === 'coop');

@@ -323,6 +323,10 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         let cartT = 0;
         let waterT = 0;
         let waterFrame = 0;
+        // Reused scratch buffers, refilled each frame — avoids allocating a fresh
+        // array + Set on every 60fps tick (GC churn that grows with station count).
+        const zoneStations: Station[] = [];
+        const present = new Set<string>();
         const inPond = (x: number, y: number) =>
           pondPx.w > 0 && x >= pondPx.x && x <= pondPx.x + pondPx.w && y >= pondPx.y && y <= pondPx.y + pondPx.h;
         // Cart entrance: play a one-time "arrival" when Auto-Haul unlocks this
@@ -399,8 +403,16 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           // Locked tease: nothing to simulate on the board.
           if (!unlocked) return;
 
-          const zoneStations = state.stations.filter((s) => s.zoneId === zoneId);
-          const present = new Set<string>();
+          // Refill the scratch buffers for this zone in a single pass (also counts
+          // coops for the duck flock-size below — no extra filter alloc).
+          zoneStations.length = 0;
+          present.clear();
+          let coops = 0;
+          for (const s of state.stations) {
+            if (s.zoneId !== zoneId) continue;
+            zoneStations.push(s);
+            if (s.type === 'coop') coops++;
+          }
 
           for (const s of zoneStations) {
             present.add(s.id);
@@ -522,7 +534,6 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
 
           // Ducks: keep the flock sized to this zone's coops, then waddle them.
           if (haveDucks) {
-            const coops = zoneStations.filter((s) => s.type === 'coop').length;
             const want = Math.min(8, 2 + coops);
             while (ducks.length < want) ducks.push(spawnDuck());
             while (ducks.length > want) duckLayer.removeChild(ducks.pop()!.sp);

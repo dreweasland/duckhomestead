@@ -6,6 +6,7 @@ import { COLORS, coopCapacity, flockRatio, phenotype, secureCapacity, type Color
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, HealIcon, ShieldIcon, WoundIcon } from './icons';
+import { useEscapeKey } from './useEscapeKey';
 
 export const COLOR_META: Record<Color, { label: string; swatch: string }> = {
   black: { label: 'Black', swatch: '#33333c' },
@@ -522,6 +523,7 @@ export function FlockPanel({
   state: GameState;
   onClose: () => void;
 }) {
+  useEscapeKey(onClose);
   const [armedCull, setArmedCull] = useState<string | null>(null);
   // New-pair selection: drake + hen are picked by tapping rows in the list below.
   const [mateDrakeId, setMateDrakeId] = useState('');

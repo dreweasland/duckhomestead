@@ -13,6 +13,7 @@ import {
 } from '../game/state';
 import { playCollect, playPlace, playUpgrade } from '../audio/sfx';
 import { CloseIcon, HelpIcon, ModuleIcon } from './icons';
+import { useEscapeKey } from './useEscapeKey';
 import { ModuleChip, RARITY_COLOR, STAT_HELP, STAT_META, rarityRank } from './lootUi';
 
 /** Signed applied-% string for a stat (− for reductions like Speed/Cooldown). */
@@ -29,6 +30,7 @@ export function ModulesPanel({
   state: GameState;
   onClose: () => void;
 }) {
+  useEscapeKey(onClose);
   const sockets = rackSockets(state);
   const used = state.rack.length;
   const rerollCost = BALANCE.LOOT.REROLL_DUST_COST;
