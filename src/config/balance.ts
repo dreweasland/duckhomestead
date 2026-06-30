@@ -328,6 +328,24 @@ export const BALANCE = {
     /** How many distinct spots the owl can dive-bomb. A strike picks one to dive
      *  at, and a non-final scare click jukes it to a DIFFERENT one. */
     STRIKE_DIVE_SPOTS: 5,
+    /**
+     * ACTIVE vs GUARD. Any meaningful player action marks the homestead "active"
+     * for this long; after it lapses (no actions), it reverts to "guard". While
+     * ACTIVE the player is clearly here, so the passive floor + presence are
+     * SUPPRESSED — a committed dive you don't scare lands an injury (scaring is the
+     * only defense). While GUARD (online idle) or OFFLINE, the built defenses carry
+     * you as before. Built deterrents are your away/guard armor; the scare is your
+     * at-the-keyboard one. */
+    ACTIVE_WINDOW_S: 150,
+    /**
+     * Rank difficulty ramp for the SCARE: the owl gets meaner to fend off as the
+     * homestead climbs. Linear from INTRO_RANK (easy, d=0) to RANK_DIFF_TO (hard,
+     * d=1): the dive wind-up shrinks toward windupMinScale (less reaction time) and
+     * the 1/2/3-click weighting slides from easy → hard (more multi-click feints).
+     */
+    RANK_DIFF_TO: 25, // rank at which the scare hits peak difficulty
+    RANK_WINDUP_MIN_SCALE: 0.5, // wind-up shrinks to this fraction at peak
+    STRIKE_CLICK_WEIGHTS_HARD: [0.2, 0.4, 0.4], // peak-rank click distribution (vs the easy default)
     /** Weighted distribution of how many clicks a strike needs to be scared off:
      *  index 0 → 1 click, 1 → 2 clicks, 2 → 3 clicks. A click that isn't the last
      *  is a FEINT — the owl jukes to another spot and re-dives (a fresh reaction

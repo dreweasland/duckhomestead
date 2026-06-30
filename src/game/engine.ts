@@ -585,6 +585,13 @@ export class GameEngine {
     return r;
   }
 
+  /** Mark the player as actively engaged (any meaningful interaction). Refreshes
+   *  the active window — while it's live, predator dives drop the passive floor and
+   *  demand a scare. Cheap; safe to call on every UI interaction. */
+  markActive() {
+    this.state.activeRemaining = BALANCE.PREDATORS.ACTIVE_WINDOW_S;
+  }
+
   /** A scare click on an in-flight owl dive — the active "be present" save. The
    *  final required click foils the strike (duck spared); an earlier one is a
    *  feint (the owl jukes away — click again). Returns the ScareResult, and drains

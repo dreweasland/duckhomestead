@@ -16,6 +16,8 @@ import {
   windowOpen,
   activeStrike,
   scareOff,
+  rankDifficulty,
+  strikeWindupSec,
 } from '../src/game/predators';
 import { waterWoundMult } from '../src/game/water';
 import {
@@ -331,6 +333,41 @@ describe('the interactive owl — telegraphed strikes you can scare off (online)
   it('scareOff is a no-op (returns null) when no dive is in flight', () => {
     const s = flock(4);
     expect(scareOff(s, 'owl')).toBeNull();
+  });
+
+  it('ACTIVE play drops the floor — an un-scared dive injures even with max defenses', () => {
+    const s = flock(4);
+    s.resources.eggs = 1e7;
+    for (let i = 0; i < 5; i++) buildDeterrent(s); // max the floor
+    expect(defenseFloor(s)).toBe(P.DEFENSE_FLOOR_CAP);
+    openWindow(s);
+    runPredators(s, firstAttackAt, { mode: 'online', rng: never, activeDefense: true });
+    const target = activeStrike(s)!.strike.targetId;
+    // rng=never would make any defensive roll MISS — but active mode bypasses it.
+    runPredators(s, P.STRIKE_WINDUP_SEC + 0.1, { mode: 'online', rng: never, activeDefense: true });
+    expect(s.ducks.find((d) => d.id === target)!.wounded).toBe(true); // the floor didn't save it
+  });
+
+  it('GUARD mode keeps the floor — the same un-scared dive can be blocked', () => {
+    const s = flock(4);
+    s.resources.eggs = 1e7;
+    for (let i = 0; i < 5; i++) buildDeterrent(s);
+    openWindow(s);
+    runPredators(s, firstAttackAt, { mode: 'online', rng: never }); // guard (no activeDefense)
+    runPredators(s, P.STRIKE_WINDUP_SEC + 0.1, { mode: 'online', rng: never });
+    expect(s.ducks.every((d) => !d.wounded)).toBe(true); // floor + presence held
+  });
+
+  it('rank scales the scare: a shorter wind-up at high rank', () => {
+    const lo = flock(4);
+    lo.rank = P.INTRO_RANK; // difficulty 0
+    const hi = flock(4);
+    hi.rank = P.RANK_DIFF_TO; // difficulty 1
+    expect(rankDifficulty(lo)).toBe(0);
+    expect(rankDifficulty(hi)).toBe(1);
+    expect(strikeWindupSec(lo)).toBeCloseTo(P.STRIKE_WINDUP_SEC, 6);
+    expect(strikeWindupSec(hi)).toBeCloseTo(P.STRIKE_WINDUP_SEC * P.RANK_WINDUP_MIN_SCALE, 6);
+    expect(strikeWindupSec(hi)).toBeLessThan(strikeWindupSec(lo));
   });
 
   it('offline catch-up never telegraphs — attacks resolve immediately (no scare possible)', () => {

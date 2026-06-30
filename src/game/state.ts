@@ -291,6 +291,10 @@ export interface GameState {
   niacinShortfall: number;
   /** Overcrowding stress accrued toward the next ratio-injury (over-drake flock). */
   overcrowdStress: number;
+  /** Seconds left of "active" play (any recent action refreshes it). While > 0 the
+   *  player is clearly here, so predator dives drop the passive floor and demand an
+   *  active scare. Runtime-only — starts at 0 (guard) on load. */
+  activeRemaining: number;
   /** Global cooldown (s) on the active "Dose Brewer's Yeast" intervention. */
   doseCooldownRemaining: number;
   /** Derived nutrition snapshot (recomputed each tick; not authoritative). */
@@ -559,6 +563,7 @@ export function initialState(now: number): GameState {
     condition: BALANCE.NUTRITION.CONDITION_MAX,
     niacinShortfall: 0,
     overcrowdStress: 0,
+    activeRemaining: 0,
     doseCooldownRemaining: 0,
     inventory: [],
     rack: [],

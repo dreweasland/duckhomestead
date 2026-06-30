@@ -69,6 +69,7 @@ export function deserialize(raw: string, now: number): GameState {
       condition: parsed.condition ?? base.condition,
       niacinShortfall: parsed.niacinShortfall ?? 0,
       overcrowdStress: parsed.overcrowdStress ?? 0,
+      activeRemaining: 0, // always start in guard; the first action arms active mode
       doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,
       // Phase 3 loot defaults for older saves.
       inventory: parsed.inventory ?? [],
