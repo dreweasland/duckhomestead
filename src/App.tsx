@@ -35,6 +35,7 @@ import { HUD } from './ui/HUD';
 import { TendIcon } from './ui/icons';
 import { LootBanner } from './ui/LootBanner';
 import { ModulesPanel } from './ui/ModulesPanel';
+import { NotifyRail } from './ui/NotifyRail';
 import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
 import { OwlAttack } from './ui/OwlAttack';
 import { StationBar } from './ui/StationBar';
@@ -206,19 +207,21 @@ export default function App() {
         <div key={milestoneFlash} className="milestone-flash pointer-events-none fixed inset-0 z-40" />
       )}
       <PredatorBanner state={state} onOpen={() => setWatchOpen(true)} />
-      {salvage && (
-        <div
-          key={salvage.id}
-          className="pointer-events-none fixed inset-x-0 top-14 z-40 flex justify-center"
-        >
-          <span className="salvage-toast rounded-full bg-[#2e2746] px-3 py-1 text-xs font-bold text-[#cdbcff] shadow ring-1 ring-[#3a2e64]">
+      {/* One shared, centered stack for every transient toast — they queue
+          vertically with a gap instead of pinning independently and overlapping. */}
+      <NotifyRail lowered={currentThreat(state) != null}>
+        <DingBanner ding={ding} onDone={() => setDing(null)} />
+        <LootBanner loot={loot} onDone={() => setLoot(null)} />
+        <DexBanner dex={dex} onDone={() => setDex(null)} />
+        {salvage && (
+          <span
+            key={salvage.id}
+            className="salvage-toast rounded-full bg-[#2e2746] px-3 py-1 text-xs font-bold text-[#cdbcff] shadow ring-1 ring-[#3a2e64]"
+          >
             Auto-salvaged spare · +{salvage.dust} dust
           </span>
-        </div>
-      )}
-      <DingBanner ding={ding} onDone={() => setDing(null)} />
-      <LootBanner loot={loot} onDone={() => setLoot(null)} />
-      <DexBanner dex={dex} onDone={() => setDex(null)} />
+        )}
+      </NotifyRail>
       {engine.away && awayOpen && (
         <AwayModal
           away={engine.away}
