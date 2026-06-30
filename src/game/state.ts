@@ -1,4 +1,11 @@
-import { BALANCE, PREDATOR_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
+import {
+  BALANCE,
+  DEFAULT_STAT_WEIGHTS,
+  PREDATOR_DEFS,
+  ZONE_DEFS,
+  zoneDef,
+  type StationType,
+} from '../config/balance';
 
 /**
  * Storage resources. `eggs` is the primary spendable currency. `corn`,
@@ -232,6 +239,11 @@ export interface GameState {
   dust: number;
   /** Monotonic id counter for modules. */
   nextModuleId: number;
+  /** Auto-fill optimizer's per-stat priority weights (the live STAT_VALUE). Set by
+   *  a playstyle preset or hand-edited. Pure assist heuristic — never the sim. */
+  statWeights: Record<ModuleStat, number>;
+  /** Which playstyle preset is selected ('custom' once the weights are hand-edited). */
+  statWeightPreset: string;
 
   // ── Phase 4a: breeding ──
   /** The flock — individual ducks (housed up to coopCapacity). */
@@ -466,6 +478,8 @@ export function initialState(now: number): GameState {
     rack: [],
     dust: 0,
     nextModuleId: 1,
+    statWeights: { ...DEFAULT_STAT_WEIGHTS } as Record<ModuleStat, number>,
+    statWeightPreset: 'balanced',
     ducks: [],
     nextDuckId: 1,
     breedingPairs: [],

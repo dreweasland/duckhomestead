@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { BALANCE } from '../src/config/balance';
+import { BALANCE, playstylePreset } from '../src/config/balance';
 import { rackSockets, type Module, type ModuleStat } from '../src/game/state';
 import {
   installModule,
   uninstallModule,
   swapInModule,
   autoFillRack,
+  bulkSalvageByTier,
 } from '../src/game/actions';
 import { spareOutlook, rackBonus } from '../src/game/loot';
 import { build } from './helpers';
@@ -82,6 +83,64 @@ describe('Auto-fill optimizer', () => {
     expect(s.rack.some((m) => m.id === strong.id)).toBe(true);
     expect(s.rack).toHaveLength(3);
     expect(s.inventory.some((m) => m.stat === 'tendCooldown')).toBe(true); // the dud got bumped
+  });
+});
+
+describe('playstyle weights steer Auto-fill', () => {
+  // 3 sockets, 5 spares: two strong tend legendaries + three modest production
+  // modules. Which three make the cut depends entirely on the active weights.
+  const loadout = (s: ReturnType<typeof build>) => {
+    s.rank = 1; // 3 sockets
+    s.inventory.push(
+      mod('tendPower', 'legendary', 0.5),
+      mod('tendCooldown', 'legendary', 0.5),
+      mod('stationSpeed', 'rare', 0.2),
+      mod('stationYield', 'rare', 0.2),
+      mod('eggOutput', 'rare', 0.2),
+    );
+  };
+  const hasTend = (s: ReturnType<typeof build>) =>
+    s.rack.some((m) => m.stat === 'tendPower' || m.stat === 'tendCooldown');
+
+  it('Idle/AFK (tend weights 0) keeps tend modules OUT, favoring production', () => {
+    const s = build({});
+    loadout(s);
+    s.statWeights = { ...playstylePreset('idle')!.weights } as Record<ModuleStat, number>;
+    autoFillRack(s);
+    expect(s.rack).toHaveLength(3);
+    expect(hasTend(s)).toBe(false);
+  });
+
+  it('Balanced values the strong tend legendaries enough to install them', () => {
+    const s = build({});
+    loadout(s);
+    s.statWeights = { ...playstylePreset('balanced')!.weights } as Record<ModuleStat, number>;
+    autoFillRack(s);
+    expect(hasTend(s)).toBe(true);
+  });
+});
+
+describe('bulk salvage by tier', () => {
+  it('salvages every spare of one rarity for dust, leaving the rest', () => {
+    const s = build({});
+    s.dust = 0;
+    s.inventory.push(
+      mod('eggOutput', 'common', 0.08),
+      mod('stationSpeed', 'common', 0.07),
+      mod('stationYield', 'rare', 0.2),
+    );
+    const r = bulkSalvageByTier(s, 'common');
+    expect(r.ok && r.value.count).toBe(2);
+    expect(s.inventory).toHaveLength(1);
+    expect(s.inventory[0].rarity).toBe('rare');
+    expect(s.dust).toBeGreaterThan(0);
+  });
+
+  it('fails when there are no spares of that tier (and touches nothing)', () => {
+    const s = build({});
+    s.inventory.push(mod('eggOutput', 'rare', 0.2));
+    expect(bulkSalvageByTier(s, 'legendary').ok).toBe(false);
+    expect(s.inventory).toHaveLength(1);
   });
 });
 

@@ -737,3 +737,60 @@ export const PREDATOR_DEFS: PredatorDef[] = [
 
 export const predatorDef = (id: string): PredatorDef | undefined =>
   PREDATOR_DEFS.find((p) => p.id === id);
+
+/**
+ * Auto-fill PLAYSTYLE PRESETS — selectable weightings for the rack optimizer.
+ * Each preset is a full set of per-stat STAT_VALUE weights; selecting one tells
+ * Auto-fill what to prefer when sockets are scarce. The weights are a pure assist
+ * heuristic (they only order the optimizer's choices, never the sim). 'balanced'
+ * mirrors the base STAT_VALUE. The player can also hand-edit the weights, which
+ * switches the active preset to 'custom'. Keyed as Record<string, number> since
+ * ModuleStat lives in state.ts (balance.ts must not import from it).
+ */
+export interface PlaystylePreset {
+  id: string;
+  label: string;
+  /** One-line "when to pick this". */
+  desc: string;
+  weights: Record<string, number>;
+}
+export const PLAYSTYLE_PRESETS: PlaystylePreset[] = [
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    desc: 'A sensible all-rounder — egg output first, production next, tending last.',
+    weights: { ...BALANCE.LOOT.STAT_VALUE },
+  },
+  {
+    id: 'active',
+    label: 'Active Tender',
+    desc: 'You’re here and tending: value the tend levers (bigger bursts, shorter cooldowns) and condition recovery.',
+    weights: {
+      eggOutput: 1.3,
+      stationSpeed: 0.9,
+      stationYield: 0.9,
+      conditionRegen: 0.9,
+      tendPower: 1.5,
+      tendCooldown: 1.5,
+    },
+  },
+  {
+    id: 'idle',
+    label: 'Idle / AFK',
+    desc: 'Going away: tending does nothing offline, so go all-in on passive production + egg output.',
+    weights: {
+      eggOutput: 1.6,
+      stationSpeed: 1.3,
+      stationYield: 1.3,
+      conditionRegen: 0.7,
+      tendPower: 0,
+      tendCooldown: 0,
+    },
+  },
+];
+
+/** The default (Balanced) weights — the seed for a fresh save + old-save fallback. */
+export const DEFAULT_STAT_WEIGHTS: Record<string, number> = PLAYSTYLE_PRESETS[0].weights;
+
+export const playstylePreset = (id: string): PlaystylePreset | undefined =>
+  PLAYSTYLE_PRESETS.find((p) => p.id === id);

@@ -1,5 +1,6 @@
 import { BALANCE, STATION_DEFS, zoneDef, type StationType } from '../config/balance';
 import {
+  activeStatWeights,
   grantModule,
   rackScore,
   rollMagnitude,
@@ -276,15 +277,16 @@ export function swapInModule(state: GameState, moduleId: string): ActionResult<M
  */
 export function autoFillRack(state: GameState): ActionResult<{ installed: number; swapped: number }> {
   const cap = rackSockets(state);
+  const w = activeStatWeights(state); // the player's playstyle priorities
   let installed = 0;
   let swapped = 0;
 
   // 1) Fill empty sockets, each time taking the spare that most raises the score.
   while (state.rack.length < cap && state.inventory.length > 0) {
     let bestIdx = -1;
-    let bestScore = rackScore(state.rack);
+    let bestScore = rackScore(state.rack, w);
     for (let i = 0; i < state.inventory.length; i++) {
-      const sc = rackScore([...state.rack, state.inventory[i]]);
+      const sc = rackScore([...state.rack, state.inventory[i]], w);
       if (sc > bestScore + 1e-12) {
         bestScore = sc;
         bestIdx = i;
@@ -299,13 +301,13 @@ export function autoFillRack(state: GameState): ActionResult<{ installed: number
   let improved = true;
   while (improved) {
     improved = false;
-    const base = rackScore(state.rack);
+    const base = rackScore(state.rack, w);
     let best = { gain: 1e-9, si: -1, ri: -1 };
     for (let si = 0; si < state.inventory.length; si++) {
       for (let ri = 0; ri < state.rack.length; ri++) {
         const cand = state.rack.slice();
         cand[ri] = state.inventory[si];
-        const gain = rackScore(cand) - base;
+        const gain = rackScore(cand, w) - base;
         if (gain > best.gain) best = { gain, si, ri };
       }
     }
@@ -330,6 +332,29 @@ export function salvageModule(state: GameState, moduleId: string): ActionResult<
   const dust = salvageDust(module.rarity);
   state.dust += dust;
   return done({ dust });
+}
+
+/** Bulk-salvage every SPARE of one rarity tier in a single sweep (the clutter
+ *  broom). Only touches the inventory — installed modules are never affected. */
+export function bulkSalvageByTier(
+  state: GameState,
+  rarity: Rarity,
+): ActionResult<{ count: number; dust: number }> {
+  const kept: Module[] = [];
+  let count = 0;
+  let dust = 0;
+  for (const m of state.inventory) {
+    if (m.rarity === rarity) {
+      count++;
+      dust += salvageDust(m.rarity);
+    } else {
+      kept.push(m);
+    }
+  }
+  if (count === 0) return fail('No spares of that tier');
+  state.inventory = kept;
+  state.dust += dust;
+  return done({ count, dust });
 }
 
 /** Spend dust to re-roll an inventory module's magnitude (same stat + rarity). */

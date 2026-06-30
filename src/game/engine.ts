@@ -4,6 +4,7 @@ import {
   buildDeterrent,
   buildGeneReader,
   buildSecureCoop,
+  bulkSalvageByTier,
   repairDeterrents,
   collectAll,
   collectStation,
@@ -30,7 +31,7 @@ import {
   type ActionResult,
   type XpResult,
 } from './actions';
-import { zoneDef } from '../config/balance';
+import { playstylePreset, zoneDef } from '../config/balance';
 import { scareOff } from './predators';
 import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
@@ -57,7 +58,9 @@ import {
   type GameState,
   type Ingredient,
   type Module,
+  type ModuleStat,
   type PredatorEvent,
+  type Rarity,
   type Resource,
 } from './state';
 
@@ -420,6 +423,27 @@ export class GameEngine {
     const r = salvageModule(this.state, moduleId);
     this.notify();
     return r;
+  }
+  /** Bulk-salvage every spare of one rarity tier in one sweep. */
+  bulkSalvageByTier(rarity: Rarity): ActionResult<{ count: number; dust: number }> {
+    const r = bulkSalvageByTier(this.state, rarity);
+    this.notify();
+    return r;
+  }
+  /** Apply a playstyle preset's priority weights to the Auto-fill optimizer. */
+  setPlaystyle(presetId: string): ActionResult<unknown> {
+    const preset = playstylePreset(presetId);
+    if (!preset) return { ok: false, reason: 'Unknown preset' };
+    this.state.statWeights = { ...preset.weights } as Record<ModuleStat, number>;
+    this.state.statWeightPreset = preset.id;
+    this.notify();
+    return { ok: true, value: undefined };
+  }
+  /** Hand-tune one stat's Auto-fill weight (switches the active preset to custom). */
+  setStatWeight(stat: ModuleStat, value: number): void {
+    this.state.statWeights = { ...this.state.statWeights, [stat]: Math.max(0, value) };
+    this.state.statWeightPreset = 'custom';
+    this.notify();
   }
   rerollModule(moduleId: string): ActionResult<unknown> {
     const r = rerollModule(this.state, moduleId);
