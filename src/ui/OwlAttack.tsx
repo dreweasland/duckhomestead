@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { playScare } from '../audio/sfx';
 import type { GameEngine } from '../game/engine';
 import { activeStrike } from '../game/predators';
@@ -8,49 +8,77 @@ import { SwoopOwlIcon } from './icons';
 /**
  * The interactive owl — the active "be present" save made real. While a strike is
  * in flight (an open window has committed a dive at a duck), the owl visibly
- * SWOOPS down the board toward the flock and the player can click it to scare it
- * off, foiling the strike entirely. Let the dive land and it resolves against the
- * built floor + passive presence only.
+ * SWOOPS down the board toward the flock and the player clicks it to scare it off.
+ *
+ * It's a 1–3 click skill check: the owl dives at one of several spots, and a
+ * non-final click is a FEINT — it jukes to a DIFFERENT spot and re-dives. Only the
+ * final required click foils the strike. Let any dive's wind-up expire un-foiled
+ * and it resolves against the built floor + passive presence.
  *
  * Rendered inside the board's relative container so the dive plays out over the
- * actual ducks. Everything reads from GameState (activeStrike) — the wind-up's
- * remaining time drives the dive via an inline animation-duration, so the owl
- * lands exactly when the strike would. Keyed by the strike id so each fresh dive
- * restarts the swoop from the top.
+ * actual ducks. Everything reads from GameState (activeStrike) — the spot + wind-up
+ * drive the position and the inline animation-duration, and the owl is keyed by
+ * (strike id, clicks landed) so each fresh dive/feint restarts the swoop.
  */
+
+/** Candidate dive spots as board-relative percentages (must be ≥ STRIKE_DIVE_SPOTS
+ *  long; the sim picks an index, the UI reads the coordinates). Spread across the
+ *  lower-middle board where the flock roams. */
+const DIVE_SPOTS = [
+  { left: 32, top: 56 },
+  { left: 68, top: 56 },
+  { left: 50, top: 67 },
+  { left: 26, top: 44 },
+  { left: 74, top: 46 },
+];
+
+interface Puff {
+  id: number;
+  kind: 'foiled' | 'feint';
+  left: number;
+  top: number;
+}
+
 export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameState }) {
-  // A brief "scared off!" puff that outlives the strike it celebrates (the strike
-  // clears the instant we scare, so the puff is tracked locally).
-  const [puff, setPuff] = useState<number | null>(null);
+  // A brief click-feedback puff that outlives the dive it reacts to (the strike
+  // moves/clears the instant we click, so the puff is tracked locally).
+  const [puff, setPuff] = useState<Puff | null>(null);
   useEffect(() => {
     if (puff == null) return;
     const t = window.setTimeout(() => setPuff(null), 650);
     return () => window.clearTimeout(t);
-  }, [puff]);
+  }, [puff?.id]);
 
   const strike = activeStrike(state);
 
   const onScare = () => {
-    if (engine.scare('owl')) {
-      playScare();
-      setPuff(Date.now());
-    }
+    if (!strike) return;
+    const spot = DIVE_SPOTS[strike.strike.spot % DIVE_SPOTS.length];
+    const res = engine.scare('owl');
+    if (!res) return;
+    if (res.kind === 'foiled') playScare(); // feint's re-dive screech plays via onPredator
+    setPuff({ id: Date.now(), kind: res.kind, left: spot.left, top: spot.top });
   };
 
   if (!strike && puff == null) return null;
 
-  const windup = strike?.strike.windupTotal ?? 0;
+  const s = strike?.strike;
+  const spot = s ? DIVE_SPOTS[s.spot % DIVE_SPOTS.length] : null;
+  const windup = s?.windupTotal ?? 0;
+  const multi = s ? s.clicksLanded > 0 : false; // reveal pips only once it's juked
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-lg">
-      {strike && (
+      {s && spot && (
         <>
           {/* Unmissable "attack NOW" cue: a pulsing red edge-glow over the board. */}
           <div className="danger-vignette absolute inset-0 rounded-lg" />
 
-          {/* Targeting reticle on the threatened ground (where the dive lands). */}
+          {/* Targeting reticle on the threatened ground (where THIS dive lands). */}
           <div
-            className="reticle-spin absolute left-1/2 top-[58%] h-16 w-16"
+            key={`reticle-${s.id}-${s.clicksLanded}`}
+            className="reticle-spin absolute h-16 w-16"
+            style={{ left: `${spot.left}%`, top: `${spot.top}%` }}
             aria-hidden
           >
             <svg viewBox="0 0 32 32" className="h-full w-full" shapeRendering="crispEdges">
@@ -64,21 +92,27 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
           </div>
 
           {/* The diving owl — the click target. Its swoop + fuse run for exactly the
-              wind-up, so the moment it reaches the flock is the moment it would
-              land. Scare it before then. */}
+              wind-up, ending on the reticle. Keyed by (id, clicks) so a feint
+              restarts the dive at the new spot. */}
           <button
-            key={strike.strike.id}
+            key={`owl-${s.id}-${s.clicksLanded}`}
             type="button"
             onClick={onScare}
             aria-label="Scare off the owl"
-            className="owl-swoop pointer-events-auto absolute left-1/2 top-0 flex flex-col items-center"
-            style={{ animationDuration: `${windup}s` }}
+            className="owl-swoop pointer-events-auto absolute flex flex-col items-center"
+            style={
+              {
+                left: `${spot.left}%`,
+                animationDuration: `${windup}s`,
+                '--spot-top': `${spot.top}%`,
+              } as CSSProperties
+            }
           >
             <span className="owl-flap inline-block">
               <SwoopOwlIcon size={84} />
             </span>
             <span className="mt-1 whitespace-nowrap rounded bg-[#5a1f1f] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#ffd9d9] shadow ring-1 ring-[#e26d6d]">
-              Tap to scare!
+              {multi ? 'Again!' : 'Tap to scare!'}
             </span>
             {/* Fuse: depletes over the wind-up so the urgency is legible. */}
             <span className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-[#3a1c1c]">
@@ -87,17 +121,35 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
                 style={{ animationDuration: `${windup}s` }}
               />
             </span>
+            {/* Progress pips — shown once it's juked at least once, so a plain
+                single-tap strike never reveals one. */}
+            {multi && (
+              <span className="mt-1 flex gap-1">
+                {Array.from({ length: s.clicksRequired }).map((_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      i < s.clicksLanded ? 'bg-[#bfe8a8]' : 'bg-[#e26d6d]'
+                    }`}
+                  />
+                ))}
+              </span>
+            )}
           </button>
         </>
       )}
 
-      {/* Scared-off reward beat. */}
+      {/* Click-feedback beat: green "Scared off!" on a foil, amber "Dodged!" when
+          the owl juked away (feint). */}
       {puff != null && (
         <span
-          key={puff}
-          className="scare-puff absolute left-1/2 top-[55%] whitespace-nowrap text-sm font-black uppercase tracking-wider text-[#bfe8a8] drop-shadow"
+          key={puff.id}
+          className={`scare-puff absolute whitespace-nowrap text-sm font-black uppercase tracking-wider drop-shadow ${
+            puff.kind === 'foiled' ? 'text-[#bfe8a8]' : 'text-[#ffd9a8]'
+          }`}
+          style={{ left: `${puff.left}%`, top: `${puff.top}%` }}
         >
-          Scared off!
+          {puff.kind === 'foiled' ? 'Scared off!' : 'Dodged!'}
         </span>
       )}
     </div>

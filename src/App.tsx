@@ -96,7 +96,7 @@ export default function App() {
       engine.onPredator((e) => {
         if (e.kind === 'introduced') return; // the milestone DING covers first contact
         if (e.kind === 'scared') return; // the scare's own whoosh plays at the click
-        if (e.kind === 'winding') playDive(); // the owl commits a dive — scare it!
+        if (e.kind === 'winding' || e.kind === 'feint') playDive(); // a dive (re)commits — scare it!
         else if (e.kind === 'incoming' || e.kind === 'open') playThreat();
         else playAttack();
       }),

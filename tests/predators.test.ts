@@ -273,17 +273,46 @@ describe('the interactive owl — telegraphed strikes you can scare off (online)
   it('SCARING the owl mid-dive foils the strike entirely (the active "be present" save)', () => {
     const s = flock(4);
     openWindow(s);
+    // rng=always ⇒ this strike needs exactly 1 click (clicks weighting picks 1).
     runPredators(s, firstAttackAt, { mode: 'online', rng: always });
     const target = activeStrike(s)!.strike.targetId;
+    expect(activeStrike(s)!.strike.clicksRequired).toBe(1);
 
-    const saved = scareOff(s, 'owl');
-    expect(saved).toBe(target);
+    const res = scareOff(s, 'owl');
+    expect(res).toEqual({ kind: 'foiled', duckId: target });
     expect(activeStrike(s)).toBeNull();
     expect(events(s).some((e) => e.kind === 'scared')).toBe(true);
 
     // Even with every roll set to land, the scared duck takes no wound.
     runPredators(s, P.STRIKE_WINDUP_SEC + 5, { mode: 'online', rng: always });
     expect(s.ducks.find((d) => d.id === target)!.wounded).not.toBe(true);
+  });
+
+  it('a multi-click strike FEINTS to a new spot, then foils on the final click', () => {
+    const s = flock(4);
+    // Construct a 2-click strike at spot 0 directly (deterministic, no rng roll).
+    s.predators.owl.strike = {
+      targetId: 'd0',
+      windupRemaining: 1,
+      windupTotal: P.STRIKE_WINDUP_SEC,
+      id: 1,
+      spot: 0,
+      clicksRequired: 2,
+      clicksLanded: 0,
+    };
+
+    // First click: a feint — the owl jukes to a different spot and re-arms.
+    const r1 = scareOff(s, 'owl', () => 0);
+    expect(r1).toEqual({ kind: 'feint', duckId: 'd0' });
+    expect(activeStrike(s)).not.toBeNull();
+    expect(s.predators.owl.strike!.spot).not.toBe(0); // relocated
+    expect(s.predators.owl.strike!.windupRemaining).toBe(P.STRIKE_WINDUP_SEC); // fresh window
+    expect(events(s).some((e) => e.kind === 'feint')).toBe(true);
+
+    // Second (final) click: foiled.
+    const r2 = scareOff(s, 'owl', () => 0);
+    expect(r2).toEqual({ kind: 'foiled', duckId: 'd0' });
+    expect(activeStrike(s)).toBeNull();
   });
 
   it('a target secured/treated DURING the dive slips away (the strike fizzles)', () => {

@@ -354,12 +354,18 @@ export interface PredatorState {
 export interface PendingStrike {
   /** The duck being dived on (re-validated at landing — it may slip away). */
   targetId: string;
-  /** Seconds left before the strike lands (counts down). */
+  /** Seconds left before the strike lands (counts down). Reset on each feint. */
   windupRemaining: number;
   /** The full wind-up duration (for the UI dive progress). */
   windupTotal: number;
   /** Monotonic id so the UI can key one dive's animation distinctly from the next. */
   id: number;
+  /** Which dive spot (0..STRIKE_DIVE_SPOTS-1) the owl is currently diving at. */
+  spot: number;
+  /** How many scare clicks it takes to foil this strike (1..3). */
+  clicksRequired: number;
+  /** Clicks landed so far; at clicksRequired the strike is foiled, else a feint. */
+  clicksLanded: number;
 }
 
 /** Transient predator events for UI feedback + the away summary. Not authoritative. */
@@ -369,6 +375,8 @@ export type PredatorEvent =
   | { kind: 'open'; predatorId: string }
   // The owl committed a dive (online): the telegraphed wind-up began — scare it!
   | { kind: 'winding'; predatorId: string; duckId: string }
+  // A non-final scare click: the owl juked to another spot and re-dove (not done yet).
+  | { kind: 'feint'; predatorId: string; duckId: string }
   // The player scared the owl off mid-dive: the strike was foiled (no wound).
   | { kind: 'scared'; predatorId: string; duckId: string }
   | { kind: 'wound'; predatorId: string; duckId: string }

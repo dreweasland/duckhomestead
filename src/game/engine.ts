@@ -32,7 +32,7 @@ import {
   type XpResult,
 } from './actions';
 import { playstylePreset, zoneDef } from '../config/balance';
-import { scareOff } from './predators';
+import { scareOff, type ScareResult } from './predators';
 import { tryTendDrop } from './loot';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
@@ -555,15 +555,15 @@ export class GameEngine {
     return r;
   }
 
-  /** Scare an in-flight owl dive off before it lands — the active "be present"
-   *  save. Foils the strike entirely (the targeted duck is spared). Returns the
-   *  spared duck's id, or null if there was no dive to scare. Drains the 'scared'
-   *  event so banners/SFX fire. */
-  scare(predatorId = 'owl'): string | null {
-    const duckId = scareOff(this.state, predatorId);
-    if (duckId) this.drainPredatorEvents();
+  /** A scare click on an in-flight owl dive — the active "be present" save. The
+   *  final required click foils the strike (duck spared); an earlier one is a
+   *  feint (the owl jukes away — click again). Returns the ScareResult, and drains
+   *  the emitted event so banners/SFX fire. */
+  scare(predatorId = 'owl'): ScareResult {
+    const result = scareOff(this.state, predatorId);
+    if (result) this.drainPredatorEvents();
     this.notify();
-    return duckId;
+    return result;
   }
 
   /** Active-only intervention: clear one duck's niacin leg debuff. */

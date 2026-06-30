@@ -195,9 +195,34 @@ function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, r
   landHit(state, def, opts, target, rng);
 }
 
+/** Weighted pick of how many scare clicks a strike needs (1..3). */
+function pickClicksRequired(rng: () => number): number {
+  const w = P.STRIKE_CLICK_WEIGHTS;
+  const total = w.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
+  for (let i = 0; i < w.length; i++) {
+    r -= w[i];
+    if (r < 0) return i + 1;
+  }
+  return 1;
+}
+
+/** A random dive spot index in [0, STRIKE_DIVE_SPOTS), optionally excluding the
+ *  current one (so a feint always visibly relocates). */
+function pickSpot(rng: () => number, exclude = -1): number {
+  const n = P.STRIKE_DIVE_SPOTS;
+  if (n <= 1) return 0;
+  if (exclude < 0) return Math.floor(rng() * n);
+  let s = Math.floor(rng() * (n - 1));
+  if (s >= exclude) s += 1; // skip the excluded index
+  return s;
+}
+
 /** Commit a telegraphed strike (online): pick a target NOW and open a visible
- *  wind-up dive. Nothing lands yet — the player gets STRIKE_WINDUP_SEC to scare
- *  the owl off. The roll happens only when the wind-up expires (resolveStrike). */
+ *  wind-up dive at a random spot. Nothing lands yet — the player gets
+ *  STRIKE_WINDUP_SEC to scare the owl off, and the strike may need up to 3 clicks
+ *  (each non-final one jukes it to another spot). The roll happens only when a
+ *  wind-up expires un-foiled (resolveStrike). */
 function beginStrike(state: GameState, def: PredatorDef, ps: PredatorState, rng: () => number): void {
   if (ps.strike) return; // a dive is already in flight — don't stack
   const target = pickTarget(state, rng);
@@ -208,6 +233,9 @@ function beginStrike(state: GameState, def: PredatorDef, ps: PredatorState, rng:
     windupRemaining: P.STRIKE_WINDUP_SEC,
     windupTotal: P.STRIKE_WINDUP_SEC,
     id,
+    spot: pickSpot(rng),
+    clicksRequired: pickClicksRequired(rng),
+    clicksLanded: 0,
   };
   emit(state, { kind: 'winding', predatorId: def.id, duckId: target.id });
 }
@@ -229,16 +257,37 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
   landHit(state, def, opts, target, rng);
 }
 
-/** Player intervention (online, active): scare an in-flight strike off before it
- *  lands. Foils it entirely — the duck is safe. Returns the spared duck's id, or
- *  null if there was no dive to scare. This is the real "be present" save. */
-export function scareOff(state: GameState, predatorId: string): string | null {
+/** Result of a scare click: 'foiled' (strike beaten, duck safe), 'feint' (the owl
+ *  juked to another spot — click again), or null (nothing was diving). */
+export type ScareResult =
+  | { kind: 'foiled'; duckId: string }
+  | { kind: 'feint'; duckId: string }
+  | null;
+
+/** Player intervention (online, active): a scare click on an in-flight strike.
+ *  The final required click FOILS it (duck safe); any earlier click is a FEINT —
+ *  the owl jukes to a different spot and re-opens its reaction window. This is the
+ *  real "be present" save, now a 1–3 click skill check. */
+export function scareOff(
+  state: GameState,
+  predatorId: string,
+  rng: () => number = Math.random,
+): ScareResult {
   const ps = state.predators[predatorId];
   if (!ps?.strike) return null;
-  const duckId = ps.strike.targetId;
-  ps.strike = undefined;
-  emit(state, { kind: 'scared', predatorId, duckId });
-  return duckId;
+  const s = ps.strike;
+  const duckId = s.targetId;
+  s.clicksLanded += 1;
+  if (s.clicksLanded >= s.clicksRequired) {
+    ps.strike = undefined;
+    emit(state, { kind: 'scared', predatorId, duckId });
+    return { kind: 'foiled', duckId };
+  }
+  // Feint: relocate to a fresh spot and re-arm the wind-up for the next dive.
+  s.spot = pickSpot(rng, s.spot);
+  s.windupRemaining = s.windupTotal;
+  emit(state, { kind: 'feint', predatorId, duckId });
+  return { kind: 'feint', duckId };
 }
 
 /** The in-flight telegraphed strike for the UI's interactive owl, or null when no
