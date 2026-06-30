@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { playCollect, playRemove, playUpgrade } from '../audio/sfx';
 import { BALANCE, STATION_DEFS } from '../config/balance';
-import { outputPerCycle, stationStatus, upgradeCost } from '../game/actions';
+import { millLoad, outputPerCycle, stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import { coopCapacity, type GameState, type Resource, type Station } from '../game/state';
 import {
@@ -101,10 +101,22 @@ export function StationBar({
   // produced via nutrition, not a flat per-cycle number); every other producer
   // shows its true per-cycle yield.
   const isCoop = station.type === 'coop';
+  const isMill = station.type === 'mill';
   const thisCoopCap = BALANCE.BREEDING.COOP_CAPACITY * station.level;
   const totalCap = coopCapacity(state);
   const flock = state.ducks.length;
-  const yields = isCoop ? [] : outputPerCycle(state, station);
+  const yields = isCoop || isMill ? [] : outputPerCycle(state, station);
+  // Mill load: the flock's blend demand vs total mill capacity (the "do I need
+  // another mill?" read). Colour ramps amber → red as it nears/exceeds 100%.
+  const load = isMill ? millLoad(state) : null;
+  const millColor = !load
+    ? '#c9b88f'
+    : load.ratio >= 1
+      ? '#e8835a'
+      : load.ratio >= 0.8
+        ? '#e8c45a'
+        : '#8fe388';
+  const millPctStr = load ? (Number.isFinite(load.ratio) ? `${Math.round(load.ratio * 100)}%` : '∞') : '';
 
   const debuffed = station.type === 'coop' && state.ducks.some((d) => d.debuffed);
   const doseCost = BALANCE.NUTRITION.DOSE_COST_YEAST;
@@ -132,11 +144,24 @@ export function StationBar({
         {statusText}
       </span>
 
-      {/* yield (per cycle) / duck capacity (coops) */}
+      {/* yield (per cycle) / duck capacity (coops) / blend load (mills) */}
       {isCoop ? (
         <span className="flex items-center gap-1 text-[11px] text-[#c9b88f]" title="This coop's housing · whole-flock usage">
           <DuckIcon size={12} /> {thisCoopCap} cap
           <span className="text-[#7a6a4a]">· flock {flock}/{totalCap}</span>
+        </span>
+      ) : isMill && load ? (
+        <span
+          className="flex items-center gap-1 text-[11px]"
+          style={{ color: millColor }}
+          title="Flock blend demand vs total mill capacity — over 100% means feed is throttled; add or upgrade a mill"
+        >
+          {millPctStr} mill load
+          {load.hasMill && (
+            <span className="text-[#7a6a4a]">
+              · {load.demand.toFixed(1)}/{load.capacity.toFixed(1)}/s
+            </span>
+          )}
         </span>
       ) : yields.length > 0 ? (
         <span className="flex items-center gap-1 text-[11px] text-[#c9b88f]" title="Produced each cycle (level + yield bonuses applied)">

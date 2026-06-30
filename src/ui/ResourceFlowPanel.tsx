@@ -1,4 +1,4 @@
-import { resourceFlow } from '../game/actions';
+import { millLoad, resourceFlow } from '../game/actions';
 import type { GameState, Resource } from '../game/state';
 import { fmt } from './format';
 import { CloseIcon, RESOURCE_ICON } from './icons';
@@ -29,8 +29,37 @@ function rate(perSec: number): string {
   return `${sign}${mag >= 1000 ? fmt(mag) : Math.round(mag * 10) / 10}`;
 }
 
+/** Mill load → bar fill, colour, and a "what to do" line. */
+function millStatus(load: NonNullable<ReturnType<typeof millLoad>>): {
+  color: string;
+  pct: string;
+  fill: number;
+  hint: string;
+} {
+  if (!load.hasMill) {
+    return { color: '#e8835a', pct: '—', fill: 1, hint: 'No feed mill — build one to blend the ration.' };
+  }
+  const r = load.ratio;
+  const pct = Number.isFinite(r) ? `${Math.round(r * 100)}%` : '∞';
+  const fill = Math.min(1, Number.isFinite(r) ? r : 1);
+  if (r >= 1) {
+    return {
+      color: '#e8835a',
+      pct,
+      fill,
+      hint: `Over capacity — feed throttled to ${Math.round(load.feedScale * 100)}%. Add or upgrade a mill.`,
+    };
+  }
+  if (r >= 0.8) {
+    return { color: '#e8c45a', pct, fill, hint: 'Approaching capacity — another mill or upgrade soon.' };
+  }
+  return { color: '#8fe388', pct, fill, hint: 'Headroom — the mills keep up with the flock.' };
+}
+
 export function ResourceFlowPanel({ state, onClose }: { state: GameState; onClose: () => void }) {
   const rows = state.resources.forage > 0 ? [...ROWS, { key: 'forage' as Resource, label: 'Forage' }] : ROWS;
+  const load = millLoad(state);
+  const mill = load ? millStatus(load) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -89,6 +118,34 @@ export function ResourceFlowPanel({ state, onClose }: { state: GameState; onClos
             );
           })}
         </div>
+
+        {/* Feed mill capacity — the production ⇄ mill partnership. */}
+        {load && mill && (
+          <div className="mt-3 rounded-md bg-[#1f1812] p-2.5">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+                Feed mill capacity
+              </span>
+              <span className="text-xs font-bold tabular-nums" style={{ color: mill.color }}>
+                {mill.pct} used
+              </span>
+            </div>
+            <div className="mb-1 h-2 overflow-hidden rounded-full bg-[#3a2e22]">
+              <div
+                className="h-full rounded-full transition-[width]"
+                style={{ width: `${mill.fill * 100}%`, background: mill.color }}
+              />
+            </div>
+            {load.hasMill && (
+              <div className="mb-1 text-[10px] tabular-nums text-[#9a8a6a]">
+                blending {load.demand.toFixed(1)} / {load.capacity.toFixed(1)} units/s
+              </div>
+            )}
+            <div className="text-[10px] leading-relaxed" style={{ color: mill.color }}>
+              {mill.hint}
+            </div>
+          </div>
+        )}
 
         <p className="mt-3 text-[10px] leading-relaxed text-[#7a6a4a]">
           Eggs have no feed outflow — they’re your currency, spent on building &amp; upgrades as you

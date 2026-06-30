@@ -116,7 +116,18 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // Condition buffers: full condition masks the penalty; empty applies it fully.
   const eggMult = eggMultRaw + (1 - eggMultRaw) * cond;
 
-  state.nutrition = { satisfaction, supply, requirement, eggMultRaw, eggMult, feedScale, hasMill, eggRate: 0 };
+  state.nutrition = {
+    satisfaction,
+    supply,
+    requirement,
+    eggMultRaw,
+    eggMult,
+    feedScale,
+    hasMill,
+    eggRate: 0,
+    millCapacity: capacity,
+    feedDemand: totalWant,
+  };
 
   // Niacin debuff: sustained shortfall accrues a timer; each time it crosses the
   // onset threshold, one healthy coop's duck gets a leg debuff (halves output).

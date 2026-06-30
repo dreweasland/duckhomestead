@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resourceFlow } from '../src/game/actions';
+import { millLoad, resourceFlow } from '../src/game/actions';
 import { INGREDIENTS, type Resource } from '../src/game/state';
 import { build, fullSetup, run, setHens, stockAll } from './helpers';
 
@@ -35,5 +35,37 @@ describe('resourceFlow — currency in/out breakdown', () => {
     );
     run(s, 5);
     expect(totalOut(s)).toBe(0);
+  });
+});
+
+describe('millLoad — feed demand vs mill capacity', () => {
+  it('a small flock with a mill has capacity headroom (ratio < 1, finite)', () => {
+    const s = stockAll(setHens(fullSetup(), 2));
+    run(s, 5);
+    const load = millLoad(s)!;
+    expect(load).not.toBeNull();
+    expect(load.hasMill).toBe(true);
+    expect(load.capacity).toBeGreaterThan(0);
+    expect(load.ratio).toBeGreaterThan(0);
+    expect(load.ratio).toBeLessThan(1);
+    expect(load.feedScale).toBeCloseTo(1, 5); // not throttled
+  });
+
+  it('no mill ⇒ infinite ratio (demand with no capacity) and hasMill false', () => {
+    const s = stockAll(
+      setHens(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, yeastVat: 1, oysterSource: 1, coop: 1 }), 2),
+    );
+    run(s, 5);
+    const load = millLoad(s)!;
+    expect(load.hasMill).toBe(false);
+    expect(Number.isFinite(load.ratio)).toBe(false); // demand but zero capacity
+  });
+
+  it('a big flock outgrows one mill (ratio ≥ 1, ration throttled)', () => {
+    const s = stockAll(setHens(fullSetup(), 60));
+    run(s, 5);
+    const load = millLoad(s)!;
+    expect(load.ratio).toBeGreaterThanOrEqual(1);
+    expect(load.feedScale).toBeLessThan(1); // mill is the bottleneck
   });
 });
