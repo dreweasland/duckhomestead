@@ -130,7 +130,7 @@ body {
     opacity: 1;
   }
   100% {
-    top: 58%;
+    top: var(--spot-top, 58%);
     transform: translate(-50%, -50%) scale(1.5) rotate(8deg);
     opacity: 1;
   }

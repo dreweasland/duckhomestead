@@ -311,10 +311,18 @@ export const BALANCE = {
     /** Online only: the active "be present" save. When a strike is committed
      *  during an open window the owl makes a VISIBLE dive for this many seconds
      *  before it lands — the reaction window in which clicking (scaring) the owl
-     *  foils the strike entirely. Let it expire and the strike resolves against
-     *  the built floor + passive presence only. This is the real work behind
-     *  "or be present": presence that you DO, not presence you merely have. */
+     *  foils the strike. Let it expire and the strike resolves against the built
+     *  floor + passive presence only. This is the real work behind "or be
+     *  present": presence that you DO, not presence you merely have. */
     STRIKE_WINDUP_SEC: 2.6,
+    /** How many distinct spots the owl can dive-bomb. A strike picks one to dive
+     *  at, and a non-final scare click jukes it to a DIFFERENT one. */
+    STRIKE_DIVE_SPOTS: 5,
+    /** Weighted distribution of how many clicks a strike needs to be scared off:
+     *  index 0 → 1 click, 1 → 2 clicks, 2 → 3 clicks. A click that isn't the last
+     *  is a FEINT — the owl jukes to another spot and re-dives (a fresh reaction
+     *  window). Tilt toward 1 so most strikes are still a single tap. */
+    STRIKE_CLICK_WEIGHTS: [0.55, 0.3, 0.15],
 
     /** A wound escalates to a PERMANENT loss this many seconds after it lands if
      *  the duck is never treated. The save is the active Treat action. */
