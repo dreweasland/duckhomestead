@@ -252,11 +252,12 @@ export function WatchPanel({
         )}
 
         <div className="mt-3 text-[10px] leading-relaxed text-[#7a6a4a]">
-          Built deterrents protect even while you’re away. Being here is active: when the owl dives
-          during a window, tap it on the board to scare it off and foil the strike — presence you
-          <span className="text-[#bfe8a8]"> do</span>, not just have. Securing a breeder takes it off
-          the menu entirely. A wound only becomes permanent if left untended — so every loss is one
-          you could have prevented.
+          Built deterrents are your <span className="text-[#a8d0e8]">guard</span> armor — they protect
+          while you’re away or idle. But while you’re <span className="text-[#ff9a9a]">actively
+          playing</span>, the owl knows it: the floor drops and a dive you don’t <span className="text-[#bfe8a8]">scare</span>
+          {' '}lands an injury (the owl also dives faster and feints more as your rank climbs). Securing
+          a breeder takes it off the menu entirely, and a wound only turns permanent if left untended —
+          so every loss is one you could have prevented.
         </div>
       </div>
     </div>

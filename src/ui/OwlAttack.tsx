@@ -66,9 +66,11 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
   const spot = s ? DIVE_SPOTS[s.spot % DIVE_SPOTS.length] : null;
   const windup = s?.windupTotal ?? 0;
   const multi = s ? s.clicksLanded > 0 : false; // reveal pips only once it's juked
+  // ACTIVE play: the passive floor is suppressed, so the scare is mandatory.
+  const active = state.activeRemaining > 0;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-lg">
+    <div className="pointer-events-none fixed inset-0 z-[70] overflow-hidden">
       {s && spot && (
         <>
           {/* Unmissable "attack NOW" cue: a pulsing red edge-glow over the board. */}
@@ -111,8 +113,14 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
             <span className="owl-flap inline-block">
               <SwoopOwlIcon size={84} />
             </span>
-            <span className="mt-1 whitespace-nowrap rounded bg-[#5a1f1f] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#ffd9d9] shadow ring-1 ring-[#e26d6d]">
-              {multi ? 'Again!' : 'Tap to scare!'}
+            <span
+              className={`mt-1 whitespace-nowrap rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-wider shadow ring-1 ${
+                active
+                  ? 'bg-[#6e1414] text-[#ffe2e2] ring-[#ff8a8a]'
+                  : 'bg-[#5a1f1f] text-[#ffd9d9] ring-[#e26d6d]'
+              }`}
+            >
+              {multi ? 'Again!' : active ? 'Scare or injury!' : 'Tap to scare!'}
             </span>
             {/* Fuse: depletes over the wind-up so the urgency is legible. */}
             <span className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-[#3a1c1c]">

@@ -19,6 +19,8 @@ export function PredatorBanner({ state, onOpen }: { state: GameState; onOpen: ()
   const cap = secureCapacity(state);
   const floorPct = Math.round(defenseFloor(state) * 100);
   const exposed = state.ducks.filter((d) => !d.secured && !d.wounded).length;
+  // ACTIVE play suppresses the passive floor — the scare is the only defense.
+  const active = state.activeRemaining > 0;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-[45]">
@@ -48,7 +50,8 @@ export function PredatorBanner({ state, onOpen }: { state: GameState; onOpen: ()
         )}
         <span className="ml-1 inline-flex items-center gap-1 rounded bg-black/25 px-1.5 py-0.5 text-[10px]">
           <ShieldIcon size={11} /> {secured}/{cap}
-          <span className="opacity-60">·</span>floor {floorPct}%
+          <span className="opacity-60">·</span>
+          {active ? <span className="text-[#ff9a9a]">defenses down — scare</span> : <>floor {floorPct}%</>}
         </span>
         {!diving && (
           <span className="ml-1 text-[10px] uppercase tracking-wider opacity-70">tap to defend</span>

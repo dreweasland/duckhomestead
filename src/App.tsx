@@ -68,6 +68,18 @@ export default function App() {
   // Tend SFX for both entry points (board double-click and panel button).
   useEffect(() => engine.onTend(() => playTend()), [engine]);
 
+  // Activity gauge: any interaction marks the player "active" (predator dives then
+  // drop the passive floor and demand a scare). Lapses to "guard" after idle.
+  useEffect(() => {
+    const mark = () => engine.markActive();
+    window.addEventListener('pointerdown', mark);
+    window.addEventListener('keydown', mark);
+    return () => {
+      window.removeEventListener('pointerdown', mark);
+      window.removeEventListener('keydown', mark);
+    };
+  }, [engine]);
+
   // The loot moment.
   const [loot, setLoot] = useState<LootEvent | null>(null);
   useEffect(
@@ -207,6 +219,10 @@ export default function App() {
         <div key={milestoneFlash} className="milestone-flash pointer-events-none fixed inset-0 z-40" />
       )}
       <PredatorBanner state={state} onOpen={() => setWatchOpen(true)} />
+      {/* The interactive owl dive — a top-level fixed overlay so it floats ABOVE any
+          open panel (in active mode the scare is mandatory, so it must always be
+          reachable). Pointer-events pass through except on the owl itself. */}
+      <OwlAttack engine={engine} state={state} />
       {/* One shared, centered stack for every transient toast — they queue
           vertically with a gap instead of pinning independently and overlapping. */}
       <NotifyRail lowered={currentThreat(state) != null}>
@@ -299,11 +315,6 @@ export default function App() {
         <div className="flex flex-col items-center gap-3">
           <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
           <div className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
-            {/* The interactive owl swoops over the board during an open window —
-                click it to scare the dive off before it lands. Overlays the board
-                (and the ambient flock) but lets board clicks pass through except
-                on the owl itself. */}
-            <OwlAttack engine={engine} state={state} />
             {/* Status pills tuck into the board's empty top headroom (the canvas
                 reserves space there) — present, but adding no height. Yard only:
                 Auto-Haul / Tend-All are station/tending milestones, irrelevant on

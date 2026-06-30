@@ -154,9 +154,16 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // Wall-clock danger — advanced by the RAW dt, never the offline rate-scaled
   // step (an owl doesn't hunt slower because you're away). Offline passes the
   // mercy budget so a defended/secured overnight is soft losses, not a wipe.
+  // Active window lapses in real seconds; offline drains it too (you're away →
+  // guard). ACTIVE only applies online: the player is here, so dives drop the
+  // passive floor and demand a scare.
+  if (state.activeRemaining > 0) state.activeRemaining = Math.max(0, state.activeRemaining - dt);
+  const activeDefense = opts.mode === 'online' && state.activeRemaining > 0;
+
   runPredators(state, dt, {
     mode: opts.mode,
     rng: opts.rng,
     lossBudget: opts.predatorLossBudget,
+    activeDefense,
   });
 }

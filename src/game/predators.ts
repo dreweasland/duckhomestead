@@ -46,6 +46,10 @@ export interface PredatorOpts {
    *  held at the brink instead of killing. Absent online (uncapped — the player
    *  is here and every loss is attributable to ignoring a visible wound). */
   lossBudget?: { remaining: number };
+  /** ACTIVE play (online + recently interacting): the passive floor + presence are
+   *  suppressed, so a committed dive the player doesn't scare lands an injury — the
+   *  scare is the only defense. Guard/offline keep the built-defense roll. */
+  activeDefense?: boolean;
 }
 
 /** Predators stay dormant until the player has a flock AND reaches the intro
@@ -196,9 +200,27 @@ function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, r
   landHit(state, def, opts, target, rng);
 }
 
-/** Weighted pick of how many scare clicks a strike needs (1..3). */
-function pickClicksRequired(rng: () => number): number {
-  const w = P.STRIKE_CLICK_WEIGHTS;
+/** Scare difficulty 0..1 from homestead rank: 0 at the intro rank, 1 at RANK_DIFF_TO.
+ *  Drives faster dives + more multi-click feints as the homestead climbs. */
+export function rankDifficulty(state: GameState): number {
+  const span = P.RANK_DIFF_TO - P.INTRO_RANK;
+  if (span <= 0) return 1;
+  return Math.max(0, Math.min(1, (state.rank - P.INTRO_RANK) / span));
+}
+
+/** Dive wind-up (reaction window) in seconds, shrinking with rank difficulty. */
+export function strikeWindupSec(state: GameState): number {
+  const d = rankDifficulty(state);
+  return P.STRIKE_WINDUP_SEC * (1 + (P.RANK_WINDUP_MIN_SCALE - 1) * d);
+}
+
+/** Weighted pick of how many scare clicks a strike needs (1..3), interpolating the
+ *  distribution from the easy default toward the hard one as rank climbs. */
+function pickClicksRequired(state: GameState, rng: () => number): number {
+  const d = rankDifficulty(state);
+  const easy = P.STRIKE_CLICK_WEIGHTS;
+  const hard = P.STRIKE_CLICK_WEIGHTS_HARD;
+  const w = easy.map((e, i) => e + ((hard[i] ?? e) - e) * d);
   const total = w.reduce((a, b) => a + b, 0);
   let r = rng() * total;
   for (let i = 0; i < w.length; i++) {
@@ -229,13 +251,14 @@ function beginStrike(state: GameState, def: PredatorDef, ps: PredatorState, rng:
   const target = pickTarget(state, rng);
   if (!target) return; // nothing exposed — no dive
   const id = (state.predatorStrikeSeq = (state.predatorStrikeSeq ?? 0) + 1);
+  const windup = strikeWindupSec(state);
   ps.strike = {
     targetId: target.id,
-    windupRemaining: P.STRIKE_WINDUP_SEC,
-    windupTotal: P.STRIKE_WINDUP_SEC,
+    windupRemaining: windup,
+    windupTotal: windup,
     id,
     spot: pickSpot(rng),
-    clicksRequired: pickClicksRequired(rng),
+    clicksRequired: pickClicksRequired(state, rng),
     clicksLanded: 0,
   };
   emit(state, { kind: 'winding', predatorId: def.id, duckId: target.id });
@@ -249,12 +272,21 @@ function beginStrike(state: GameState, def: PredatorDef, ps: PredatorState, rng:
 function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, ps: PredatorState, rng: () => number): void {
   const strike = ps.strike;
   if (!strike) return;
-  const success = attackChance(state, def, true); // online: passive presence still helps
-  if (rng() >= success) return; // missed — defenses/presence held
-
-  wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
   const target = state.ducks.find((d) => d.id === strike.targetId && !d.secured && !d.wounded);
   if (!target) return; // slipped away (secured/treated/gone) — the dive misses
+
+  if (opts.activeDefense) {
+    // ACTIVE: the player is here, so the built floor + presence are off — an
+    // un-scared committed dive lands. The scare was the only defense.
+    wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
+    landHit(state, def, opts, target, rng);
+    return;
+  }
+
+  // GUARD (online idle): the built floor + passive presence get a roll to hold.
+  const success = attackChance(state, def, true);
+  if (rng() >= success) return; // missed — defenses/presence held
+  wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
   landHit(state, def, opts, target, rng);
 }
 
