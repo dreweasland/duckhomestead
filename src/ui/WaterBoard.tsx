@@ -435,23 +435,29 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                if (engine.upgradePondFeature(selected.x, selected.y).ok) playUpgrade();
-              }}
-              disabled={state.resources.eggs < upgradeCost}
-              className={`flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-[11px] font-bold transition ${
-                state.resources.eggs >= upgradeCost
-                  ? 'bg-[#1f4a2a] text-[#bfe8a8] hover:bg-[#27583a]'
-                  : 'cursor-not-allowed bg-[#13202a] text-[#5a7a8a]'
-              }`}
-              title={`Upgrade to Lv ${(selected.level ?? 1) + 1} — ×${W.UPGRADE.provisionMult} water`}
-            >
-              Upgrade → Lv {(selected.level ?? 1) + 1}
-              <span className="inline-flex items-center gap-0.5">
-                <EggIcon size={10} /> {upgradeCost}
+            {W.FEATURES[selected.type].baseProvision > 0 ? (
+              <button
+                onClick={() => {
+                  if (engine.upgradePondFeature(selected.x, selected.y).ok) playUpgrade();
+                }}
+                disabled={state.resources.eggs < upgradeCost}
+                className={`flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-[11px] font-bold transition ${
+                  state.resources.eggs >= upgradeCost
+                    ? 'bg-[#1f4a2a] text-[#bfe8a8] hover:bg-[#27583a]'
+                    : 'cursor-not-allowed bg-[#13202a] text-[#5a7a8a]'
+                }`}
+                title={`Upgrade to Lv ${(selected.level ?? 1) + 1} — ×${W.UPGRADE.provisionMult} water`}
+              >
+                Upgrade → Lv {(selected.level ?? 1) + 1}
+                <span className="inline-flex items-center gap-0.5">
+                  <EggIcon size={10} /> {upgradeCost}
+                </span>
+              </button>
+            ) : (
+              <span className="flex-1 rounded bg-[#13202a] px-2 py-1.5 text-center text-[10px] text-[#5a7a8a]">
+                Feeds adjacent pools — not upgradeable
               </span>
-            </button>
+            )}
             <button
               onClick={() => {
                 if (engine.removePondFeature(selected.x, selected.y).ok) {
