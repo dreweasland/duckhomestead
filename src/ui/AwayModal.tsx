@@ -93,6 +93,18 @@ export function AwayModal({ away, onClose }: { away: AwaySummary; onClose: () =>
           </div>
         )}
 
+        {(away.debuffed ?? 0) > 0 && (
+          <div className="mt-3 rounded-md bg-[#2a1f2a] px-3 py-2 text-xs ring-1 ring-[#5a3a5a]">
+            <div className="flex items-center gap-1.5 font-bold text-[#e87a9a]">
+              <DuckIcon size={15} /> Niacin shortfall
+            </div>
+            <div className="mt-1 text-[#d8a0b8]">
+              {away.debuffed} duck{away.debuffed! > 1 ? 's' : ''} limping (laying at half) — Dose
+              Brewer&rsquo;s Yeast from a coop, and raise niacin in the ration.
+            </div>
+          </div>
+        )}
+
         <p className="mt-3 text-[10px] text-[#7a6a4a]">
           Idle produces resources only — no rank XP. Tend stations while you’re here to rank up.
         </p>

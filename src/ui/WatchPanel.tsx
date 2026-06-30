@@ -8,12 +8,6 @@ import { CloseIcon, EggIcon, HealIcon, NetIcon, OwlIcon, ShieldIcon } from './ic
 
 const P = BALANCE.PREDATORS;
 
-/** Side-panel button styling: pull attention when a window is live or ducks are
- *  wounded (something to act on right now). */
-export function watchNeedsAttention(state: GameState): boolean {
-  return currentThreat(state) !== null || state.ducks.some((d) => d.wounded);
-}
-
 function StatRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="flex items-baseline justify-between rounded bg-[#171009] px-2.5 py-1.5">

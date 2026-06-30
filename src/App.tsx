@@ -194,8 +194,15 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedId]);
-  const anyBuffer = state.stations.some((s) => Object.values(s.buffer).some((v) => (v ?? 0) > 0));
-  const readyToTend = state.stations.filter((s) => s.tendCooldownRemaining === 0).length;
+  // Each only feeds a milestone-gated button — short-circuit the station scan when
+  // that button isn't shown (anyBuffer's Collect-All is gone once Auto-Haul is on;
+  // readyToTend's Tend-All doesn't exist until that milestone unlocks).
+  const anyBuffer =
+    !state.autoHaulUnlocked &&
+    state.stations.some((s) => Object.values(s.buffer).some((v) => (v ?? 0) > 0));
+  const readyToTend = state.tendAllUnlocked
+    ? state.stations.filter((s) => s.tendCooldownRemaining === 0).length
+    : 0;
 
   // Onboarding for the pre-placed starter: the Coop is already laying but short
   // on protein + calcium. Surfaced as a one-time welcome pop-up (first run only,
