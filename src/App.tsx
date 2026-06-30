@@ -42,6 +42,9 @@ import { StationBar } from './ui/StationBar';
 
 /** Per-browser flag: the first-run welcome pop-up shows once, then never again. */
 const WELCOME_SEEN_KEY = 'duck-homestead-welcome-seen';
+/** One-time teaching moment: the first time a threat telegraphs while the player
+ *  is actively playing (defenses suppressed). Shows once, then never again. */
+const DEFENSES_DOWN_SEEN_KEY = 'duck-homestead-defenses-down-seen';
 
 /** Combined width of the two columns at desktop: board box (MAX_BOARD_WIDTH +
  *  p-2) + the gap-4 + the 300px side panel. The bottom build row / footer are
@@ -157,6 +160,21 @@ export default function App() {
     }
     setWelcomeSeen(true);
   };
+  const [defensesDownSeen, setDefensesDownSeen] = useState(() => {
+    try {
+      return !!localStorage.getItem(DEFENSES_DOWN_SEEN_KEY);
+    } catch {
+      return true;
+    }
+  });
+  const dismissDefensesDown = () => {
+    try {
+      localStorage.setItem(DEFENSES_DOWN_SEEN_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setDefensesDownSeen(true);
+  };
 
   const state = engine.state;
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
@@ -184,6 +202,15 @@ export default function App() {
     !state.stations.some((s) => s.type === 'oysterSource') && 'an Oyster Source (calcium)',
   ].filter(Boolean) as string[];
   const showWelcome = !welcomeSeen && hasCoop && missingProducers.length > 0;
+  // Fire the "defenses down" lesson when a threat first telegraphs while the player
+  // is active (the floor is suppressed) — a heads-up before the dives land. Not
+  // during the welcome, so the two never stack.
+  const showDefensesDown =
+    !defensesDownSeen &&
+    !showWelcome &&
+    predatorsActive(state) &&
+    state.activeRemaining > 0 &&
+    currentThreat(state) != null;
 
   const onTileClick = useCallback(
     (x: number, y: number) => {
@@ -294,6 +321,37 @@ export default function App() {
                 Got it
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* First-time "defenses down" lesson — the active-mode shift, taught once. */}
+      {showDefensesDown && (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 p-4"
+          onClick={dismissDefensesDown}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-[#2a1818] p-5 text-center ring-2 ring-[#5a2a2a]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 inline-flex items-center justify-center gap-2 text-lg font-black text-[#ffd9d9]">
+              <OwlIcon size={22} /> Defenses down!
+            </div>
+            <p className="mb-4 text-xs leading-relaxed text-[#c9a0a0]">
+              The owl knows you&rsquo;re at the keyboard. While you&rsquo;re actively playing it{' '}
+              <span className="font-bold text-[#ff9a9a]">ignores your built deterrents</span> — your
+              only defense is to <span className="font-bold text-[#bfe8a8]">scare each dive</span> (tap
+              the swooping owl). Miss one and a duck takes an injury. Step away a couple minutes and
+              your deterrents take guard again. It also dives faster and feints more as your rank
+              climbs — secure prize breeders to keep them off the menu entirely.
+            </p>
+            <button
+              onClick={dismissDefensesDown}
+              className="rounded-md bg-[#6e1414] px-4 py-2 text-sm font-bold text-[#ffe2e2] transition hover:bg-[#7e1c1c]"
+            >
+              Got it — I&rsquo;ll scare them off
+            </button>
           </div>
         </div>
       )}
