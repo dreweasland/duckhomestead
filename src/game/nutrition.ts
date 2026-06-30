@@ -5,7 +5,6 @@ import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { waterConditionMult } from './water';
 import { eggValueBoostMult } from './prestige';
 import {
-  adultDrakes,
   adultLayers,
   AXES,
   breedingEstablished,
@@ -211,14 +210,16 @@ const DUCKLING_AXES: Axis[] = ['energy', 'protein', 'niacin'];
  */
 export function runDucklingNutrition(state: GameState, dt: number, rateMult: number): number {
   const B = BALANCE.BREEDING;
-  const immature = state.ducks.filter((d) => d.stage !== 'adult');
-  if (immature.length === 0) {
+  // Only the head COUNT drives demand — count immature ducks instead of allocating
+  // a filtered array every tick.
+  let n = 0;
+  for (const d of state.ducks) if (d.stage !== 'adult') n++;
+  if (n === 0) {
     state.ducklingNutrition = undefined;
     return 1;
   }
   const step = dt * rateMult;
   const coopCycle = BALANCE.COOP.cycleSeconds;
-  const n = immature.length;
 
   const supply = zeroAxes();
   for (const ing of INGREDIENTS) {
@@ -260,14 +261,21 @@ const DRAKE_AXES: Axis[] = ['energy', 'protein', 'niacin'];
  */
 export function runDrakeNutrition(state: GameState, dt: number, rateMult: number): number {
   const B = BALANCE.BREEDING;
-  const drakes = adultDrakes(state);
-  if (drakes.length === 0 || !breedingEstablished(state)) {
+  // Check the O(1) gate before the O(ducks) flock scan — during the (often long)
+  // pre-breeding phase this skips the per-tick work entirely.
+  if (!breedingEstablished(state)) {
+    state.drakeNutrition = undefined;
+    return 1;
+  }
+  // Only the head COUNT drives demand — count adult drakes, no array allocation.
+  let n = 0;
+  for (const d of state.ducks) if (d.stage === 'adult' && d.sex === 'drake') n++;
+  if (n === 0) {
     state.drakeNutrition = undefined;
     return 1;
   }
   const step = dt * rateMult;
   const coopCycle = BALANCE.COOP.cycleSeconds;
-  const n = drakes.length;
 
   const supply = zeroAxes();
   for (const ing of INGREDIENTS) {
