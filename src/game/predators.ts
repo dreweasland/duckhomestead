@@ -406,19 +406,23 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
  *  multiplier stays > 0, so there is always time to treat — no new death path). */
 function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void {
   const threshold = P.WOUND_ESCALATE_SEC * waterWoundMult(state);
-  for (const d of [...state.ducks]) {
+  // Iterate the live array (no per-tick copy); defer removals so we never mutate
+  // state.ducks mid-loop. `lost` stays null unless something actually escalates.
+  let lost: string[] | null = null;
+  for (const d of state.ducks) {
     if (!d.wounded) continue;
     d.woundElapsed = (d.woundElapsed ?? 0) + dt;
     if (d.woundElapsed < threshold) continue;
     if (permitPermanentLoss(opts)) {
       emit(state, { kind: 'escalated', duckId: d.id, source: d.woundSource ?? 'predator' });
-      removeDuck(state, d.id);
+      (lost ??= []).push(d.id);
     } else {
       // Mercy rail (offline budget spent): hold at the brink. The player returns
       // to a wounded duck to TREAT, not a corpse.
       d.woundElapsed = threshold;
     }
   }
+  if (lost) for (const id of lost) removeDuck(state, id);
 }
 
 /**
