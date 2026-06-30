@@ -46,6 +46,9 @@ export interface AwaySummary {
   /** Flock-overcrowding toll while away — ducks injured (treatable) and lost to an
    *  over-drake flock. Separate from the predator toll so it's attributed honestly. */
   overcrowd?: { injured: number; lost: number };
+  /** Ducks limping from a niacin shortfall on return (laying at half) — the third
+   *  flock toll, so the summary surfaces every offline loss, not just predators. */
+  debuffed?: number;
 }
 
 export function serialize(state: GameState): string {
@@ -263,6 +266,8 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     predatorLost > 0 || predatorWounded > 0 ? { wounded: predatorWounded, lost: predatorLost } : undefined;
   const overcrowd =
     overcrowdLost > 0 || overcrowdWounded > 0 ? { injured: overcrowdWounded, lost: overcrowdLost } : undefined;
+  const debuffedCount = state.ducks.filter((d) => d.debuffed).length;
+  const debuffed = debuffedCount > 0 ? debuffedCount : undefined;
 
   state.lastSeen = now;
   return {
@@ -272,6 +277,7 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     produced,
     predator,
     overcrowd,
+    debuffed,
   };
 }
 
@@ -317,6 +323,9 @@ export function loadGame(now: number): { state: GameState; away: AwaySummary | n
   // so the player returned to wounded/missing ducks with no explanation.
   const meaningful =
     away.elapsedSeconds > 5 &&
-    (Object.keys(away.produced).length > 0 || away.predator != null || away.overcrowd != null);
+    (Object.keys(away.produced).length > 0 ||
+      away.predator != null ||
+      away.overcrowd != null ||
+      (away.debuffed ?? 0) > 0);
   return { state, away: meaningful ? away : null };
 }
