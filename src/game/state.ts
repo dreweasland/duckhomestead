@@ -238,10 +238,13 @@ export function flockRatio(state: GameState): {
 } {
   const B = BALANCE.BREEDING;
   // Single pass — counts only, no intermediate arrays (runs every tick + render).
+  // SECURED ducks are in separate housing, not part of the free-roaming flock, so
+  // they don't count toward the over-ratio (and can't be injured/culled by it —
+  // counting them would make the injuries permanently unfixable).
   let hens = 0;
   let drakes = 0;
   for (const d of state.ducks) {
-    if (d.stage !== 'adult') continue;
+    if (d.stage !== 'adult' || d.secured) continue;
     if (d.sex === 'hen') hens++;
     else if (d.sex === 'drake') drakes++;
   }

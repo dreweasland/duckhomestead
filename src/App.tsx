@@ -14,12 +14,12 @@ import { zoneDef, type StationType } from './config/balance';
 import { WaterBoard } from './ui/WaterBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
-import { championReadiness } from './game/prestige';
-import { LegacyPanel, legacyReady } from './ui/LegacyPanel';
+import { championGoal } from './game/prestige';
+import { LegacyPanel } from './ui/LegacyPanel';
 import { defenseFloor, flockRatio, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
 import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
-import { WatchPanel, watchNeedsAttention } from './ui/WatchPanel';
+import { WatchPanel } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
 import { StatusPills } from './ui/StatusPills';
 import { useGame } from './game/useGame';
@@ -499,33 +499,41 @@ export default function App() {
                 </button>
               );
             })()}
-          {(state.ducks.length > 0 || state.legacyTier > 0) && (
-            <button
-              onClick={() => setLegacyOpen(true)}
-              className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${
-                legacyReady(state)
-                  ? 'bg-[#5a4320] text-[#ffe9a8] ring-1 ring-[#e2b94f] hover:bg-[#6a4f28]'
-                  : 'bg-[#2e2746] text-[#cdbcff] hover:bg-[#372e57]'
-              }`}
-            >
-              <span className="flex items-center gap-1.5">
-                <LegacyIcon size={16} /> Legacy
-              </span>
-              <span className="tabular-nums">
-                {legacyReady(state)
-                  ? 'champion ready!'
-                  : `T${state.legacyTier} · ${Math.round(championReadiness(state) * 100)}%`}
-              </span>
-            </button>
-          )}
+          {(state.ducks.length > 0 || state.legacyTier > 0) &&
+            (() => {
+              // Compute the champion goal ONCE — it was evaluated 3× here (legacyReady
+              // ×2 + championReadiness), each a full O(ducks) meanQuality scan.
+              const goal = championGoal(state);
+              const ready = goal.colors.met && goal.quality.met && goal.size.met;
+              return (
+                <button
+                  onClick={() => setLegacyOpen(true)}
+                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${
+                    ready
+                      ? 'bg-[#5a4320] text-[#ffe9a8] ring-1 ring-[#e2b94f] hover:bg-[#6a4f28]'
+                      : 'bg-[#2e2746] text-[#cdbcff] hover:bg-[#372e57]'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <LegacyIcon size={16} /> Legacy
+                  </span>
+                  <span className="tabular-nums">
+                    {ready ? 'champion ready!' : `T${state.legacyTier} · ${Math.round(goal.readiness * 100)}%`}
+                  </span>
+                </button>
+              );
+            })()}
           {(predatorsActive(state) ||
             state.deterrents > 0 ||
             state.secureCoops > 0 ||
             state.ducks.some((d) => d.wounded)) &&
             (() => {
-              const attention = watchNeedsAttention(state);
+              // Compute threat + wound count ONCE (this block previously scanned the
+              // flock for wounds 2× — watchNeedsAttention + the filter — and called
+              // currentThreat twice).
               const threat = currentThreat(state);
-              const woundedCount = state.ducks.filter((d) => d.wounded).length;
+              const woundedCount = state.ducks.reduce((n, d) => n + (d.wounded ? 1 : 0), 0);
+              const attention = threat != null || woundedCount > 0;
               const label =
                 woundedCount > 0
                   ? `${woundedCount} wounded`
