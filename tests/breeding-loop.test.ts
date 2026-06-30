@@ -3,7 +3,7 @@ import { BALANCE } from '../src/config/balance';
 import { createPair, cullDuck, cullDucks, removePair } from '../src/game/actions';
 import { goodGeneCount } from '../src/game/genetics';
 import { runOfflineCatchUp, serialize, deserialize } from '../src/game/save';
-import { phenotype, type Duck, type Genome, type GameState } from '../src/game/state';
+import { phenotype, type Color, type Duck, type Genome, type GameState } from '../src/game/state';
 import { build, run, stockAll, FLAT_GENOME, genome } from './helpers';
 
 /** Replace the flock with a controlled drake + hen of a given genotype/genome. */
@@ -162,5 +162,19 @@ describe('culling = the selection lever (live mean genome quality)', () => {
     const ids = s.ducks.map((d) => d.id).sort();
     expect(ids).toEqual(['keepPairedD', 'keepPairedH', 'keepSecured']);
     expect(s.breedingPairs).toHaveLength(1); // the pair is intact
+  });
+});
+
+describe('offline catch-up suppresses live DING queues (they happened away, not now)', () => {
+  it('clears pendingDex + pendingGodClone so they do not fire on load', () => {
+    const s = stockAll(build({ coop: 2 }));
+    s.rank = 5;
+    s.lastSeen = -1 * 3600 * 1000; // 1h ago
+    // Stand in for offline-queued achievements (as an offline hatch would).
+    s.pendingDex = ['splash'] as Color[];
+    s.pendingGodClone = 1;
+    runOfflineCatchUp(s, 0);
+    expect(s.pendingDex).toEqual([]);
+    expect(s.pendingGodClone).toBe(0);
   });
 });

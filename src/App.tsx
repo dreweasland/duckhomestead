@@ -177,6 +177,10 @@ export default function App() {
   };
 
   const state = engine.state;
+  // Hoist the predator reads — used by the spacer, the NotifyRail offset, the
+  // "defenses down" trigger, and the Watch button (was evaluated 4×/2× per render).
+  const threat = currentThreat(state);
+  const predActive = predatorsActive(state);
   const selected = selectedId ? state.stations.find((s) => s.id === selectedId) ?? null : null;
   // Build is only meaningful on a buildable (non-water) unlocked zone — the Yard.
   const activeZd = zoneDef(activeZone);
@@ -206,11 +210,7 @@ export default function App() {
   // is active (the floor is suppressed) — a heads-up before the dives land. Not
   // during the welcome, so the two never stack.
   const showDefensesDown =
-    !defensesDownSeen &&
-    !showWelcome &&
-    predatorsActive(state) &&
-    state.activeRemaining > 0 &&
-    currentThreat(state) != null;
+    !defensesDownSeen && !showWelcome && predActive && state.activeRemaining > 0 && threat != null;
 
   const onTileClick = useCallback(
     (x: number, y: number) => {
@@ -252,7 +252,7 @@ export default function App() {
       <OwlAttack engine={engine} state={state} />
       {/* One shared, centered stack for every transient toast — they queue
           vertically with a gap instead of pinning independently and overlapping. */}
-      <NotifyRail lowered={currentThreat(state) != null}>
+      <NotifyRail lowered={threat != null}>
         <DingBanner ding={ding} onDone={() => setDing(null)} />
         <LootBanner loot={loot} onDone={() => setLoot(null)} />
         <DexBanner dex={dex} onDone={() => setDex(null)} />
@@ -359,7 +359,7 @@ export default function App() {
 
       {/* The predator telegraph is pinned (fixed) to the very top; reserve flow
           space for it so it never overlaps the zone tabs / HUD beneath it. */}
-      {currentThreat(state) && <div aria-hidden className="h-12 md:h-8" />}
+      {threat && <div aria-hidden className="h-12 md:h-8" />}
 
       {/* Pin the column stack to the two columns' combined width (COLS_WIDTH) so
           the full-width build row + footer line up exactly with the right
@@ -523,15 +523,12 @@ export default function App() {
                 </button>
               );
             })()}
-          {(predatorsActive(state) ||
+          {(predActive ||
             state.deterrents > 0 ||
             state.secureCoops > 0 ||
             state.ducks.some((d) => d.wounded)) &&
             (() => {
-              // Compute threat + wound count ONCE (this block previously scanned the
-              // flock for wounds 2× — watchNeedsAttention + the filter — and called
-              // currentThreat twice).
-              const threat = currentThreat(state);
+              // Reuse the hoisted `threat`; compute the wound count once.
               const woundedCount = state.ducks.reduce((n, d) => n + (d.wounded ? 1 : 0), 0);
               const attention = threat != null || woundedCount > 0;
               const label =

@@ -252,6 +252,13 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
   const predatorWounded = woundedDucks.filter((d) => d.woundSource !== 'overcrowd').length;
   const overcrowdWounded = woundedDucks.filter((d) => d.woundSource === 'overcrowd').length;
   state.pendingPredatorEvents = [];
+  // Offline hatches still record colors (dexSeen) and create god-clone ducks, but
+  // the live DING queues must not fire on load — an offline event isn't a live
+  // moment, and a god-clone fanfare right after the Away modal reads as a bug.
+  // (Same treatment as the predator events above; the achievements persist in
+  // dexSeen / the flock.)
+  state.pendingDex = [];
+  state.pendingGodClone = 0;
   const predator =
     predatorLost > 0 || predatorWounded > 0 ? { wounded: predatorWounded, lost: predatorLost } : undefined;
   const overcrowd =
@@ -304,7 +311,12 @@ export function loadGame(now: number): { state: GameState; away: AwaySummary | n
 
   const state = deserialize(raw, now);
   const away = runOfflineCatchUp(state, now);
-  // Only surface the summary if meaningful time passed and something was made.
-  const meaningful = away.elapsedSeconds > 5 && Object.keys(away.produced).length > 0;
+  // Surface the summary if meaningful time passed AND something happened — resources
+  // made OR a flock toll (predator/overcrowding). Gating on production alone hid the
+  // toll when nothing was produced (e.g. an all-drake flock with no laying hens),
+  // so the player returned to wounded/missing ducks with no explanation.
+  const meaningful =
+    away.elapsedSeconds > 5 &&
+    (Object.keys(away.produced).length > 0 || away.predator != null || away.overcrowd != null);
   return { state, away: meaningful ? away : null };
 }
