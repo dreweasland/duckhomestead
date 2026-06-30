@@ -58,8 +58,11 @@ const fail = (reason: string): PondResult => ({ ok: false, reason });
  */
 export function featureProvisions(state: GameState): Map<string, number> {
   const feats = state.pond.features;
-  const typeAt = (x: number, y: number): PondFeatureType | undefined =>
-    feats.find((f) => f.x === x && f.y === y)?.type;
+  // Index by cell once (O(features)) so adjacency lookups are O(1) — the whole
+  // function used to be O(features²) via a per-neighbor `feats.find`, and it runs
+  // every tick (waterCondition/waterWound multipliers).
+  const typeByCell = new Map<string, PondFeatureType>(feats.map((f) => [cellKey(f.x, f.y), f.type]));
+  const typeAt = (x: number, y: number): PondFeatureType | undefined => typeByCell.get(cellKey(x, y));
   const adjSpring = (x: number, y: number) => ORTHO.some(([dx, dy]) => typeAt(x + dx, y + dy) === 'spring');
   const adjPlantBeds = (x: number, y: number) =>
     ORTHO.filter(([dx, dy]) => typeAt(x + dx, y + dy) === 'plantBed').length;

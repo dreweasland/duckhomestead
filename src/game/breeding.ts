@@ -47,12 +47,18 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
  */
 export function runBreeding(state: GameState, step: number, matureRate = 1, breedRate = 1): void {
   const capacity = coopCapacity(state);
+  // Index ducks by id once so pair-parent lookups are O(1) — this ran two
+  // `state.ducks.find` per pair every tick (O(pairs × ducks)). Ducklings pushed
+  // mid-loop are never pair parents, so the up-front map stays valid.
+  const byId = new Map(state.ducks.map((d) => [d.id, d]));
 
   // ── Pairs: clutch + incubation + hatch ──
   for (const pair of state.breedingPairs) {
-    const drake = state.ducks.find((d) => d.id === pair.drakeId && d.sex === 'drake' && d.stage === 'adult');
-    const hen = state.ducks.find((d) => d.id === pair.henId && d.sex === 'hen' && d.stage === 'adult');
-    if (!drake || !hen) continue; // pair invalid until both are present adults
+    const drake = byId.get(pair.drakeId);
+    const hen = byId.get(pair.henId);
+    // Pair invalid until both are present adults of the right sex.
+    if (!drake || drake.sex !== 'drake' || drake.stage !== 'adult') continue;
+    if (!hen || hen.sex !== 'hen' || hen.stage !== 'adult') continue;
     if (drake.wounded || hen.wounded) continue; // Phase 4c: a wounded bird can't breed
 
     // Lay a fertilized clutch on the interval (bounded queue so it can't pile up).

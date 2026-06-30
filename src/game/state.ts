@@ -237,9 +237,14 @@ export function flockRatio(state: GameState): {
   injuring: boolean;
 } {
   const B = BALANCE.BREEDING;
-  const adults = state.ducks.filter(isAdult);
-  const hens = adults.filter((d) => d.sex === 'hen').length;
-  const drakes = adults.filter((d) => d.sex === 'drake').length;
+  // Single pass — counts only, no intermediate arrays (runs every tick + render).
+  let hens = 0;
+  let drakes = 0;
+  for (const d of state.ducks) {
+    if (d.stage !== 'adult') continue;
+    if (d.sex === 'hen') hens++;
+    else if (d.sex === 'drake') drakes++;
+  }
   const flock = state.ducks.length;
   // An over-drake flock only ever arises from breeding, so gate on that too (also
   // keeps a tiny seeded/un-bred flock — and isolated tests — free of ratio stress).
