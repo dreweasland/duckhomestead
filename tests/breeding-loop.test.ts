@@ -57,7 +57,7 @@ describe('breeding loop end to end', () => {
   });
 
   it('offspring genotype comes from the parents (Splash×Splash breeds true)', () => {
-    const s = build({ coop: 2 });
+    const s = stockAll(build({ coop: 2 })); // stocked: drakes fed → full breeding speed
     const { drakeId, henId } = pairFlock(s, ['Bl', 'Bl']); // both splash
     createPair(s, drakeId, henId);
     run(s, 300); // a clutch hatches
@@ -67,7 +67,7 @@ describe('breeding loop end to end', () => {
   });
 
   it('records the dex + queues a DING when a new color first hatches', () => {
-    const s = build({ coop: 2 });
+    const s = stockAll(build({ coop: 2 })); // stocked: drakes fed → full breeding speed
     s.dexSeen = ['blue'];
     const { drakeId, henId } = pairFlock(s, ['Bl', 'Bl']); // splash offspring (new)
     createPair(s, drakeId, henId);

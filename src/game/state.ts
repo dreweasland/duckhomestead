@@ -29,6 +29,13 @@ export type Resources = Record<Resource, number>;
 export const INGREDIENTS = ['corn', 'peas', 'mealworms', 'brewersYeast', 'oysterShell'] as const;
 export type Ingredient = (typeof INGREDIENTS)[number];
 
+/** An all-zero ration (the empty starting point — nothing fed until the player sets it). */
+export const zeroRation = (): Record<Ingredient, number> =>
+  ({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 });
+/** True when a ration is entirely unset (every ingredient is 0). */
+export const rationUnset = (ration: Record<Ingredient, number>): boolean =>
+  INGREDIENTS.every((i) => (ration[i] ?? 0) === 0);
+
 /**
  * A placed station. Production deposits outputs into `buffer`; "hauling"
  * (manual Collect, the Auto-Haul cart, or offline catch-up) moves the buffer
@@ -122,6 +129,14 @@ export interface DucklingNutritionState {
   immatureCount: number;
 }
 
+export interface DrakeNutritionState {
+  satisfaction: Record<Axis, number>;
+  requirement: Record<Axis, number>;
+  /** Clutch-rate (breeding speed) multiplier (1 = full, down to the penalty floor). */
+  breedRate: number;
+  drakeCount: number;
+}
+
 // ── Phase 4a: breeding & genetics ──
 /** Blue-dilution locus alleles. `Bl` = blue allele, `bl` = wild-type. */
 export type Allele = 'Bl' | 'bl';
@@ -201,6 +216,14 @@ export const adultLayers = (state: GameState): Duck[] =>
   state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'hen');
 /** All adult ducks — what the layer ration must feed. */
 export const adultDucks = (state: GameState): Duck[] => state.ducks.filter(isAdult);
+/** Adult drakes — breeding males that eat the maintenance ration (no calcium). */
+export const adultDrakes = (state: GameState): Duck[] =>
+  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'drake');
+/** Breeding is "established" — the drake ration only kicks in past this so a
+ *  cold-start flock is never taxed. True once the gene reader is built or any
+ *  pairing has been made. */
+export const breedingEstablished = (state: GameState): boolean =>
+  state.geneReader || state.breedingPairs.length > 0;
 
 export interface GameState {
   /** Schema version for save migration. */
@@ -228,6 +251,10 @@ export interface GameState {
   ducklingRation: Record<Ingredient, number>;
   /** Derived duckling-nutrition snapshot (recomputed each tick). */
   ducklingNutrition?: DucklingNutritionState;
+  /** Maintenance ration fed to adult drakes (gates breeding speed, no calcium). */
+  drakeRation: Record<Ingredient, number>;
+  /** Derived drake-nutrition snapshot (recomputed each tick). */
+  drakeNutrition?: DrakeNutritionState;
   /** Flock condition reserve (0..CONDITION_MAX) — the battery that buffers
    *  shortfalls and powers offline. */
   condition: number;
@@ -486,8 +513,12 @@ export function initialState(now: number): GameState {
     xp: 0,
     autoHaulUnlocked: false,
     tendAllUnlocked: false,
-    ration: { ...BALANCE.NUTRITION.DEFAULT_RATION },
-    ducklingRation: { ...BALANCE.BREEDING.DEFAULT_DUCKLING_RATION },
+    // Rations start EMPTY — nothing is silently drained before the player has set
+    // a ration. The Nutrition panel flags an unset ration and offers a one-tap
+    // "Suggested" fill (the balanced defaults live in BALANCE for that).
+    ration: zeroRation(),
+    ducklingRation: zeroRation(),
+    drakeRation: zeroRation(),
     condition: BALANCE.NUTRITION.CONDITION_MAX,
     niacinShortfall: 0,
     doseCooldownRemaining: 0,

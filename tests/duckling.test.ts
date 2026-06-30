@@ -75,8 +75,8 @@ describe('save', () => {
     expect(deserialize(serialize(s), 0).ducklingRation).toEqual(s.ducklingRation);
   });
 
-  it('defaults the duckling ration for a pre-step-5 save', () => {
+  it('starts the duckling ration empty for a pre-step-5 save (player sets it)', () => {
     const r = deserialize(JSON.stringify({ ducks: [], stations: [] }), 0);
-    expect(r.ducklingRation).toEqual(BALANCE.BREEDING.DEFAULT_DUCKLING_RATION);
+    expect(r.ducklingRation).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 });
   });
 });

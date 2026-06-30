@@ -456,6 +456,19 @@ export const BALANCE = {
     DUCKLING_RATION_MATURE_PENALTY_FLOOR: 0.3, // worst-case maturation speed mult
     /** Default grow-out ration fed to immature ducks (satisfies E/P/N when stocked). */
     DEFAULT_DUCKLING_RATION: { corn: 1, peas: 0, mealworms: 2.5, brewersYeast: 2, oysterShell: 0 },
+    /**
+     * Drake maintenance ration — adult breeding males eat too, but lay no eggs, so
+     * they need NO calcium (the layers' eggshell cost). Per-drake demand matches a
+     * laying hen on energy/protein/niacin, making a big breeding pool a real
+     * end-game ingredient drain that spares oyster shell. Only kicks in once
+     * breeding is established (gene reader built or a pair made), so a cold-start
+     * flock is never taxed. Feeding drakes well speeds breeding; starving them
+     * throttles clutch production (never a hard stop — a floor like the others).
+     */
+    DRAKE_REQUIREMENT: { energy: 3, protein: 2, niacin: 1, calcium: 0 },
+    DRAKE_BREED_PENALTY_FLOOR: 0.4, // worst-case clutch-rate mult when underfed
+    /** Default drake ration — the layer default minus the (unneeded) oyster shell. */
+    DEFAULT_DRAKE_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.25, oysterShell: 0 },
     /** Starting flock seeded into the first coop (Blue carriers, mixed genome). */
     SEED_DRAKES: 1,
     SEED_HENS: 2,

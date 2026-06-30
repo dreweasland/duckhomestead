@@ -1,7 +1,7 @@
 import { initialState, type Gene, type Genome, type GameState } from '../src/game/state';
 import { placeStation } from '../src/game/actions';
 import { tick } from '../src/game/tick';
-import type { StationType } from '../src/config/balance';
+import { BALANCE, type StationType } from '../src/config/balance';
 
 /** All-Dud genome → layMult 1.0 (the old "vigor 1.0" baseline for sim tests). */
 export const FLAT_GENOME: Genome = ['D', 'D', 'D', 'D', 'D', 'D'];
@@ -10,10 +10,15 @@ export const genome = (s: string): Genome => s.split('') as Gene[];
 
 export const INGREDIENTS = ['corn', 'peas', 'mealworms', 'brewersYeast', 'oysterShell'] as const;
 
-/** Build a state with the given station counts, laid out across the grid. */
+/** Build a state with the given station counts, laid out across the grid. The
+ *  game now starts with EMPTY rations (the player sets them), but sim tests want a
+ *  fed flock, so seed the balanced default rations here. */
 export function build(counts: Partial<Record<StationType, number>>): GameState {
   const s = initialState(0);
   s.resources.eggs = 1_000_000;
+  s.ration = { ...BALANCE.NUTRITION.DEFAULT_RATION };
+  s.ducklingRation = { ...BALANCE.BREEDING.DEFAULT_DUCKLING_RATION };
+  s.drakeRation = { ...BALANCE.BREEDING.DEFAULT_DRAKE_RATION };
   let x = 0;
   for (const [type, n] of Object.entries(counts)) {
     for (let i = 0; i < (n ?? 0); i++) {

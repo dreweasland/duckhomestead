@@ -497,6 +497,11 @@ export class GameEngine {
     this.state.ducklingRation[ingredient] = Math.max(0, value);
     this.notify();
   }
+  /** Set the maintenance ration fed to adult drakes (gates breeding speed). */
+  setDrakeRation(ingredient: Ingredient, value: number) {
+    this.state.drakeRation[ingredient] = Math.max(0, value);
+    this.notify();
+  }
 
   // ── Phase 4c: predator defenses + wound care ───────────────────────
   /** Build a deterrent (raises the homestead-wide protection floor). */

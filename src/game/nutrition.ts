@@ -4,7 +4,16 @@ import { layMult } from './genetics';
 import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { waterConditionMult } from './water';
 import { eggValueBoostMult } from './prestige';
-import { adultLayers, AXES, INGREDIENTS, type Axis, type GameState, type Ingredient } from './state';
+import {
+  adultDrakes,
+  adultLayers,
+  AXES,
+  breedingEstablished,
+  INGREDIENTS,
+  type Axis,
+  type GameState,
+  type Ingredient,
+} from './state';
 
 const N = BALANCE.NUTRITION;
 /** Axes that multiply egg output. Niacin is excluded — it drives the debuff. */
@@ -236,4 +245,53 @@ export function runDucklingNutrition(state: GameState, dt: number, rateMult: num
   const matureRate = floor + (1 - floor) * clamp01(minSat);
   state.ducklingNutrition = { satisfaction, requirement, matureRate, immatureCount: n };
   return matureRate;
+}
+
+/** Axes the drake maintenance ration must cover (no calcium — drakes don't lay). */
+const DRAKE_AXES: Axis[] = ['energy', 'protein', 'niacin'];
+
+/**
+ * Advance the drake maintenance ration: adult drakes consume ingredients from the
+ * SAME storage pool as everyone else (a real end-game drain that spares oyster
+ * shell). Returns a clutch-rate multiplier (1 = full, down to the penalty floor)
+ * from the worst required axis — well-fed drakes breed faster; starved ones slow
+ * (a throttle, never a wall). Gated on breedingEstablished so a cold-start flock
+ * is untouched. Runs online & offline; never grants XP.
+ */
+export function runDrakeNutrition(state: GameState, dt: number, rateMult: number): number {
+  const B = BALANCE.BREEDING;
+  const drakes = adultDrakes(state);
+  if (drakes.length === 0 || !breedingEstablished(state)) {
+    state.drakeNutrition = undefined;
+    return 1;
+  }
+  const step = dt * rateMult;
+  const coopCycle = BALANCE.COOP.cycleSeconds;
+  const n = drakes.length;
+
+  const supply = zeroAxes();
+  for (const ing of INGREDIENTS) {
+    const want = (((state.drakeRation[ing] ?? 0) * n) / coopCycle) * step;
+    const consume = Math.min(want, state.resources[ing as Ingredient]);
+    if (consume > 0) state.resources[ing as Ingredient] -= consume;
+    const rate = step > 0 ? consume / step : 0;
+    const vals = N.INGREDIENT[ing as Ingredient] as Record<Axis, number>;
+    for (const axis of AXES) supply[axis] += rate * (vals[axis] ?? 0);
+  }
+
+  const requirement = zeroAxes();
+  const satisfaction = zeroAxes();
+  const prior = state.drakeNutrition?.satisfaction;
+  const alpha = N.SMOOTH_TAU_S > 0 ? Math.min(1, step / N.SMOOTH_TAU_S) : 1;
+  for (const axis of AXES) {
+    requirement[axis] = (B.DRAKE_REQUIREMENT[axis] * n) / coopCycle;
+    const instant = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
+    satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
+  }
+
+  const minSat = Math.min(...DRAKE_AXES.map((a) => satisfaction[a]));
+  const floor = B.DRAKE_BREED_PENALTY_FLOOR;
+  const breedRate = floor + (1 - floor) * clamp01(minSat);
+  state.drakeNutrition = { satisfaction, requirement, breedRate, drakeCount: n };
+  return breedRate;
 }

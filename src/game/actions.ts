@@ -15,7 +15,9 @@ import { outputBoostMult, speedBoostMult } from './prestige';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { Gene, GameState, Ingredient, Module, Rarity, Resource, Station } from './state';
 import {
+  adultDrakes,
   adultLayers,
+  breedingEstablished,
   INGREDIENTS,
   isBlockedTile,
   rackSockets,
@@ -106,6 +108,11 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
     outflow += (((state.ration[ing] ?? 0) * layers) / coopCycle) * feedScale;
     const immature = state.ducks.filter((d) => d.stage !== 'adult').length;
     outflow += ((state.ducklingRation[ing] ?? 0) * immature) / coopCycle;
+    // Drakes draw their maintenance ration too, once breeding's established.
+    if (breedingEstablished(state)) {
+      const drakes = adultDrakes(state).length;
+      outflow += ((state.drakeRation[ing] ?? 0) * drakes) / coopCycle;
+    }
   }
 
   return { in: inflow, out: outflow };
