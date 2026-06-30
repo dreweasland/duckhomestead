@@ -16,3 +16,6 @@ docs/
 !.dev.vars.example
 .env*
 !.env.example
+
+# Transient cron scheduler lock (session-only)
+.claude/scheduled_tasks.lock
