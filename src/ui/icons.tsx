@@ -241,6 +241,23 @@ export const CloseIcon = (p: PixProps) => (
   />
 );
 
+/** A drawn question mark — the help affordance. */
+export const HelpIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor' }}
+    rows={[
+      '.xxx.',
+      'x...x',
+      '...x.',
+      '..x..',
+      '..x..',
+      '.....',
+      '..x..',
+    ]}
+  />
+);
+
 export const SpeakerIcon = (p: PixProps) => (
   <Pix
     {...p}

@@ -2,10 +2,18 @@ import { useState } from 'react';
 import { BALANCE, PLAYSTYLE_PRESETS } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { installMarginal, moduleContribution, salvageDust, spareOutlook } from '../game/loot';
-import { MODULE_STATS, RARITIES, rackSockets, type GameState, type Module } from '../game/state';
+import {
+  MODULE_STATS,
+  RARITIES,
+  rackSockets,
+  type GameState,
+  type Module,
+  type ModuleStat,
+  type Rarity,
+} from '../game/state';
 import { playCollect, playPlace, playUpgrade } from '../audio/sfx';
-import { CloseIcon, ModuleIcon } from './icons';
-import { ModuleChip, RARITY_COLOR, STAT_META, rarityRank } from './lootUi';
+import { CloseIcon, HelpIcon, ModuleIcon } from './icons';
+import { ModuleChip, RARITY_COLOR, STAT_HELP, STAT_META, rarityRank } from './lootUi';
 
 /** Signed applied-% string for a stat (− for reductions like Speed/Cooldown). */
 function effPct(stat: Module['stat'], applied: number): string {
@@ -25,6 +33,9 @@ export function ModulesPanel({
   const used = state.rack.length;
   const rerollCost = BALANCE.LOOT.REROLL_DUST_COST;
   const [tuneOpen, setTuneOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [tierFilter, setTierFilter] = useState<Rarity | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<ModuleStat | 'all'>('all');
 
   // Rack: group by stat for a stable read. Spares: tier → type → % (best tier,
   // grouped by stat, strongest roll first) so the list reads top-down by value.
@@ -54,12 +65,50 @@ export function ModulesPanel({
 
   const activePreset = state.statWeightPreset;
 
+  // Spare filters: by tier (rarity) and by type (stat). Each row's per-option
+  // counts are faceted by the OTHER active filter; only options actually present
+  // among the spares are shown. The list then applies both.
+  const matchTier = (m: Module) => tierFilter === 'all' || m.rarity === tierFilter;
+  const matchType = (m: Module) => typeFilter === 'all' || m.stat === typeFilter;
+  const visibleSpares = spares.filter((m) => matchTier(m) && matchType(m));
+
+  const presentTiers = [...RARITIES].reverse().filter((r) => spares.some((m) => m.rarity === r));
+  const presentTypes = MODULE_STATS.filter((s) => spares.some((m) => m.stat === s));
+  const tierOptions = [
+    { value: 'all' as const, label: 'All', count: spares.filter(matchType).length },
+    ...presentTiers.map((r) => ({
+      value: r,
+      label: r[0].toUpperCase() + r.slice(1),
+      count: spares.filter((m) => m.rarity === r && matchType(m)).length,
+    })),
+  ];
+  const typeOptions = [
+    { value: 'all' as const, label: 'All', count: spares.filter(matchTier).length },
+    ...presentTypes.map((s) => ({
+      value: s,
+      label: STAT_META[s].label,
+      count: spares.filter((m) => m.stat === s && matchTier(m)).length,
+    })),
+  ];
+
+  if (helpOpen) {
+    return <ModuleHelp onClose={() => setHelpOpen(false)} />;
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-black text-[#ffe9a8]">
             <ModuleIcon size={18} /> Module Rack
+            <button
+              onClick={() => setHelpOpen(true)}
+              className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1f1812] text-[#9a8a6a] ring-1 ring-[#3a2e22] hover:text-[#cdbcff]"
+              aria-label="What do modules do?"
+              title="What do modules do?"
+            >
+              <HelpIcon size={11} />
+            </button>
           </h2>
           <div className="flex items-center gap-3">
             <span className="rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#cdbcff]">
@@ -208,9 +257,22 @@ export function ModulesPanel({
         {/* ── Spares ── */}
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
-            Spares ({spares.length})
+            Spares ({visibleSpares.length === spares.length ? spares.length : `${visibleSpares.length}/${spares.length}`})
           </span>
         </div>
+
+        {/* Filter spares by tier + type (counts faceted by the other filter). Each
+            row only appears when there's more than one option to choose from. */}
+        {(presentTiers.length > 1 || presentTypes.length > 1) && (
+          <div className="mb-2 flex flex-col gap-1">
+            {presentTiers.length > 1 && (
+              <FilterPills options={tierOptions} value={tierFilter} onChange={setTierFilter} />
+            )}
+            {presentTypes.length > 1 && (
+              <FilterPills options={typeOptions} value={typeFilter} onChange={setTypeFilter} />
+            )}
+          </div>
+        )}
 
         {/* Bulk salvage by tier — one tap clears every spare of that rarity. */}
         {spareTiers.length > 0 && (
@@ -237,9 +299,22 @@ export function ModulesPanel({
           <div className="py-4 text-center text-sm text-[#9a8a6a]">
             No spare modules. Tend stations for a chance to drop one.
           </div>
+        ) : visibleSpares.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-4 text-center text-xs text-[#9a8a6a]">
+            No spares match this filter.
+            <button
+              onClick={() => {
+                setTierFilter('all');
+                setTypeFilter('all');
+              }}
+              className="rounded bg-[#3a2e22] px-2 py-1 text-[10px] font-bold text-[#f5ecd8] hover:bg-[#4a3a2a]"
+            >
+              Clear filters
+            </button>
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {spares.map((m) => {
+            {visibleSpares.map((m) => {
               const outlook = spareOutlook(state, m);
               const installable = outlook.kind === 'install';
               const upgrade = outlook.kind === 'upgrade';
@@ -323,6 +398,93 @@ export function ModulesPanel({
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** A wrapping row of segmented filter pills with faceted counts (content-sized so
+ *  the longer module-type labels wrap cleanly instead of cramming one row). */
+function FilterPills<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string; count: number }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold transition ${
+              active
+                ? 'bg-[#3a2e22] text-[#f5ecd8] ring-1 ring-[#5a4a32]'
+                : 'bg-[#1f1812] text-[#9a8a6a] hover:bg-[#33271c]'
+            }`}
+          >
+            {o.label}
+            <span className="tabular-nums text-[#7a6a4a]">{o.count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The "what modules do" help overlay — a plain-words breakdown of each stat,
+ *  reachable from the (?) by the panel title. */
+function ModuleHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-black text-[#ffe9a8]">
+            <HelpIcon size={16} /> What modules do
+          </h2>
+          <button
+            onClick={onClose}
+            className="rounded p-1.5 text-[#9a8a6a] hover:bg-[#1f1812] hover:text-[#f5ecd8]"
+            aria-label="Close"
+          >
+            <CloseIcon size={14} />
+          </button>
+        </div>
+
+        <p className="mb-3 text-[11px] leading-relaxed text-[#c9b88f]">
+          Modules install into one homestead-wide <span className="text-[#cdbcff]">rack</span> — each
+          applies to its whole category (all producers, the flock, or tending), no per-tile fiddling.
+          Stacking the same stat has <span className="text-[#ffe9a8]">diminishing returns</span> (a
+          soft cap), which is why Auto-fill spreads across stats instead of piling onto one.
+        </p>
+
+        <div className="flex flex-col gap-2">
+          {MODULE_STATS.map((stat) => {
+            const meta = STAT_META[stat];
+            return (
+              <div key={stat} className="rounded-md bg-[#1f1812] p-2.5">
+                <div className="mb-0.5 flex items-baseline justify-between gap-2">
+                  <span className="text-[12px] font-bold text-[#f5ecd8]">{meta.label}</span>
+                  <span className="text-[9px] uppercase tracking-wider text-[#7a6a4a]">
+                    {meta.dir < 0 ? 'lower is the bonus' : 'higher is the bonus'} · {meta.scope}
+                  </span>
+                </div>
+                <p className="text-[10px] leading-relaxed text-[#c9b88f]">{STAT_HELP[stat]}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="mt-3 text-[10px] leading-relaxed text-[#7a6a4a]">
+          Tend stats (Tend Power / Tend Cooldown) only pay off while you’re actively tending — the
+          <span className="text-[#cdbcff]"> Idle / AFK</span> playstyle preset zeroes them for that
+          reason. Set your playstyle under “Auto-fill priorities”.
+        </p>
       </div>
     </div>
   );

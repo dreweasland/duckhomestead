@@ -26,6 +26,24 @@ export const STAT_META: Record<ModuleStat, StatMeta> = {
   tendCooldown: { label: 'Tend Cooldown', dir: -1, blurb: 'shorter tend cooldown', scope: 'tending' },
 };
 
+/** Plain-words "what does this actually do" for the modules help (?) panel. Keyed
+ *  to match STAT_META; written to demystify the less-obvious stats (Condition
+ *  Regen especially) and to flag the active-play-only tend levers. */
+export const STAT_HELP: Record<ModuleStat, string> = {
+  stationSpeed:
+    'Every timed producer finishes its cycle faster, across the whole homestead — more cycles per minute means more raw output (and faster mill blending). Pure throughput: it never changes a recipe or a nutrition requirement.',
+  stationYield:
+    'Every producer makes more per cycle — same cadence, bigger batches. Stacks with Speed on the mill’s blend throughput.',
+  eggOutput:
+    'A flat multiplier on eggs laid, applied on top of nutrition. The most direct lever on your main currency: it multiplies the nutrition result without touching the ration math.',
+  conditionRegen:
+    'Flock condition is a “battery” that buffers egg output: when nutrition dips, a full battery hides the penalty; an empty one lets it bite in full. Condition Regen refills that battery faster after a shortfall — so the flock shrugs off brief feed gaps and returns to full laying sooner. Most valuable if your ration occasionally runs short; little use if you’re always perfectly fed.',
+  tendPower:
+    'A bigger burst each time you tend a station (the instant kick a manual tend gives). An active-play lever — it does nothing while you’re idle or offline.',
+  tendCooldown:
+    'Shortens the recharge between tends, so you can tend more often. Like Tend Power, it only pays off when you’re actively tending — worthless when AFK.',
+};
+
 /** "+18%" or "−18%" for the rolled magnitude. */
 export function fmtMagnitude(m: Module): string {
   const pct = Math.round(m.magnitude * 100);
