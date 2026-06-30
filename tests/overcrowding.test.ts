@@ -61,6 +61,15 @@ describe('flockRatio', () => {
   it('a balanced flock is healthy (no excess)', () => {
     expect(flockRatio(makeFlock(12, 3)).injuring).toBe(false); // ideal 3 drakes, has 3
   });
+
+  it('secured drakes are separate housing — they do not count toward the over-ratio', () => {
+    const s = makeFlock(8, 5); // 5 drakes vs 8 hens → excess 3, injuring
+    expect(flockRatio(s).injuring).toBe(true);
+    // Secure 3 drakes → 2 unsecured drakes vs 8 hens (ideal 2) → healthy.
+    for (const d of s.ducks.filter((d) => d.sex === 'drake').slice(0, 3)) d.secured = true;
+    expect(flockRatio(s).drakes).toBe(2);
+    expect(flockRatio(s).injuring).toBe(false);
+  });
 });
 
 describe('runOvercrowding', () => {
