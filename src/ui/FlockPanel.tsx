@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
-import { COLORS, coopCapacity, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
+import { COLORS, coopCapacity, flockRatio, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, HealIcon, ShieldIcon, WoundIcon } from './icons';
@@ -220,7 +220,58 @@ export function ColorSwatch({ color, size = 14 }: { color: Color; size?: number 
   );
 }
 
-/** Active-pair status + new-pair builder. Drake/hen are picked by tapping rows in
+/** Flock Health: the drake:hen ratio and its consequences. An over-drake flock
+ *  harasses itself into injury past a size gate; the fix is culling surplus drakes
+ *  (one tap here). Always visible so the ratio stays front-of-mind. */
+function FlockHealth({ engine, state }: { engine: GameEngine; state: GameState }) {
+  const r = flockRatio(state);
+  if (r.hens === 0 && r.drakes === 0) return null; // no adults yet — nothing to balance
+  const minFlock = BALANCE.BREEDING.OVERCROWD_MIN_FLOCK;
+  const color = r.injuring ? '#e8835a' : r.gated ? '#8fe388' : '#9a8a6a';
+  const status = r.injuring
+    ? `Over-drake — ${r.excess} excess`
+    : r.gated
+      ? 'Healthy ratio'
+      : `OK · ratio matters at ${minFlock}+`;
+  // Bar: current drakes vs the healthy max (ideal = full bar; over = red overflow).
+  const fill = Math.min(1, r.drakes / Math.max(1, r.maxHealthyDrakes));
+  return (
+    <div className={`mb-3 rounded-md px-3 py-2 ${r.injuring ? 'bg-[#2a1818] ring-1 ring-[#5a2a2a]' : 'bg-[#1f1812]'}`}>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">Flock health</span>
+        <span className="text-[11px] font-bold" style={{ color }}>
+          {status}
+        </span>
+      </div>
+      <div className="mb-1 flex items-center gap-2 text-[11px] text-[#c9b88f]">
+        <span className="tabular-nums">{r.hens} hens · {r.drakes} drakes</span>
+        <span className="text-[#7a6a4a]">ideal ≤ {r.maxHealthyDrakes} drake{r.maxHealthyDrakes > 1 ? 's' : ''}</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-[#0f0b07]">
+        <div className="h-full rounded-full" style={{ width: `${fill * 100}%`, background: color }} />
+      </div>
+      {r.injuring && (
+        <>
+          <p className="mt-1.5 text-[10px] leading-relaxed text-[#e8a35a]">
+            Too many drakes — they fight and over-mate the hens, injuring the flock (wounds escalate if
+            untended). Cull surplus drakes to fix the ratio.
+          </p>
+          <button
+            onClick={() => {
+              if (engine.cullExcessDrakes().ok) playTend();
+            }}
+            className="mt-1.5 w-full rounded-md bg-[#5a3a2a] px-3 py-1.5 text-xs font-bold text-[#ffd9a8] transition hover:bg-[#6a4632]"
+            title="Release the worst-genome surplus drakes (keeps secured + paired studs)"
+          >
+            Cull {r.excess} excess drake{r.excess > 1 ? 's' : ''}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The breeding controls: god-clone target, existing pairs, and a new-pair builder over
  *  the flock list below (selection lives in FlockPanel and is passed in here). */
 function Breeding({
   engine,
@@ -241,6 +292,17 @@ function Breeding({
   const target = state.genomeTarget;
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
   const byId = (id: string) => state.ducks.find((d) => d.id === id);
+
+  // Pair cards collapse by default (just identity + clutch timer) so multiple pairs
+  // stay compact; tap one to reveal its colour odds + crossbreed preview.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   const readerCost = BALANCE.GENOME.READER_COST_EGGS;
   return (
@@ -313,16 +375,24 @@ function Breeding({
         const next = Math.max(0, B.CLUTCH_INTERVAL_S - p.clutchProgress);
         const soonest = p.incubating.length ? Math.max(0, B.INCUBATE_S - Math.max(...p.incubating)) : 0;
         const odds = colorOdds(dr.genotype, he.genotype);
+        const isOpen = expanded.has(p.id);
         return (
           <div key={p.id} className="mb-1.5 rounded bg-[#171009] px-2 py-1.5">
             <div className="flex items-center gap-1.5 text-[11px]">
-              <ColorSwatch color={phenotype(dr.genotype)} size={11} />
-              <PhenoBands genome={dr.genome} width={16} />
-              <GenomeTiles duck={dr} target={target} size={12} />
-              <span className="text-[#5a4d3a]">·</span>
-              <ColorSwatch color={phenotype(he.genotype)} size={11} />
-              <PhenoBands genome={he.genome} width={16} />
-              <GenomeTiles duck={he} target={target} size={12} />
+              <button
+                onClick={() => toggle(p.id)}
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left hover:opacity-90"
+                title={isOpen ? 'Collapse this pair' : 'Show colour odds + crossbreed preview'}
+              >
+                <span className="w-2 shrink-0 text-[#7a6a4a]">{isOpen ? '▾' : '▸'}</span>
+                <ColorSwatch color={phenotype(dr.genotype)} size={11} />
+                <PhenoBands genome={dr.genome} width={16} />
+                <GenomeTiles duck={dr} target={target} size={12} />
+                <span className="text-[#5a4d3a]">·</span>
+                <ColorSwatch color={phenotype(he.genotype)} size={11} />
+                <PhenoBands genome={he.genome} width={16} />
+                <GenomeTiles duck={he} target={target} size={12} />
+              </button>
               <button
                 onClick={() => engine.unpair(p.id)}
                 className="ml-auto rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
@@ -330,19 +400,23 @@ function Breeding({
                 unpair
               </button>
             </div>
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#7a6a4a]">
-              {COLORS.filter((c) => odds[c] > 0).map((c) => (
-                <span key={c} className="flex items-center gap-0.5" title={`${COLOR_META[c].label} offspring`}>
-                  <ColorSwatch color={c} size={9} />
-                  <span className="tabular-nums text-[#9a8a6a]">{Math.round(odds[c] * 100)}%</span>
-                </span>
-              ))}
-            </div>
             <div className="mt-0.5 text-[10px] text-[#9a8a6a]">
               clutch {Math.ceil(next)}s
               {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
             </div>
-            <OddsPreview a={dr} b={he} target={target} />
+            {isOpen && (
+              <>
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#7a6a4a]">
+                  {COLORS.filter((c) => odds[c] > 0).map((c) => (
+                    <span key={c} className="flex items-center gap-0.5" title={`${COLOR_META[c].label} offspring`}>
+                      <ColorSwatch color={c} size={9} />
+                      <span className="tabular-nums text-[#9a8a6a]">{Math.round(odds[c] * 100)}%</span>
+                    </span>
+                  ))}
+                </div>
+                <OddsPreview a={dr} b={he} target={target} />
+              </>
+            )}
           </div>
         );
       })}
@@ -532,6 +606,8 @@ export function FlockPanel({
             </button>
           </div>
         </div>
+
+        {state.ducks.length > 0 && <FlockHealth engine={engine} state={state} />}
 
         {state.ducks.length > 0 && (
           <Breeding

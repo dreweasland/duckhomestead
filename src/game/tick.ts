@@ -5,7 +5,7 @@ import { UPGRADE_OUTPUT } from './actions';
 import { cycleMult, yieldMult } from './loot';
 import { outputBoostMult, speedBoostMult } from './prestige';
 import { runNutrition, runDucklingNutrition, runDrakeNutrition } from './nutrition';
-import { runBreeding } from './breeding';
+import { runBreeding, runOvercrowding } from './breeding';
 import { runPredators } from './predators';
 import { runCirculation } from './pond';
 
@@ -142,6 +142,8 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
 
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
   runBreeding(state, dt * rateMult, matureRate, breedRate);
+  // Flock ratio health: an over-drake flock injures its own (online & offline).
+  runOvercrowding(state, dt * rateMult);
 
   // THE WATER SYSTEM's upkeep loop: foul the pond at a rate set by flock size and
   // hold well-circulated features fresh (online & offline). Wellness-only — it
