@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { AXES, INGREDIENTS, zoneUnlocked, type Axis, type GameState, type Ingredient } from '../game/state';
+import {
+  AXES,
+  breedingEstablished,
+  INGREDIENTS,
+  rationUnset,
+  zoneUnlocked,
+  type Axis,
+  type GameState,
+  type Ingredient,
+} from '../game/state';
 import {
   flockRequirement,
   waterAccess,
@@ -25,6 +34,7 @@ const ING_LABEL: Record<Ingredient, string> = {
 };
 const RATION_MAX = 6;
 const DUCKLING_AXES: Axis[] = ['energy', 'protein', 'niacin'];
+const DRAKE_AXES: Axis[] = ['energy', 'protein', 'niacin']; // no calcium — drakes don't lay
 
 function barColor(sat: number): string {
   const pct = Math.round(sat * 100);
@@ -111,6 +121,46 @@ function RationSliders({
   );
 }
 
+/** A ration section: title + a one-tap "Suggested" fill (the balanced default),
+ *  a can't-miss "not set" banner when it's all zero, then the sliders. Rations now
+ *  start EMPTY, so this both flags an unset ration and offers the quick fix. */
+function RationEditor({
+  state,
+  title,
+  ration,
+  suggested,
+  onSet,
+}: {
+  state: GameState;
+  title: string;
+  ration: Record<Ingredient, number>;
+  suggested: Record<Ingredient, number>;
+  onSet: (ing: Ingredient, v: number) => void;
+}) {
+  const unset = rationUnset(ration);
+  return (
+    <>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">{title}</span>
+        <button
+          onClick={() => INGREDIENTS.forEach((i) => onSet(i, suggested[i] ?? 0))}
+          className="rounded bg-[#3a2e64] px-2 py-0.5 text-[10px] font-bold text-[#cdbcff] transition hover:bg-[#473a78]"
+          title="Fill with a balanced starting ration"
+        >
+          Suggested
+        </button>
+      </div>
+      {unset && (
+        <div className="mb-2 rounded-md bg-[#3a2418] px-3 py-1.5 text-[11px] text-[#e8a35a] ring-1 ring-[#5a3a22]">
+          Ration not set — nothing’s being fed here. Drag the sliders or tap{' '}
+          <span className="font-bold">Suggested</span>.
+        </div>
+      )}
+      <RationSliders state={state} ration={ration} onSet={onSet} />
+    </>
+  );
+}
+
 /** Water readout: the water system's PROVISION vs the flock's requirement, its
  *  wellness effects, and where to go to scale it — so the player SEES the flock
  *  outgrowing its water and is invited to the Pond / Waterworks tabs. */
@@ -182,13 +232,14 @@ export function NutritionPanel({
   state: GameState;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'layers' | 'ducklings'>('layers');
+  const [tab, setTab] = useState<'layers' | 'ducklings' | 'drakes'>('layers');
   const n = state.nutrition;
   const coops = state.stations.filter((s) => s.type === 'coop');
   const debuffed = state.ducks.filter((d) => d.debuffed).length;
   const condPct = Math.round((state.condition / N.CONDITION_MAX) * 100);
   const eggPct = Math.round((n?.eggMult ?? 1) * 100);
   const dn = state.ducklingNutrition;
+  const drn = state.drakeNutrition;
   const adults = state.ducks.filter((d) => d.stage === 'adult').length;
 
   return (
@@ -202,7 +253,7 @@ export function NutritionPanel({
         </div>
 
         <div className="mb-3 flex gap-1 border-b border-[#3a2e22]">
-          {(['layers', 'ducklings'] as const).map((id) => (
+          {(['layers', 'ducklings', 'drakes'] as const).map((id) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -254,43 +305,87 @@ export function NutritionPanel({
                 </div>
               )}
 
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
-                Layer ration — units per adult duck per cycle
-              </div>
-              <RationSliders state={state} ration={state.ration} onSet={(i, v) => engine.setRation(i, v)} />
+              <RationEditor
+                state={state}
+                title="Layer ration — units per adult duck per cycle"
+                ration={state.ration}
+                suggested={N.DEFAULT_RATION}
+                onSet={(i, v) => engine.setRation(i, v)}
+              />
               <p className="mt-3 text-[10px] text-[#7a6a4a]">
                 Requirement scales with your adult flock. Keep every line producing faster than the
                 ducks eat and the bars stay green; condition buffers brief dips.
               </p>
             </>
           )
-        ) : !dn ? (
+        ) : tab === 'ducklings' ? (
+          !dn ? (
+            <div className="py-6 text-center text-sm text-[#9a8a6a]">
+              No ducklings growing — pair a drake and hen in the Flock panel to breed.
+            </div>
+          ) : (
+            <>
+              <div className="mb-4 rounded-md bg-[#1f1812] px-3 py-2 text-xs">
+                <div className="text-[10px] uppercase tracking-wider text-[#7a6a4a]">Maturation speed</div>
+                <div className="text-lg font-bold" style={{ color: barColor(dn.matureRate) }}>
+                  {Math.round(dn.matureRate * 100)}%
+                </div>
+                <div className="text-[10px] text-[#9a8a6a]">{dn.immatureCount} growing</div>
+              </div>
+
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
+                Grow-out balance (high protein + niacin)
+              </div>
+              <AxisBars satisfaction={dn.satisfaction} axes={DUCKLING_AXES} />
+
+              <RationEditor
+                state={state}
+                title="Duckling ration — units per duckling per cycle"
+                ration={state.ducklingRation}
+                suggested={B.DEFAULT_DUCKLING_RATION}
+                onSet={(i, v) => engine.setDucklingRation(i, v)}
+              />
+              <p className="mt-3 text-[10px] text-[#7a6a4a]">
+                Ducklings eat from the same storage as your layers (layers eat first), so growing the
+                flock competes with feeding it. A poor grow-out ration slows maturation toward{' '}
+                {Math.round(B.DUCKLING_RATION_MATURE_PENALTY_FLOOR * 100)}% speed — a throttle, never a stop.
+              </p>
+            </>
+          )
+        ) : !drn ? (
           <div className="py-6 text-center text-sm text-[#9a8a6a]">
-            No ducklings growing — pair a drake and hen in the Flock panel to breed.
+            {breedingEstablished(state)
+              ? 'No adult drakes to feed yet.'
+              : 'Drakes don’t eat until breeding is established — build the Gene Reader or pair a drake and hen.'}
           </div>
         ) : (
           <>
             <div className="mb-4 rounded-md bg-[#1f1812] px-3 py-2 text-xs">
-              <div className="text-[10px] uppercase tracking-wider text-[#7a6a4a]">Maturation speed</div>
-              <div className="text-lg font-bold" style={{ color: barColor(dn.matureRate) }}>
-                {Math.round(dn.matureRate * 100)}%
+              <div className="text-[10px] uppercase tracking-wider text-[#7a6a4a]">Breeding speed</div>
+              <div className="text-lg font-bold" style={{ color: barColor(drn.breedRate) }}>
+                {Math.round(drn.breedRate * 100)}%
               </div>
-              <div className="text-[10px] text-[#9a8a6a]">{dn.immatureCount} growing</div>
+              <div className="text-[10px] text-[#9a8a6a]">
+                {drn.drakeCount} drake{drn.drakeCount > 1 ? 's' : ''}
+              </div>
             </div>
 
             <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
-              Grow-out balance (high protein + niacin)
+              Maintenance balance (no calcium needed)
             </div>
-            <AxisBars satisfaction={dn.satisfaction} axes={DUCKLING_AXES} />
+            <AxisBars satisfaction={drn.satisfaction} axes={DRAKE_AXES} />
 
-            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
-              Duckling ration — units per duckling per cycle
-            </div>
-            <RationSliders state={state} ration={state.ducklingRation} onSet={(i, v) => engine.setDucklingRation(i, v)} />
+            <RationEditor
+              state={state}
+              title="Drake ration — units per drake per cycle"
+              ration={state.drakeRation}
+              suggested={B.DEFAULT_DRAKE_RATION}
+              onSet={(i, v) => engine.setDrakeRation(i, v)}
+            />
             <p className="mt-3 text-[10px] text-[#7a6a4a]">
-              Ducklings eat from the same storage as your layers (layers eat first), so growing the
-              flock competes with feeding it. A poor grow-out ration slows maturation toward{' '}
-              {Math.round(B.DUCKLING_RATION_MATURE_PENALTY_FLOOR * 100)}% speed — a throttle, never a stop.
+              Adult drakes draw from the same storage as the flock (a real end-game drain) but need no
+              calcium — so it spares oyster shell. Underfed drakes breed slower, down to{' '}
+              {Math.round(B.DRAKE_BREED_PENALTY_FLOOR * 100)}% clutch speed — a throttle, never a stop.
             </p>
           </>
         )}

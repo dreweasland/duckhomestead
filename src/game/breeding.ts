@@ -12,7 +12,7 @@ const B = BALANCE.BREEDING;
  * maturation; it's 1 until then. New colors are pushed to state.pendingDex.
  * Never grants XP. Hatching is gated by housing capacity.
  */
-export function runBreeding(state: GameState, step: number, matureRate = 1): void {
+export function runBreeding(state: GameState, step: number, matureRate = 1, breedRate = 1): void {
   const capacity = coopCapacity(state);
 
   // ── Pairs: clutch + incubation + hatch ──
@@ -23,7 +23,8 @@ export function runBreeding(state: GameState, step: number, matureRate = 1): voi
     if (drake.wounded || hen.wounded) continue; // Phase 4c: a wounded bird can't breed
 
     // Lay a fertilized clutch on the interval (bounded queue so it can't pile up).
-    pair.clutchProgress += step;
+    // breedRate (drake-ration throttle) scales how fast clutches accrue.
+    pair.clutchProgress += step * breedRate;
     while (pair.clutchProgress >= B.CLUTCH_INTERVAL_S && pair.incubating.length < B.CLUTCH_SIZE * 2) {
       pair.clutchProgress -= B.CLUTCH_INTERVAL_S;
       for (let i = 0; i < B.CLUTCH_SIZE; i++) pair.incubating.push(0);

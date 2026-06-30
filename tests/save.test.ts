@@ -42,7 +42,7 @@ describe('back-compat + robustness', () => {
       lastSeen: 0,
     });
     const r = deserialize(legacy, 1000);
-    expect(r.ration.corn).toBe(N.DEFAULT_RATION.corn);
+    expect(r.ration.corn).toBe(0); // rations now start EMPTY (player sets them)
     expect(r.condition).toBe(N.CONDITION_MAX);
     expect(r.niacinShortfall).toBe(0);
     expect(r.doseCooldownRemaining).toBe(0);
@@ -59,7 +59,8 @@ describe('back-compat + robustness', () => {
   it('merges a partial saved ration with defaults', () => {
     const r = deserialize(JSON.stringify({ ration: { corn: 9 } }), 0);
     expect(r.ration.corn).toBe(9);
-    expect(r.ration.oysterShell).toBe(N.DEFAULT_RATION.oysterShell);
+    expect(r.ration.oysterShell).toBe(0); // unset keys fill from the empty base
+
   });
 
   it('defaults loot fields for a pre-Phase-3 save', () => {
