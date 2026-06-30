@@ -44,6 +44,7 @@ import {
   placePondFeature,
   removeFlowFeature,
   removePondFeature,
+  upgradePondFeature,
   type PondResult,
 } from './pond';
 import type { FlowFeatureType, PondFeatureType } from './state';
@@ -550,6 +551,12 @@ export class GameEngine {
   /** Remove a provision feature (refunds part of its cost). */
   removePondFeature(x: number, y: number): PondResult {
     const r = removePondFeature(this.state, x, y);
+    if (r.ok) this.notify();
+    return r;
+  }
+  /** Upgrade a provision feature (+1 level → more water; escalating egg cost). */
+  upgradePondFeature(x: number, y: number): PondResult {
+    const r = upgradePondFeature(this.state, x, y);
     if (r.ok) this.notify();
     return r;
   }

@@ -19,8 +19,8 @@ import { COLORS, initialState, type ChampionSnapshot, type GameState } from './s
 const P = BALANCE.PRESTIGE;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-export type BoostId = 'output' | 'stationSpeed' | 'eggValue';
-export const BOOST_IDS: BoostId[] = ['output', 'stationSpeed', 'eggValue'];
+export type BoostId = 'output' | 'stationSpeed' | 'eggValue' | 'waterProvision';
+export const BOOST_IDS: BoostId[] = ['output', 'stationSpeed', 'eggValue', 'waterProvision'];
 
 // ── The champion goal: three concrete requirements ───────────────────
 /** Live average flock GENOME QUALITY = mean slots matching the god-clone target
@@ -130,6 +130,7 @@ export function boostCost(state: GameState, id: BoostId): number {
 export const outputBoostMult = (state: GameState): number => boostMult(state, 'output');
 export const speedBoostMult = (state: GameState): number => boostMult(state, 'stationSpeed');
 export const eggValueBoostMult = (state: GameState): number => boostMult(state, 'eggValue');
+export const waterProvisionBoostMult = (state: GameState): number => boostMult(state, 'waterProvision');
 
 // ── The reset ────────────────────────────────────────────────────────
 /** A memorial snapshot of the flock about to be wiped. */

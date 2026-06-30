@@ -43,6 +43,9 @@ export interface AwaySummary {
   /** Phase 4c: predator toll while away — ducks currently wounded (treatable)
    *  and ducks permanently lost. Absent when nothing happened. */
   predator?: { wounded: number; lost: number };
+  /** Flock-overcrowding toll while away — ducks injured (treatable) and lost to an
+   *  over-drake flock. Separate from the predator toll so it's attributed honestly. */
+  overcrowd?: { injured: number; lost: number };
 }
 
 export function serialize(state: GameState): string {
@@ -233,13 +236,25 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     if (delta > 0) produced[key] = delta;
   }
 
-  // Predator toll: deaths from this catch-up's events; wounded = current
-  // survivors carrying a treatable wound. Clear the transient (consumed here).
+  // Toll while away — attributed by SOURCE (owl vs flock overcrowding) so an
+  // overcrowding injury never shows as if the owl did it. Lost = deaths from this
+  // catch-up's events (escalated carries its source); wounded = current survivors
+  // carrying a treatable wound, split by woundSource. Clear the transient.
   const events = state.pendingPredatorEvents ?? [];
-  const lost = events.filter((e) => e.kind === 'snatched' || e.kind === 'escalated').length;
-  const woundedNow = state.ducks.filter((d) => d.wounded).length;
+  const isOvercrowd = (e: (typeof events)[number]) =>
+    e.kind === 'escalated' && e.source === 'overcrowd';
+  const predatorLost = events.filter(
+    (e) => e.kind === 'snatched' || (e.kind === 'escalated' && e.source !== 'overcrowd'),
+  ).length;
+  const overcrowdLost = events.filter(isOvercrowd).length;
+  const woundedDucks = state.ducks.filter((d) => d.wounded);
+  const predatorWounded = woundedDucks.filter((d) => d.woundSource !== 'overcrowd').length;
+  const overcrowdWounded = woundedDucks.filter((d) => d.woundSource === 'overcrowd').length;
   state.pendingPredatorEvents = [];
-  const predator = lost > 0 || woundedNow > 0 ? { wounded: woundedNow, lost } : undefined;
+  const predator =
+    predatorLost > 0 || predatorWounded > 0 ? { wounded: predatorWounded, lost: predatorLost } : undefined;
+  const overcrowd =
+    overcrowdLost > 0 || overcrowdWounded > 0 ? { injured: overcrowdWounded, lost: overcrowdLost } : undefined;
 
   state.lastSeen = now;
   return {
@@ -248,6 +263,7 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     capped: elapsedSeconds > capSeconds,
     produced,
     predator,
+    overcrowd,
   };
 }
 

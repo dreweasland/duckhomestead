@@ -55,6 +55,7 @@ const BOOST_META: Record<BoostId, { label: string; blurb: string }> = {
   output: { label: 'Output', blurb: 'all station production' },
   stationSpeed: { label: 'Station Speed', blurb: 'faster producer cycles' },
   eggValue: { label: 'Egg Value', blurb: 'more eggs laid' },
+  waterProvision: { label: 'Water Capacity', blurb: 'water a bigger flock (past the pond cap)' },
 };
 
 const fmtDate = (ms: number) => {

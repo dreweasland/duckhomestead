@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { pondView } from '../game/pond';
+import { pondFeatureUpgradeCost, pondView } from '../game/pond';
 import { flockRequirement, waterAccess, waterProvision, waterStatus } from '../game/water';
 import {
   cellKey,
@@ -11,7 +11,7 @@ import {
   type PondFeature,
   type PondFeatureType,
 } from '../game/state';
-import { playPlace } from '../audio/sfx';
+import { playPlace, playUpgrade } from '../audio/sfx';
 import { CloseIcon, EggIcon, WaterIcon } from './icons';
 
 const W = BALANCE.WATER;
@@ -248,6 +248,8 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
     isFlow ? 'fountain' : 'bathingPool',
   );
   const [help, setHelp] = useState(false);
+  // Selected provision feature (layout mode) — opens the upgrade/remove panel.
+  const [selKey, setSelKey] = useState<string | null>(null);
   // Auto-open the help sheet the first time each tab is viewed (once per browser).
   useEffect(() => {
     try {
@@ -310,12 +312,18 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
       if (flowAt(x, y)) {
         if (engine.removeFlowFeature(x, y).ok) playPlace();
       } else if (engine.placeFlowFeature(pick as FlowFeatureType, x, y).ok) playPlace();
-    } else {
-      if (featAt(x, y)) {
-        if (engine.removePondFeature(x, y).ok) playPlace();
-      } else if (engine.placePondFeature(pick as PondFeatureType, x, y).ok) playPlace();
+    } else if (featAt(x, y)) {
+      // Tap a placed feature to SELECT it (upgrade / remove live in the panel).
+      setSelKey(cellKey(x, y));
+    } else if (engine.placePondFeature(pick as PondFeatureType, x, y).ok) {
+      playPlace();
+      setSelKey(null);
     }
   };
+
+  // The selected feature (layout mode only); cleared if it no longer exists.
+  const selected = !isFlow && selKey ? view.features.find((f) => cellKey(f.x, f.y) === selKey) ?? null : null;
+  const upgradeCost = selected ? pondFeatureUpgradeCost(state, selected.x, selected.y) : 0;
 
   return (
     <div className="flex flex-col items-center gap-2" style={{ width: GW }}>
@@ -387,7 +395,17 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
                     {view.worksUnlocked && feat.freshness < 0.999 && (
                       <rect x={px + 6} y={py + 6} width={TILE - 12} height={TILE - 12} rx={5} fill="none" stroke={freshColor(feat.freshness)} strokeWidth={2} />
                     )}
+                    {/* upgrade level badge (top-right) once leveled */}
+                    {(feat.level ?? 1) > 1 && (
+                      <text x={px + TILE - 7} y={py + 13} textAnchor="end" fontSize={8} fontWeight="bold" fill="#fff4d6" fontFamily="monospace">
+                        L{feat.level}
+                      </text>
+                    )}
                   </g>
+                )}
+                {/* selection ring (layout mode) */}
+                {!isFlow && selKey === key && (
+                  <rect x={px + 3} y={py + 3} width={TILE - 6} height={TILE - 6} rx={6} fill="none" stroke="#fff4d6" strokeWidth={2} />
                 )}
                 {/* circulation feature */}
                 {flow && fmeta && (
@@ -403,6 +421,59 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
           }),
         )}
       </svg>
+
+      {/* selected feature: upgrade (water scaler + egg sink) / remove */}
+      {selected && (
+        <div className="w-full rounded-md bg-[#13202a] px-3 py-2 ring-1 ring-[#27485a]">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold" style={{ color: FEAT_META[selected.type].color }}>
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: FEAT_META[selected.type].color }} />
+              {FEAT_META[selected.type].label} · Lv {selected.level ?? 1}
+            </span>
+            <span className="text-[10px] tabular-nums text-[#7a9aa8]">
+              +{selected.provision.toFixed(1)} water
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                if (engine.upgradePondFeature(selected.x, selected.y).ok) playUpgrade();
+              }}
+              disabled={state.resources.eggs < upgradeCost}
+              className={`flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-[11px] font-bold transition ${
+                state.resources.eggs >= upgradeCost
+                  ? 'bg-[#1f4a2a] text-[#bfe8a8] hover:bg-[#27583a]'
+                  : 'cursor-not-allowed bg-[#13202a] text-[#5a7a8a]'
+              }`}
+              title={`Upgrade to Lv ${(selected.level ?? 1) + 1} — ×${W.UPGRADE.provisionMult} water`}
+            >
+              Upgrade → Lv {(selected.level ?? 1) + 1}
+              <span className="inline-flex items-center gap-0.5">
+                <EggIcon size={10} /> {upgradeCost}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                if (engine.removePondFeature(selected.x, selected.y).ok) {
+                  playPlace();
+                  setSelKey(null);
+                }
+              }}
+              className="rounded bg-[#3a1f1f] px-2.5 py-1.5 text-[11px] font-bold text-[#e88a8a] hover:bg-[#4a2a2a]"
+              title="Remove (partial refund)"
+            >
+              Remove
+            </button>
+            <button
+              onClick={() => setSelKey(null)}
+              className="rounded px-2 py-1.5 text-[12px] leading-none text-[#7a9aa8] hover:text-[#dff]"
+              aria-label="Deselect"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* provision vs requirement */}
       <div className="w-full rounded-md bg-[#13202a] px-3 py-2 text-[11px]">
@@ -473,8 +544,8 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
         </div>
       ) : (
         <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
-          Tap to place; tap a feature to remove. Cluster for bonuses: bathing pools beside a spring,
-          plant beds beside your richest features.
+          Tap empty water to place; tap a feature to upgrade it (more water) or remove it. Cluster for
+          bonuses: bathing pools beside a spring, plant beds beside your richest features.
         </div>
       )}
     </div>

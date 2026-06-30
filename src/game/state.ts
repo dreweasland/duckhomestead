@@ -173,6 +173,9 @@ export interface Duck {
    *  escalates to a permanent loss if untended past WOUND_ESCALATE_SEC. Cleared
    *  by the Treat action. */
   wounded?: boolean;
+  /** What inflicted the wound — so the away summary attributes it correctly (an
+   *  owl attack vs flock overcrowding), rather than blaming everything on the owl. */
+  woundSource?: 'predator' | 'overcrowd';
   /** Seconds since this wound landed (the escalation timer). Runs online & offline. */
   woundElapsed?: number;
   /** Phase 4c: marked secured (housed in a Secure Coop slot) — excluded from
@@ -447,7 +450,7 @@ export type PredatorEvent =
   | { kind: 'crowdInjury'; duckId: string }
   | { kind: 'wound'; predatorId: string; duckId: string }
   | { kind: 'snatched'; predatorId: string; duckId: string }
-  | { kind: 'escalated'; duckId: string };
+  | { kind: 'escalated'; duckId: string; source?: 'predator' | 'overcrowd' };
 
 /** Fresh per-predator state from the defs: first window is a full interval out. */
 export function initialPredators(): Record<string, PredatorState> {
@@ -500,6 +503,10 @@ export interface PondFeature {
   x: number;
   y: number;
   type: PondFeatureType;
+  /** Upgrade level (1 = placed). Each level scales the feature's provision — the
+   *  pre-prestige egg sink that grows water past the fixed-canvas layout ceiling.
+   *  Optional so pre-upgrade saves load as level 1. */
+  level?: number;
 }
 export interface FlowFeature {
   x: number;

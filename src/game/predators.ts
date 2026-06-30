@@ -176,6 +176,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   if (rng() < woundResistChance(target.genome)) return;
 
   target.wounded = true;
+  target.woundSource = 'predator';
   target.woundElapsed = 0;
   emit(state, { kind: 'wound', predatorId: def.id, duckId: target.id });
 }
@@ -378,7 +379,7 @@ function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void 
     d.woundElapsed = (d.woundElapsed ?? 0) + dt;
     if (d.woundElapsed < threshold) continue;
     if (permitPermanentLoss(opts)) {
-      emit(state, { kind: 'escalated', duckId: d.id });
+      emit(state, { kind: 'escalated', duckId: d.id, source: d.woundSource ?? 'predator' });
       removeDuck(state, d.id);
     } else {
       // Mercy rail (offline budget spent): hold at the brink. The player returns
