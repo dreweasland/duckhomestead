@@ -446,14 +446,13 @@ export function FlockPanel({
   const slotsUsed = state.ducks.filter((d) => d.secured).length;
   const treatCost = BALANCE.PREDATORS.TREAT_COST_EGGS;
 
-  // Tab the flock by color. Counts per color drive the tab badges; open on the
-  // color you have the most of. The sorted `ducks` filtered to a color is already
-  // in stage → sex → vigor order.
+  // Tab the flock by color. Counts per color drive the tab badges; open on All so
+  // the whole flock is in view up front (matching the sex/stage filters, which
+  // also default to All). The sorted `ducks` filtered to a color is already in
+  // stage → sex → vigor order.
   const colorCounts: Record<Color, number> = { black: 0, blue: 0, splash: 0 };
   for (const d of state.ducks) colorCounts[phenotype(d.genotype)]++;
-  const [colorTab, setColorTab] = useState<'all' | Color>(
-    () => [...COLORS].sort((a, b) => colorCounts[b] - colorCounts[a])[0] ?? 'blue',
-  );
+  const [colorTab, setColorTab] = useState<'all' | Color>('all');
   const inTab = (d: Duck) => colorTab === 'all' || phenotype(d.genotype) === colorTab;
   // Cross-cutting filters (compose with the color tab): sex and life stage.
   const [sexFilter, setSexFilter] = useState<'all' | Duck['sex']>('all');
