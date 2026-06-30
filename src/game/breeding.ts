@@ -1,6 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
-import { coopCapacity, flockRatio, phenotype, type Duck, type GameState } from './state';
+import { breedingEstablished, coopCapacity, flockRatio, phenotype, type Duck, type GameState } from './state';
 
 const B = BALANCE.BREEDING;
 
@@ -12,9 +12,15 @@ const B = BALANCE.BREEDING;
  * ratio: cull surplus drakes. Runs online & offline; never grants XP.
  */
 export function runOvercrowding(state: GameState, step: number, rng: () => number = Math.random): void {
+  // Cheap O(1) gates first — the overwhelming majority of ticks (small flock or
+  // breeding not yet established) can't injure, so skip the O(ducks) flockRatio scan.
+  if (state.ducks.length < B.OVERCROWD_MIN_FLOCK || !breedingEstablished(state)) {
+    state.overcrowdStress = 0;
+    return;
+  }
   const r = flockRatio(state);
   if (!r.injuring) {
-    state.overcrowdStress = 0; // healthy ratio (or below the gate) — stress relaxes
+    state.overcrowdStress = 0; // healthy ratio — stress relaxes
     return;
   }
   // Worse the more over-drake, but the speed-up is capped so a hugely over-drake
