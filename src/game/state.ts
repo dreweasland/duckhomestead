@@ -102,6 +102,9 @@ export interface NutritionState {
   /** Mill-capacity scaling on feed throughput (1 = enough mills). */
   feedScale: number;
   hasMill: boolean;
+  /** Eggs laid per second by the whole flock right now (for the currency-flow
+   *  breakdown). Output rate, after nutrition throttle + modules + legacy. */
+  eggRate: number;
 }
 
 /** Derived duckling-ration snapshot (gates maturation speed). */

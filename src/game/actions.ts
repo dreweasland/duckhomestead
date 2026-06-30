@@ -1,6 +1,7 @@
 import { BALANCE, STATION_DEFS, zoneDef, type StationType } from '../config/balance';
 import {
   activeStatWeights,
+  cycleMult,
   grantModule,
   rackScore,
   rollMagnitude,
@@ -8,10 +9,21 @@ import {
   spareOutlook,
   tendCooldownMult,
   tendPowerMult,
+  yieldMult,
 } from './loot';
+import { outputBoostMult, speedBoostMult } from './prestige';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
-import type { Gene, GameState, Module, Rarity, Resource, Station } from './state';
-import { isBlockedTile, rackSockets, secureCapacity, seedFlock, stationAt, zoneUnlocked } from './state';
+import type { Gene, GameState, Ingredient, Module, Rarity, Resource, Station } from './state';
+import {
+  adultLayers,
+  INGREDIENTS,
+  isBlockedTile,
+  rackSockets,
+  secureCapacity,
+  seedFlock,
+  stationAt,
+  zoneUnlocked,
+} from './state';
 
 /** Output/throughput multiplier for a station at a given level. */
 export function UPGRADE_OUTPUT(level: number): number {
@@ -43,6 +55,60 @@ export function stationStatus(
     }
   }
   return { producing: true };
+}
+
+/** Effective per-cycle output(s) of a station — base × level × rack yield × legacy
+ *  boost, i.e. the amount that lands in its buffer each cycle (what you collect).
+ *  Mirrors tick.ts's stationOutput so the UI reads the true yield, not the raw
+ *  base. Coops are special-cased in the sim (eggs come from nutrition), so their
+ *  raw `outputs.eggs` is NOT a meaningful lay rate — the UI shows duck capacity
+ *  for coops instead. */
+export function outputPerCycle(
+  state: GameState,
+  station: Station,
+): { resource: Resource; amount: number }[] {
+  const def = STATION_DEFS[station.type];
+  const m = UPGRADE_OUTPUT(station.level) * yieldMult(state) * outputBoostMult(state);
+  return (Object.keys(def.outputs) as Resource[])
+    .map((resource) => ({ resource, amount: (def.outputs[resource] ?? 0) * m }))
+    .filter((o) => o.amount > 0);
+}
+
+/** Per-second economy flow for one resource: what's PRODUCED (in) vs what the feed
+ *  blend + duckling grow-out ration CONSUME (out). Powers the currency-flow
+ *  breakdown. Rates, not stock — `out − in < 0` means the stock is draining.
+ *
+ *  Income: raw producers run input-free so their rate is steady (output/cycle ÷
+ *  effective cycle time); eggs come from the flock at the live nutrition egg rate.
+ *  Outgo: only the five blendable ingredients are consumed — by the layers (mill-
+ *  capacity throttled) and by growing ducklings (same storage pool). */
+export function resourceFlow(state: GameState, resource: Resource): { in: number; out: number } {
+  let inflow = 0;
+  if (resource === 'eggs') {
+    inflow = state.nutrition?.eggRate ?? 0;
+  } else {
+    for (const s of state.stations) {
+      const def = STATION_DEFS[s.type];
+      if (!(resource in def.outputs)) continue;
+      const eff = (def.cycleSeconds * cycleMult(state)) / speedBoostMult(state);
+      if (eff <= 0) continue;
+      const out = outputPerCycle(state, s).find((o) => o.resource === resource);
+      if (out) inflow += out.amount / eff;
+    }
+  }
+
+  let outflow = 0;
+  if ((INGREDIENTS as readonly string[]).includes(resource)) {
+    const ing = resource as Ingredient;
+    const coopCycle = BALANCE.COOP.cycleSeconds;
+    const layers = adultLayers(state).length;
+    const feedScale = state.nutrition?.feedScale ?? 0; // mill-capacity throttle
+    outflow += (((state.ration[ing] ?? 0) * layers) / coopCycle) * feedScale;
+    const immature = state.ducks.filter((d) => d.stage !== 'adult').length;
+    outflow += ((state.ducklingRation[ing] ?? 0) * immature) / coopCycle;
+  }
+
+  return { in: inflow, out: outflow };
 }
 
 export type ActionResult<T = unknown> =
