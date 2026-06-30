@@ -116,7 +116,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   // Condition buffers: full condition masks the penalty; empty applies it fully.
   const eggMult = eggMultRaw + (1 - eggMultRaw) * cond;
 
-  state.nutrition = { satisfaction, supply, requirement, eggMultRaw, eggMult, feedScale, hasMill };
+  state.nutrition = { satisfaction, supply, requirement, eggMultRaw, eggMult, feedScale, hasMill, eggRate: 0 };
 
   // Niacin debuff: sustained shortfall accrues a timer; each time it crosses the
   // onset threshold, one healthy coop's duck gets a leg debuff (halves output).
@@ -161,7 +161,9 @@ function layNutritionTail(
   const eggModuleMult = eggOutputMult(state); // rack eggOutput modules buff the flock
   // Phase 4e: the legacy eggValue boost is a uniform scalar on eggs laid (never
   // the satisfaction/throttle math above — the nutrition puzzle is untouched).
-  const eggsThisStep = flockRate * eggMult * eggModuleMult * eggValueBoostMult(state) * step;
+  const eggRate = flockRate * eggMult * eggModuleMult * eggValueBoostMult(state); // eggs/sec
+  if (state.nutrition) state.nutrition.eggRate = eggRate;
+  const eggsThisStep = eggRate * step;
   // Deposit into coop buffers (split evenly) so Collect / Auto-Haul / the buffer
   // chips keep working unchanged. Coops are the flock's collection points.
   if (coops.length > 0 && eggsThisStep > 0) {

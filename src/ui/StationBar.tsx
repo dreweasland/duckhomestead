@@ -1,10 +1,49 @@
 import { useState } from 'react';
 import { playCollect, playRemove, playUpgrade } from '../audio/sfx';
 import { BALANCE, STATION_DEFS } from '../config/balance';
-import { stationStatus, upgradeCost } from '../game/actions';
+import { outputPerCycle, stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
-import type { GameState, Station } from '../game/state';
-import { CloseIcon, CollectIcon, EggIcon, HandIcon, UpgradeIcon } from './icons';
+import { coopCapacity, type GameState, type Resource, type Station } from '../game/state';
+import {
+  CloseIcon,
+  CollectIcon,
+  CornIcon,
+  DuckIcon,
+  EggIcon,
+  ForageIcon,
+  HandIcon,
+  MealwormIcon,
+  PeaIcon,
+  PelletIcon,
+  ShellIcon,
+  UpgradeIcon,
+  YeastIcon,
+} from './icons';
+
+/** Pixel icon + short label per resource (for the yield chip + collect flash). */
+const RES_ICON: Record<Resource, typeof CornIcon> = {
+  corn: CornIcon,
+  peas: PeaIcon,
+  mealworms: MealwormIcon,
+  brewersYeast: YeastIcon,
+  oysterShell: ShellIcon,
+  forage: ForageIcon,
+  pellets: PelletIcon,
+  eggs: EggIcon,
+};
+const RES_LABEL: Record<Resource, string> = {
+  corn: 'corn',
+  peas: 'peas',
+  mealworms: 'mealworms',
+  brewersYeast: 'yeast',
+  oysterShell: 'shell',
+  forage: 'forage',
+  pellets: 'pellets',
+  eggs: 'eggs',
+};
+
+/** Trim a per-cycle amount: whole numbers above 10, one decimal below. */
+const fmtAmt = (n: number): string => (n >= 10 ? `${Math.round(n)}` : `${Math.round(n * 10) / 10}`);
 
 /**
  * The selected-station controls as a slim, fixed strip pinned to the bottom of
@@ -58,6 +97,15 @@ export function StationBar({
     statusColor = '#e8a35a';
   }
 
+  // Yield / capacity readout: coops show duck capacity (their "output" is eggs,
+  // produced via nutrition, not a flat per-cycle number); every other producer
+  // shows its true per-cycle yield.
+  const isCoop = station.type === 'coop';
+  const thisCoopCap = BALANCE.BREEDING.COOP_CAPACITY * station.level;
+  const totalCap = coopCapacity(state);
+  const flock = state.ducks.length;
+  const yields = isCoop ? [] : outputPerCycle(state, station);
+
   const debuffed = station.type === 'coop' && state.ducks.some((d) => d.debuffed);
   const doseCost = BALANCE.NUTRITION.DOSE_COST_YEAST;
   const doseReady = state.doseCooldownRemaining <= 0 && state.resources.brewersYeast >= doseCost;
@@ -83,6 +131,26 @@ export function StationBar({
         <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: statusColor }} />
         {statusText}
       </span>
+
+      {/* yield (per cycle) / duck capacity (coops) */}
+      {isCoop ? (
+        <span className="flex items-center gap-1 text-[11px] text-[#c9b88f]" title="This coop's housing · whole-flock usage">
+          <DuckIcon size={12} /> {thisCoopCap} cap
+          <span className="text-[#7a6a4a]">· flock {flock}/{totalCap}</span>
+        </span>
+      ) : yields.length > 0 ? (
+        <span className="flex items-center gap-1 text-[11px] text-[#c9b88f]" title="Produced each cycle (level + yield bonuses applied)">
+          {yields.map(({ resource, amount }) => {
+            const Icon = RES_ICON[resource];
+            return (
+              <span key={resource} className="flex items-center gap-0.5">
+                +{fmtAmt(amount)} <Icon size={12} />
+              </span>
+            );
+          })}
+          <span className="text-[#7a6a4a]">/ cycle</span>
+        </span>
+      ) : null}
 
       {/* actions, pushed to the right */}
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -114,9 +182,15 @@ export function StationBar({
         {!state.autoHaulUnlocked && (
           <button
             onClick={() => {
-              engine.collect(station.id);
+              const r = engine.collect(station.id);
               playCollect();
-              flash('Collected.');
+              const moved = (r.ok ? r.value : null) as Partial<Record<Resource, number>> | null;
+              const parts = moved
+                ? (Object.entries(moved) as [Resource, number][])
+                    .filter(([, amt]) => amt > 0)
+                    .map(([res, amt]) => `+${Math.round(amt)} ${RES_LABEL[res]}`)
+                : [];
+              flash(parts.length ? `Collected ${parts.join(', ')}` : 'Collected.');
             }}
             disabled={!hasBuffer}
             className={`${btn} ${hasBuffer ? 'bg-[#b87333] text-[#fff4d6] hover:bg-[#c9823c]' : off}`}

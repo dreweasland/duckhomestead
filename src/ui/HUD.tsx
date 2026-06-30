@@ -5,6 +5,7 @@ import { rankProgress, xpForLevel } from '../game/rank';
 import { fmt } from './format';
 import { DuckIcon, MuteIcon, RESOURCE_ICON, SpeakerIcon } from './icons';
 import { RankPanel } from './RankPanel';
+import { ResourceFlowPanel } from './ResourceFlowPanel';
 
 // Eggs (currency) + the five nutrition ingredients. `pellets` is a retired
 // Phase 1 field and is intentionally not shown.
@@ -22,6 +23,7 @@ export function HUD({ state }: { state: GameState }) {
   const need = xpForLevel(state.rank);
   const [muted, setMutedState] = useState(isMuted());
   const [ranksOpen, setRanksOpen] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
   // Forage (foraged energy feed) only appears once a forage zone is in play.
   const res =
     state.resources.forage > 0 ? [...RES, { key: 'forage' as Resource, label: 'Forage' }] : RES;
@@ -45,21 +47,25 @@ export function HUD({ state }: { state: GameState }) {
         </button>
       </div>
 
-      {/* Resources: eggs (currency) + the five nutrition ingredients. */}
+      {/* Resources: eggs (currency) + the five nutrition ingredients. Click any to
+          see the full in/out/net flow breakdown for every currency. */}
+      {flowOpen && <ResourceFlowPanel state={state} onClose={() => setFlowOpen(false)} />}
       <div className="grid grid-cols-3 gap-1.5">
         {res.map((r) => {
           const Icon = RESOURCE_ICON[r.key];
           return (
-            <div
+            <button
               key={r.key}
-              className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 ${
+              type="button"
+              onClick={() => setFlowOpen(true)}
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition hover:ring-1 hover:ring-[#7a6a4a] ${
                 r.key === 'eggs' ? 'bg-[#3a2e22] ring-1 ring-[#5a4a32]' : 'bg-[#2a2018]'
               }`}
-              title={r.label}
+              title={`${r.label} — see resource flow`}
             >
               <Icon size={15} title={r.label} />
               <span className="text-sm font-bold tabular-nums">{fmt(state.resources[r.key])}</span>
-            </div>
+            </button>
           );
         })}
       </div>
