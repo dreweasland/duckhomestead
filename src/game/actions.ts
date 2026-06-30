@@ -111,6 +111,25 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
   return { in: inflow, out: outflow };
 }
 
+/** Feed-mill load: how the flock's blend DEMAND compares to mill CAPACITY — the
+ *  partnership between ingredient feed and mills. ratio ≥ 1 means the mills can't
+ *  keep up (the ration is throttled, feedScale < 1) so another mill / an upgrade
+ *  is due; well under 1 means headroom. Null when there's no flock to feed. */
+export function millLoad(
+  state: GameState,
+): { capacity: number; demand: number; ratio: number; feedScale: number; hasMill: boolean } | null {
+  const n = state.nutrition;
+  if (!n) return null;
+  const ratio = n.millCapacity > 0 ? n.feedDemand / n.millCapacity : n.feedDemand > 0 ? Infinity : 0;
+  return {
+    capacity: n.millCapacity,
+    demand: n.feedDemand,
+    ratio,
+    feedScale: n.feedScale,
+    hasMill: n.hasMill,
+  };
+}
+
 export type ActionResult<T = unknown> =
   | { ok: true; value: T }
   | { ok: false; reason: string };

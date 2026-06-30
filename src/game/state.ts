@@ -102,6 +102,12 @@ export interface NutritionState {
   /** Mill-capacity scaling on feed throughput (1 = enough mills). */
   feedScale: number;
   hasMill: boolean;
+  /** Total mill blend throughput available (units/sec) — the supply side of the
+   *  feed bottleneck. Scales with mill count, level, and throughput modules. */
+  millCapacity: number;
+  /** Total feed the flock wants blended right now (units/sec) — the demand side.
+   *  When feedDemand > millCapacity the ration is throttled (feedScale < 1). */
+  feedDemand: number;
   /** Eggs laid per second by the whole flock right now (for the currency-flow
    *  breakdown). Output rate, after nutrition throttle + modules + legacy. */
   eggRate: number;
