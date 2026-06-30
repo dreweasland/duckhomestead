@@ -70,6 +70,10 @@ export function deserialize(raw: string, now: number): GameState {
       rack: parsed.rack ?? [],
       dust: parsed.dust ?? 0,
       nextModuleId: parsed.nextModuleId ?? 1,
+      // Auto-fill playstyle weights: pre-feature saves default to Balanced. Merge
+      // so a partial saved map still carries every stat (new stats get the default).
+      statWeights: { ...base.statWeights, ...(parsed.statWeights ?? {}) },
+      statWeightPreset: parsed.statWeightPreset ?? 'balanced',
       // Phase 4a breeding defaults for older saves. Breeding rework: migrate each
       // duck's vigor → a genome (drop the dead vigor field). A pre-rework save has
       // no gene-reader, so migrated genomes start hidden until one is built.

@@ -1,10 +1,11 @@
-import { BALANCE } from '../config/balance';
+import { useState } from 'react';
+import { BALANCE, PLAYSTYLE_PRESETS } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { installMarginal, moduleContribution, salvageDust, spareOutlook } from '../game/loot';
-import { MODULE_STATS, rackSockets, type GameState, type Module } from '../game/state';
+import { MODULE_STATS, RARITIES, rackSockets, type GameState, type Module } from '../game/state';
 import { playCollect, playPlace, playUpgrade } from '../audio/sfx';
 import { CloseIcon, ModuleIcon } from './icons';
-import { ModuleChip, STAT_META, rarityRank } from './lootUi';
+import { ModuleChip, RARITY_COLOR, STAT_META, rarityRank } from './lootUi';
 
 /** Signed applied-% string for a stat (− for reductions like Speed/Cooldown). */
 function effPct(stat: Module['stat'], applied: number): string {
@@ -23,8 +24,10 @@ export function ModulesPanel({
   const sockets = rackSockets(state);
   const used = state.rack.length;
   const rerollCost = BALANCE.LOOT.REROLL_DUST_COST;
+  const [tuneOpen, setTuneOpen] = useState(false);
 
-  // Rack: group by stat for a stable read. Spares: best first.
+  // Rack: group by stat for a stable read. Spares: tier → type → % (best tier,
+  // grouped by stat, strongest roll first) so the list reads top-down by value.
   const rack = [...state.rack].sort(
     (a, b) =>
       MODULE_STATS.indexOf(a.stat) - MODULE_STATS.indexOf(b.stat) ||
@@ -34,10 +37,22 @@ export function ModulesPanel({
   const spares = [...state.inventory].sort(
     (a, b) =>
       rarityRank[a.rarity] - rarityRank[b.rarity] ||
-      b.magnitude - a.magnitude ||
-      MODULE_STATS.indexOf(a.stat) - MODULE_STATS.indexOf(b.stat),
+      MODULE_STATS.indexOf(a.stat) - MODULE_STATS.indexOf(b.stat) ||
+      b.magnitude - a.magnitude,
   );
   const emptySockets = Math.max(0, sockets - used);
+
+  // Spare counts per tier (drive the bulk-salvage chips). Best tier first.
+  const spareTiers = [...RARITIES]
+    .reverse()
+    .map((r) => ({
+      rarity: r,
+      count: state.inventory.filter((m) => m.rarity === r).length,
+      dust: state.inventory.filter((m) => m.rarity === r).reduce((a, m) => a + salvageDust(m.rarity), 0),
+    }))
+    .filter((t) => t.count > 0);
+
+  const activePreset = state.statWeightPreset;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -89,6 +104,83 @@ export function ModulesPanel({
           </button>
         </div>
 
+        {/* ── Auto-fill priorities: pick a playstyle preset or hand-tune weights ── */}
+        <div className="mb-3 rounded-md bg-[#1f1812] p-2">
+          <button
+            onClick={() => setTuneOpen((v) => !v)}
+            className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a] hover:text-[#cdbcff]"
+          >
+            <span>Auto-fill priorities</span>
+            <span className="flex items-center gap-1 normal-case tracking-normal text-[#cdbcff]">
+              {PLAYSTYLE_PRESETS.find((p) => p.id === activePreset)?.label ?? 'Custom'}
+              <span className="text-[#6a5a3a]">{tuneOpen ? '▾' : '▸'}</span>
+            </span>
+          </button>
+
+          {tuneOpen && (
+            <div className="mt-2 flex flex-col gap-2">
+              <div className="flex flex-wrap gap-1">
+                {PLAYSTYLE_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => engine.setPlaystyle(p.id)}
+                    title={p.desc}
+                    className={`rounded px-2 py-1 text-[10px] font-bold transition ${
+                      activePreset === p.id
+                        ? 'bg-[#3a2e64] text-[#cdbcff] ring-1 ring-[#cdbcff]'
+                        : 'bg-[#241c14] text-[#9a8a6a] hover:bg-[#2e2440]'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+                <span
+                  className={`rounded px-2 py-1 text-[10px] font-bold ${
+                    activePreset === 'custom'
+                      ? 'bg-[#3a2e64] text-[#cdbcff] ring-1 ring-[#cdbcff]'
+                      : 'bg-[#241c14] text-[#5a4d3a]'
+                  }`}
+                >
+                  Custom
+                </span>
+              </div>
+              <p className="text-[9px] leading-relaxed text-[#7a6a4a]">
+                {PLAYSTYLE_PRESETS.find((p) => p.id === activePreset)?.desc ??
+                  'Hand-tuned weights. Higher = Auto-fill prefers this stat when sockets are scarce.'}
+              </p>
+              <div className="flex flex-col gap-1">
+                {MODULE_STATS.map((stat) => {
+                  const w = state.statWeights[stat] ?? 0;
+                  return (
+                    <div key={stat} className="flex items-center gap-2">
+                      <span className="flex-1 text-[10px] text-[#c9b88f]">{STAT_META[stat].label}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => engine.setStatWeight(stat, Math.max(0, +(w - 0.1).toFixed(1)))}
+                          className="h-5 w-5 rounded bg-[#241c14] text-[11px] font-bold text-[#cdbcff] hover:bg-[#2e2440]"
+                          aria-label={`Lower ${STAT_META[stat].label} priority`}
+                        >
+                          −
+                        </button>
+                        <span className="w-7 text-center text-[11px] font-bold tabular-nums text-[#f5ecd8]">
+                          {w.toFixed(1)}
+                        </span>
+                        <button
+                          onClick={() => engine.setStatWeight(stat, +(w + 0.1).toFixed(1))}
+                          className="h-5 w-5 rounded bg-[#241c14] text-[11px] font-bold text-[#cdbcff] hover:bg-[#2e2440]"
+                          aria-label={`Raise ${STAT_META[stat].label} priority`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="mb-4 flex flex-col gap-1.5">
           {rack.map((m) => (
             <div key={m.id} className="flex flex-col gap-0.5">
@@ -114,9 +206,33 @@ export function ModulesPanel({
         </div>
 
         {/* ── Spares ── */}
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
-          Spares ({spares.length})
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
+            Spares ({spares.length})
+          </span>
         </div>
+
+        {/* Bulk salvage by tier — one tap clears every spare of that rarity. */}
+        {spareTiers.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-1">
+            <span className="mr-0.5 text-[9px] uppercase tracking-wider text-[#7a6a4a]">
+              Bulk salvage
+            </span>
+            {spareTiers.map(({ rarity, count, dust }) => (
+              <button
+                key={rarity}
+                onClick={() => {
+                  if (engine.bulkSalvageByTier(rarity).ok) playCollect();
+                }}
+                title={`Salvage all ${count} ${rarity} spare${count > 1 ? 's' : ''} for ${dust} dust`}
+                className="rounded px-1.5 py-0.5 text-[10px] font-bold capitalize transition hover:brightness-110"
+                style={{ background: `${RARITY_COLOR[rarity]}22`, color: RARITY_COLOR[rarity], border: `1px solid ${RARITY_COLOR[rarity]}66` }}
+              >
+                {rarity} ×{count} <span className="opacity-70">+{dust}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {spares.length === 0 ? (
           <div className="py-4 text-center text-sm text-[#9a8a6a]">
             No spare modules. Tend stations for a chance to drop one.

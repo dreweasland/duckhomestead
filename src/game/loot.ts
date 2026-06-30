@@ -1,4 +1,4 @@
-import { BALANCE, type StationType } from '../config/balance';
+import { BALANCE, DEFAULT_STAT_WEIGHTS, type StationType } from '../config/balance';
 import {
   MODULE_STATS,
   RARITIES,
@@ -76,14 +76,22 @@ export const millThroughputMult = (state: GameState): number =>
   (1 + rackBonus(state, 'stationSpeed')) * (1 + rackBonus(state, 'stationYield'));
 
 // ── Loadout scoring (drives the Auto-fill optimizer + spare "upgrade?" hints) ──
-const statValue = (stat: ModuleStat): number => L.STAT_VALUE[stat] ?? 1;
+/** The live per-stat priority weights driving the optimizer. Player-set via a
+ *  playstyle preset or hand-edit; falls back to the Balanced default for any
+ *  stat (and for older saves before the field existed). */
+export function activeStatWeights(state: GameState): Record<string, number> {
+  return state.statWeights ?? DEFAULT_STAT_WEIGHTS;
+}
+const statValue = (stat: ModuleStat, weights: Record<string, number>): number =>
+  weights[stat] ?? DEFAULT_STAT_WEIGHTS[stat] ?? 1;
 
 /** Value-weighted total applied bonus of a set of installed modules — the scalar
- *  the optimizer maximizes. Pure heuristic; never affects the sim. */
-export function rackScore(modules: Module[]): number {
+ *  the optimizer maximizes, under the active playstyle weights. Pure heuristic;
+ *  never affects the sim. */
+export function rackScore(modules: Module[], weights: Record<string, number>): number {
   let score = 0;
   for (const stat of MODULE_STATS) {
-    score += statValue(stat) * appliedBonus(rawSumFor(modules, stat), L.SOFT_CAP[stat] ?? 0);
+    score += statValue(stat, weights) * appliedBonus(rawSumFor(modules, stat), L.SOFT_CAP[stat] ?? 0);
   }
   return score;
 }
@@ -112,12 +120,13 @@ export type SpareOutlook =
 
 /** Best strictly-improving swap for a (hypothetical) module against the full rack. */
 function bestSwap(state: GameState, mod: Module): { gain: number; replace: Module } | null {
-  const base = rackScore(state.rack);
+  const w = activeStatWeights(state);
+  const base = rackScore(state.rack, w);
   let best: { gain: number; replace: Module } | null = null;
   for (let i = 0; i < state.rack.length; i++) {
     const cand = state.rack.slice();
     cand[i] = mod;
-    const gain = rackScore(cand) - base;
+    const gain = rackScore(cand, w) - base;
     if (gain > (best?.gain ?? 1e-9)) best = { gain, replace: state.rack[i] };
   }
   return best;
@@ -132,7 +141,8 @@ function bestSwap(state: GameState, mod: Module): { gain: number; replace: Modul
  */
 export function spareOutlook(state: GameState, spare: Module): SpareOutlook {
   if (state.rack.length < rackSockets(state)) {
-    return { kind: 'install', gain: statValue(spare.stat) * installMarginal(state, spare) };
+    const gain = statValue(spare.stat, activeStatWeights(state)) * installMarginal(state, spare);
+    return { kind: 'install', gain };
   }
   const now = bestSwap(state, spare);
   if (now) return { kind: 'upgrade', gain: now.gain, replace: now.replace };
