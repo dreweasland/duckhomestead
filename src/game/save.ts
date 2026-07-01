@@ -173,8 +173,24 @@ export function deserialize(raw: string, now: number): GameState {
       }
     }
     for (const s of result.stations) s.modules = [];
+    // Guard the id counters against collisions: a save whose counter is missing or
+    // has fallen behind its existing ids (an older shape, a hand-edit, the pre-rack
+    // module pull-in above) would otherwise mint a DUPLICATE id — silently merging
+    // two ducks/modules/pairs in every id-keyed lookup (byId maps, cull, pair/secure
+    // targeting). Ids are `<prefix><n>`; take each counter past its highest live id.
+    const maxIdNum = (ids: string[]): number =>
+      ids.reduce((m, id) => Math.max(m, parseInt(id.slice(1), 10) || 0), 0);
+    result.nextDuckId = Math.max(result.nextDuckId, maxIdNum(result.ducks.map((d) => d.id)) + 1);
+    result.nextModuleId = Math.max(
+      result.nextModuleId,
+      maxIdNum([...result.rack, ...result.inventory].map((m) => m.id)) + 1,
+    );
+    result.nextPairId = Math.max(result.nextPairId, maxIdNum(result.breedingPairs.map((p) => p.id)) + 1);
     // Back-derive milestone unlocks from rank so a save from before the milestone
-    // existed gets it immediately (not only on the next rank-up).
+    // existed gets it immediately (not only on the next rank-up). Mirror BOTH
+    // rank-gated flags set at rank-up (actions.ts) — Auto-Haul was previously missed,
+    // leaving a past-rank-5 legacy save collecting by hand until its next rank-up.
+    if (result.rank >= BALANCE.MILESTONE_AUTOHAUL_RANK) result.autoHaulUnlocked = true;
     if (result.rank >= BALANCE.MILESTONE_TENDALL_RANK) result.tendAllUnlocked = true;
     return result;
   } catch {

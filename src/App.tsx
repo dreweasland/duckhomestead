@@ -207,10 +207,13 @@ export default function App() {
   // Onboarding for the pre-placed starter: the Coop is already laying but short
   // on protein + calcium. Surfaced as a one-time welcome pop-up (first run only,
   // per-browser) rather than an inline note hogging board space.
-  const hasCoop = state.stations.some((s) => s.type === 'coop');
+  // Present station types in one pass — several checks below (and the coop-gated
+  // Nutrition button in the side panel) each used their own `stations.some(...)` scan.
+  const stationTypes = new Set(state.stations.map((s) => s.type));
+  const hasCoop = stationTypes.has('coop');
   const missingProducers = [
-    !state.stations.some((s) => s.type === 'mealwormFarm') && 'a Mealworm Farm (protein)',
-    !state.stations.some((s) => s.type === 'oysterSource') && 'an Oyster Source (calcium)',
+    !stationTypes.has('mealwormFarm') && 'a Mealworm Farm (protein)',
+    !stationTypes.has('oysterSource') && 'an Oyster Source (calcium)',
   ].filter(Boolean) as string[];
   const showWelcome = !welcomeSeen && hasCoop && missingProducers.length > 0;
   // Fire the "defenses down" lesson when a threat first telegraphs while the player
@@ -455,7 +458,7 @@ export default function App() {
         {/* Side panel */}
         <div className="flex w-full flex-col gap-4 md:w-[300px]">
           <HUD state={state} />
-          {state.stations.some((s) => s.type === 'coop') && (
+          {hasCoop && (
             <button
               onClick={() => setNutritionOpen(true)}
               className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${

@@ -56,6 +56,35 @@ describe('back-compat + robustness', () => {
     expect(r.resources.eggs).toBe(BALANCE.STARTING_EGGS);
   });
 
+  it('advances id counters past existing ids so no duplicate id is ever minted', () => {
+    // A legacy/hand-edited save whose counters trail its live ids: naively defaulting
+    // nextDuckId to 1 would re-mint d3 on the next hatch and collide.
+    const raw = JSON.stringify({
+      ducks: [
+        { id: 'd3', genome: ['L', 'L', 'L', 'L', 'L', 'L'], sex: 'hen', stage: 'adult', ageTicks: 0 },
+        { id: 'd7', genome: ['D', 'D', 'D', 'D', 'D', 'D'], sex: 'drake', stage: 'adult', ageTicks: 0 },
+      ],
+      inventory: [{ id: 'm5', stat: 'stationYield', rarity: 'common', magnitude: 0.1 }],
+      breedingPairs: [{ id: 'p2', drakeId: 'd7', henId: 'd3', clutchProgress: 0, incubating: [] }],
+      // nextDuckId / nextModuleId / nextPairId all absent → default 1 before the guard.
+    });
+    const r = deserialize(raw, 0);
+    expect(r.nextDuckId).toBe(8); // past d7
+    expect(r.nextModuleId).toBe(6); // past m5
+    expect(r.nextPairId).toBe(3); // past p2
+  });
+
+  it('back-derives BOTH rank-gated milestones from rank on load', () => {
+    // A pre-milestone save at rank 12 (past both gates) with the flags absent must
+    // load with Auto-Haul AND Tend-All already unlocked — not stuck until a rank-up.
+    const r = deserialize(JSON.stringify({ rank: 12 }), 0);
+    expect(r.autoHaulUnlocked).toBe(true); // rank ≥ 5
+    expect(r.tendAllUnlocked).toBe(true); // rank ≥ 10
+    // Below the gate stays locked.
+    const low = deserialize(JSON.stringify({ rank: BALANCE.MILESTONE_AUTOHAUL_RANK - 1 }), 0);
+    expect(low.autoHaulUnlocked).toBe(false);
+  });
+
   it('merges a partial saved ration with defaults', () => {
     const r = deserialize(JSON.stringify({ ration: { corn: 9 } }), 0);
     expect(r.ration.corn).toBe(9);
