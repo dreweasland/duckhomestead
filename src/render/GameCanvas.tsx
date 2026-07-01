@@ -3,7 +3,7 @@ import { Application, Container, Graphics, Sprite, Text, TextStyle, type Texture
 import { playPlace } from '../audio/sfx';
 import { STATION_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
 import { BALANCE } from '../config/balance';
-import { stationStatus, upgradeCost } from '../game/actions';
+import { producerMaxed, stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import { isBlockedTile, phenotype, stationAt, type Color, type Resource, type Station } from '../game/state';
 import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './assets';
@@ -465,10 +465,11 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
               entry.body.circle(TILE - 9, TILE - 12, 3.5).fill(0xe8a35a);
             }
 
-            // Level badge, bottom-left.
+            // Level badge, bottom-left — a capped producer reads MAX, not its level.
+            const maxed = producerMaxed(s);
             entry.body.roundRect(4, TILE - 25, 21, 14, 3).fill(DARK);
-            entry.lvl.text = `L${s.level}`;
-            entry.lvl.position.set(8, TILE - 23);
+            entry.lvl.text = maxed ? 'MAX' : `L${s.level}`;
+            entry.lvl.position.set(maxed ? 6 : 8, TILE - 23);
 
             // Niacin leg-debuff marker (red medical badge), top-center.
             if (s.debuffed) {
@@ -508,17 +509,24 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
             // Build bar, show its own upgrade cost (green = affordable, red = not),
             // since clicking it will upgrade in place.
             if (buildRef.current === s.type) {
-              const cost = upgradeCost(s);
-              const ok = state.resources.eggs >= cost;
               const cx = TILE / 2;
               const cy = TILE / 2 + 2;
               entry.body.roundRect(cx - 20, cy - 9, 40, 18, 4).fill({ color: 0x16110b, alpha: 0.82 });
-              // up-chevron
-              const col = ok ? 0x8fe388 : 0xd95f5f;
-              entry.body.poly([cx - 12, cy + 3, cx - 8, cy - 4, cx - 4, cy + 3]).fill(col);
-              entry.up.text = `${cost}`;
-              entry.up.style.fill = col;
-              entry.up.position.set(cx + 5, cy);
+              if (maxed) {
+                // Capped — no upgrade to offer, so show MAX (no cost, no chevron).
+                entry.up.text = 'MAX';
+                entry.up.style.fill = 0x9a8a6a;
+                entry.up.position.set(cx - 11, cy);
+              } else {
+                const cost = upgradeCost(s);
+                const ok = state.resources.eggs >= cost;
+                // up-chevron
+                const col = ok ? 0x8fe388 : 0xd95f5f;
+                entry.body.poly([cx - 12, cy + 3, cx - 8, cy - 4, cx - 4, cy + 3]).fill(col);
+                entry.up.text = `${cost}`;
+                entry.up.style.fill = col;
+                entry.up.position.set(cx + 5, cy);
+              }
             } else {
               entry.up.text = '';
             }
