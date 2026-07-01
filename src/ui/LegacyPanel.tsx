@@ -7,12 +7,14 @@ import {
   boostMult,
   canPrestige,
   championGoal,
+  currencyAtSize,
   prestigeCurrency,
+  targetForTier,
   type BoostId,
 } from '../game/prestige';
-import { COLORS, type Color, type GameState } from '../game/state';
+import { COLORS, type Color, type GameState, type Genome } from '../game/state';
 import { playDing, playUpgrade } from '../audio/sfx';
-import { ColorSwatch, COLOR_META } from './FlockPanel';
+import { ColorSwatch, COLOR_META, GENE_META } from './FlockPanel';
 import { useEscapeKey } from './useEscapeKey';
 import { CheckIcon, CloseIcon, DuckIcon, LegacyIcon } from './icons';
 
@@ -61,6 +63,24 @@ const BOOST_META: Record<BoostId, { label: string; blurb: string }> = {
   husbandry: { label: 'Husbandry', blurb: 'faster clutches + maturation — regrow the flock faster' },
 };
 
+/** A gate-target profile as read-only gene pips (the tier's breeding puzzle). */
+function TargetPips({ target, size = 13 }: { target: Genome; size?: number }) {
+  return (
+    <span className="inline-flex gap-0.5 align-middle">
+      {target.map((g, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center justify-center rounded-[2px] font-bold leading-none"
+          style={{ width: size, height: size, fontSize: size - 5, background: GENE_META[g].color, color: '#171009' }}
+          title={`Slot ${i + 1}: ${GENE_META[g].label}`}
+        >
+          {g}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const fmtDate = (ms: number) => {
   try {
     return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -90,6 +110,11 @@ export function LegacyPanel({
   const goal = championGoal(state);
   const ready = canPrestige(state);
   const grant = prestigeCurrency(state);
+  const gateTarget = targetForTier(state.legacyTier);
+  const nextTarget = targetForTier(state.legacyTier + 1);
+  // The push-vs-reset projection: what a +50% flock would bank instead.
+  const pushSize = Math.round(state.ducks.length * 1.5);
+  const pushGrant = currencyAtSize(state, pushSize);
 
   const doPrestige = () => {
     if (!ready) return;
@@ -169,14 +194,20 @@ export function LegacyPanel({
               )
             }
           />
-          {/* 2 — average genome quality (mean slots matching the god-clone target) */}
+          {/* 2 — average genome quality (mean slots matching THIS TIER's target) */}
           <GoalRow
             icon={<span className="text-[#ffe9a8]">⌬</span>}
             label="Genome quality"
             value={`${goal.quality.value.toFixed(2)} / ${goal.quality.gate.toFixed(2)}`}
             progress={goal.quality.progress}
             met={goal.quality.met}
-            hint={goal.quality.met ? undefined : <span className="text-[#7a6a4a]">crossbreed toward the target + cull the weak</span>}
+            hint={
+              <span className="inline-flex items-center gap-1.5 text-[#7a6a4a]">
+                <span>tier target</span>
+                <TargetPips target={gateTarget} size={12} />
+                {!goal.quality.met && <span>— crossbreed toward it + cull the weak</span>}
+              </span>
+            }
           />
           {/* 3 — flock size (scales each tier) */}
           <GoalRow
@@ -209,13 +240,22 @@ export function LegacyPanel({
         </button>
         {ready && (
           <div className="mb-1 text-center text-[10px] text-[#8fae6a]">
-            Payout scales with overshoot of BOTH the size target and the quality gate — a bigger,
-            higher-quality flock earns more.
+            Push or reset? Now <span className="font-bold tabular-nums">+{grant}</span> · at{' '}
+            <span className="tabular-nums">{pushSize}</span> ducks ≈{' '}
+            <span className="font-bold tabular-nums">+{pushGrant}</span>. Overshooting the size
+            target and quality gate pays superlinearly — a deeper run banks more.
           </div>
         )}
+        {/* The next tier's puzzle — the reason to prestige beyond the numbers. */}
+        <div className="mb-1 flex items-center justify-center gap-1.5 text-center text-[10px] text-[#9a8a6a]">
+          <span>Next legacy demands</span>
+          <TargetPips target={nextTarget} size={12} />
+          <span>— a new breeding puzzle</span>
+        </div>
         <div className="mb-3 text-center text-[10px] text-[#7a6a4a]">
           Prestige wipes the entire run (flock, eggs, stations, zones re-lock) for permanent boosts.
-          Only your legacy + boosts persist. The size target and quality gate both rise each tier.
+          Only your legacy + boosts persist. The size target, quality gate, and target profile all
+          change each tier.
         </div>
 
         {/* Legacy shop */}

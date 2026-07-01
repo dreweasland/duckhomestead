@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
+import { targetForTier } from '../game/prestige';
 import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
@@ -358,10 +359,14 @@ function Breeding({
         )}
       </div>
 
-      {/* God-clone target: the profile the flock is steered toward. Click a slot
-          to cycle its gene; readout shows best-match + how many god clones exist. */}
+      {/* TRACKING target: the workbench profile the browser/previews measure
+          against — a planning aid. The legacy gate + god-clone DING judge against
+          the TIER's authoritative target (prestige.ts targetForTier); the ⌂ button
+          snaps tracking back to it. Click a slot to cycle its gene. */}
       {(() => {
         const SLOTS = target.length;
+        const legacyTarget = targetForTier(state.legacyTier);
+        const onLegacy = target.every((g, i) => g === legacyTarget[i]);
         const best = state.ducks.reduce((m, d) => Math.max(m, targetMatch(d.genome, target)), 0);
         const clones = state.ducks.filter((d) => targetMatch(d.genome, target) === SLOTS).length;
         const cycle = (i: number) => {
@@ -371,7 +376,12 @@ function Breeding({
         };
         return (
           <div className="mb-1.5 flex items-center gap-1.5 rounded bg-[#171009] px-2 py-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-[#7a6a4a]">Target</span>
+            <span
+              className="text-[9px] font-bold uppercase tracking-wider text-[#7a6a4a]"
+              title="Your workbench target — sorting/previews measure against it. The Legacy gate judges the tier's own target."
+            >
+              Tracking
+            </span>
             <span className="inline-flex gap-0.5">
               {target.map((g, i) => (
                 <button
@@ -385,7 +395,16 @@ function Breeding({
                 </button>
               ))}
             </span>
-            <span className="ml-auto text-[10px] text-[#9a8a6a]" title="Best match in the flock toward the target">
+            {!onLegacy && (
+              <button
+                onClick={() => engine.setGenomeTarget(legacyTarget)}
+                title="Snap tracking back to this tier's Legacy gate target"
+                className="rounded bg-[#3a2e22] px-1.5 py-0.5 text-[9px] font-bold text-[#ffe9a8] hover:bg-[#4a3a2a]"
+              >
+                → legacy
+              </button>
+            )}
+            <span className="ml-auto text-[10px] text-[#9a8a6a]" title="Best match in the flock toward the tracking target">
               best <span className="tabular-nums text-[#ffe9a8]">{best}/{SLOTS}</span>
               {clones > 0 && (
                 <span className="ml-1 text-[#8fe388]">· {clones} god clone{clones > 1 ? 's' : ''}</span>
