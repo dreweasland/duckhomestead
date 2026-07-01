@@ -18,6 +18,8 @@ import {
   adultDrakes,
   adultLayers,
   breedingEstablished,
+  infirmaryCapacity,
+  infirmaryOccupied,
   INGREDIENTS,
   isBlockedTile,
   rackSockets,
@@ -680,20 +682,33 @@ export function setSecured(state: GameState, duckId: string, secured: boolean): 
   return done(true);
 }
 
+/** Build one Infirmary — adds INFIRMARY.SLOTS_PER recovery slots. Costs eggs. */
+export function buildInfirmary(state: GameState): ActionResult<{ infirmaries: number }> {
+  const cost = BALANCE.PREDATORS.INFIRMARY.COST_EGGS;
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.infirmaries += 1;
+  return done({ infirmaries: state.infirmaries });
+}
+
 /**
- * Treat (heal) a wounded duck — the active save that stops a wound escalating to
- * a permanent loss. Costs eggs. This is the checkpoint every death passes
- * through: a wound the player could have caught.
+ * Admit a wounded duck to an Infirmary recovery slot — the active save that stops a
+ * wound escalating to a permanent loss. Free, but slots are LIMITED: a recovering
+ * duck holds its slot until healed (over time, severity + water scaled), lays
+ * nothing, and eats extra feed. If every slot is full it's triage — build another
+ * infirmary, wait for one to free up, or cull. This is the checkpoint every death
+ * passes through: a wound the player could have caught.
  */
-export function treatDuck(state: GameState, duckId: string): ActionResult<unknown> {
+export function admitToInfirmary(state: GameState, duckId: string): ActionResult<unknown> {
   const duck = state.ducks.find((d) => d.id === duckId);
   if (!duck) return fail('No such duck');
   if (!duck.wounded) return fail('Not wounded');
-  const cost = BALANCE.PREDATORS.TREAT_COST_EGGS;
-  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
-  state.resources.eggs -= cost;
-  duck.wounded = false;
-  duck.woundElapsed = 0;
+  if (duck.recovering) return done(true); // already admitted
+  if (infirmaryOccupied(state) >= infirmaryCapacity(state)) {
+    return fail('Infirmary full — build another, wait, or cull');
+  }
+  duck.recovering = true;
+  duck.recoveryElapsed = 0;
   return done(true);
 }
 

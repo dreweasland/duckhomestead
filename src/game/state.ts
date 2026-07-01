@@ -181,7 +181,17 @@ export interface Duck {
   /** Phase 4c: marked secured (housed in a Secure Coop slot) — excluded from
    *  predator targeting during windows. The lever for protecting prize breeders. */
   secured?: boolean;
+  /** Injury severity, rolled when the wound lands — drives recovery time (worse when
+   *  the hit landed with defenses down; milder for Hardy ducks). */
+  severity?: WoundSeverity;
+  /** In an Infirmary recovery slot: healing over time, holds a slot, eats extra feed,
+   *  lays nothing, and no longer escalates. Set by Admit; cleared when recovered. */
+  recovering?: boolean;
+  /** Seconds accrued toward this recovery (vs the severity's RECOVERY_SEC). */
+  recoveryElapsed?: number;
 }
+
+export type WoundSeverity = 'minor' | 'serious' | 'critical';
 
 /** An active breeding pair: lays fertilized clutches that incubate into ducklings. */
 export interface BreedingPair {
@@ -367,6 +377,8 @@ export interface GameState {
   // ── Phase 4c: secure housing ──
   /** Built Secure Coops (count) — each adds SECURE_SLOTS_PER_COOP secure slots. */
   secureCoops: number;
+  /** Built infirmaries — each adds INFIRMARY.SLOTS_PER recovery slots. */
+  infirmaries: number;
   /** First-contact grace: predators only ever resolve their first window once the
    *  player is PRESENT (online) to see the new threat and set up defenses — never
    *  first during an absence. Set true the moment predators activate online; once
@@ -484,6 +496,18 @@ export function secureCapacity(state: GameState): number {
   return state.secureCoops * BALANCE.PREDATORS.SECURE_SLOTS_PER_COOP;
 }
 
+/** Total recovery slots across all built infirmaries. */
+export function infirmaryCapacity(state: GameState): number {
+  return state.infirmaries * BALANCE.PREDATORS.INFIRMARY.SLOTS_PER;
+}
+
+/** How many recovery slots are currently occupied (ducks mid-recovery). */
+export function infirmaryOccupied(state: GameState): number {
+  let n = 0;
+  for (const d of state.ducks) if (d.recovering) n++;
+  return n;
+}
+
 /** Homestead-wide protection floor from built deterrents (capped), scaled by their
  *  integrity. Passive and offline-safe, but it WEARS — a neglected floor sags
  *  toward zero, so it must be repaired to keep its full value. */
@@ -592,6 +616,7 @@ export function initialState(now: number): GameState {
     deterrents: 0,
     deterrentIntegrity: 1,
     secureCoops: 0,
+    infirmaries: 0,
     predatorsIntroduced: false,
     legacyTier: 0,
     legacyCurrency: 0,

@@ -1,8 +1,10 @@
 import { BALANCE, type StationType } from '../config/balance';
 import {
+  admitToInfirmary,
   autoFillRack,
   buildDeterrent,
   buildGeneReader,
+  buildInfirmary,
   buildSecureCoop,
   bulkSalvageByTier,
   repairDeterrents,
@@ -24,7 +26,6 @@ import {
   setSecured,
   swapInModule,
   tend,
-  treatDuck,
   uninstallModule,
   unlockZone as unlockZoneAction,
   upgradeStation,
@@ -535,6 +536,12 @@ export class GameEngine {
     this.notify();
     return r;
   }
+  /** Build one Infirmary — adds recovery slots for wounded ducks. */
+  buildInfirmary(): ActionResult<{ infirmaries: number }> {
+    const r = buildInfirmary(this.state);
+    this.notify();
+    return r;
+  }
   /** Repair the deterrent floor back to pristine (active-only upkeep). */
   repairDeterrents(): ActionResult<{ cost: number }> {
     const r = repairDeterrents(this.state);
@@ -578,9 +585,10 @@ export class GameEngine {
     this.notify();
     return r;
   }
-  /** Treat a wounded duck — the active save that stops a wound escalating. */
-  treat(duckId: string): ActionResult<unknown> {
-    const r = treatDuck(this.state, duckId);
+  /** Admit a wounded duck to an infirmary recovery slot — the save that stops a
+   *  wound escalating (if a slot is free). */
+  admit(duckId: string): ActionResult<unknown> {
+    const r = admitToInfirmary(this.state, duckId);
     this.notify();
     return r;
   }

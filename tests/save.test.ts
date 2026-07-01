@@ -35,7 +35,7 @@ describe('save round-trip', () => {
     // breeding
     s.ducks = [
       { id: 'd1', genotype: ['Bl', 'bl'], genome: ['L', 'L', 'V', 'H', 'D', 'L'], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 3, secured: true },
-      { id: 'd2', genotype: ['bl', 'bl'], genome: ['D', 'D', 'D', 'D', 'D', 'D'], genomeKnown: false, sex: 'drake', stage: 'juvenile', ageTicks: 1, wounded: true, woundElapsed: 7, woundSource: 'predator' },
+      { id: 'd2', genotype: ['bl', 'bl'], genome: ['D', 'D', 'D', 'D', 'D', 'D'], genomeKnown: false, sex: 'drake', stage: 'juvenile', ageTicks: 1, wounded: true, woundElapsed: 7, woundSource: 'predator', severity: 'serious', recovering: true, recoveryElapsed: 4 },
     ] as Duck[];
     s.nextDuckId = 3;
     s.breedingPairs = [{ id: 'p1', drakeId: 'd2', henId: 'd1', clutchProgress: 4, incubating: [1, 2] }];
@@ -54,6 +54,7 @@ describe('save round-trip', () => {
     s.deterrents = 2;
     s.deterrentIntegrity = 0.6;
     s.secureCoops = 1;
+    s.infirmaries = 3;
     s.predatorsIntroduced = true;
     // prestige
     s.legacyTier = 3;
@@ -80,6 +81,8 @@ describe('save round-trip', () => {
     expect(r.deterrents).toBe(2);
     expect(r.deterrentIntegrity).toBe(0.6);
     expect(r.secureCoops).toBe(1);
+    expect(r.infirmaries).toBe(3);
+    expect(r.ducks[1]).toMatchObject({ severity: 'serious', recovering: true, recoveryElapsed: 4 });
     expect(r.predatorsIntroduced).toBe(true);
     expect(r.legacyTier).toBe(3);
     expect(r.legacyCurrency).toBe(40);

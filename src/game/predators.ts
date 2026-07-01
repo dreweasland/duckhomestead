@@ -1,15 +1,41 @@
 import { BALANCE, PREDATOR_DEFS, type PredatorDef } from '../config/balance';
 import {
   defenseFloor,
+  infirmaryCapacity,
+  infirmaryOccupied,
   type Duck,
   type GameState,
+  type Genome,
   type PredatorEvent,
   type PredatorState,
+  type WoundSeverity,
 } from './state';
 import { woundResistChance } from './genetics';
 import { waterWoundMult } from './water';
 
 const P = BALANCE.PREDATORS;
+const SEVERITIES: WoundSeverity[] = ['minor', 'serious', 'critical'];
+
+/** Roll an injury's severity when it lands. `caught` (a defenses-down active hit)
+ *  rolls the harsher distribution; a Hardy (H-gene) duck has a chance to shrug one
+ *  step milder. Severity drives infirmary recovery time. Shared by predator strikes
+ *  and flock overcrowding. */
+export function rollWoundSeverity(caught: boolean, genome: Genome, rng: () => number): WoundSeverity {
+  const I = P.INFIRMARY;
+  const weights = caught ? I.SEVERITY_WEIGHTS_CAUGHT : I.SEVERITY_WEIGHTS;
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
+  let idx = weights.length - 1;
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r < 0) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx > 0 && rng() < woundResistChance(genome)) idx -= 1; // Hardy shrugs milder
+  return SEVERITIES[idx];
+}
 
 /**
  * predators.ts — Phase 4c risk layer.
@@ -182,6 +208,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   target.wounded = true;
   target.woundSource = 'predator';
   target.woundElapsed = 0;
+  target.severity = rollWoundSeverity(!!opts.activeDefense, target.genome, rng);
   emit(state, { kind: 'wound', predatorId: def.id, duckId: target.id });
 }
 
@@ -400,29 +427,61 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
   }
 }
 
-/** Age every wound by raw `dt`; escalate any that pass the recovery window into
- *  a permanent loss (subject to the offline mercy rail). Runs online & offline.
- *  Phase 4d: water access stretches/tightens the recovery window (the timer
- *  multiplier stays > 0, so there is always time to treat — no new death path). */
+/** Advance every wound by raw `dt`. Three cases per wounded duck:
+ *   - RECOVERING (in an infirmary slot): heal over time (severity + water scaled),
+ *     no escalation; returns to the flock when done.
+ *   - OFFLINE, not admitted: the infirmary auto-admits into any free slot (you're
+ *     away — it runs itself), overflow falls through to escalation.
+ *   - not admitted: age the escalation timer; past the window it's a permanent loss
+ *     (subject to the offline mercy rail).
+ *  Runs online & offline. Water access stretches the escalation window AND speeds
+ *  recovery (the timer multiplier stays > 0 — no new death path). */
 function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void {
-  // Iterate the live array (no per-tick copy); defer removals so we never mutate
-  // state.ducks mid-loop. `lost` stays null unless something actually escalates.
-  // The escalation threshold pulls in the whole water chain (waterWoundMult →
-  // waterProvision/featureProvisions), so compute it lazily — only once we hit a
-  // wounded duck. The common no-wounds tick then skips it entirely.
-  let threshold = -1;
+  const I = P.INFIRMARY;
+  // Lazy — only touched once we hit a wounded duck (the common tick has none). The
+  // water chain (waterWoundMult) and slot count are each O(work), so compute once.
+  let woundMult = -1;
+  let freeSlots = -1;
   let lost: string[] | null = null;
   for (const d of state.ducks) {
     if (!d.wounded) continue;
-    if (threshold < 0) threshold = P.WOUND_ESCALATE_SEC * waterWoundMult(state);
+    if (woundMult < 0) woundMult = waterWoundMult(state);
+
+    if (d.recovering) {
+      // Healing in a slot — good water heals faster (divide by the same mult that
+      // stretches the escalation window). No escalation while recovering.
+      const recSec = (I.RECOVERY_SEC[d.severity ?? 'serious'] ?? I.RECOVERY_SEC.serious) / woundMult;
+      d.recoveryElapsed = (d.recoveryElapsed ?? 0) + dt;
+      if (d.recoveryElapsed >= recSec) {
+        d.wounded = false;
+        d.recovering = false;
+        d.severity = undefined;
+        d.woundElapsed = 0;
+        d.recoveryElapsed = 0;
+      }
+      continue;
+    }
+
+    // Offline the infirmary triages itself — auto-admit waiting wounds into free slots.
+    if (opts.mode === 'offline') {
+      if (freeSlots < 0) freeSlots = infirmaryCapacity(state) - infirmaryOccupied(state);
+      if (freeSlots > 0) {
+        d.recovering = true;
+        d.recoveryElapsed = 0;
+        freeSlots -= 1;
+        continue;
+      }
+    }
+
+    // Not admitted — age the escalation timer toward a permanent loss.
+    const threshold = P.WOUND_ESCALATE_SEC * woundMult;
     d.woundElapsed = (d.woundElapsed ?? 0) + dt;
     if (d.woundElapsed < threshold) continue;
     if (permitPermanentLoss(opts)) {
       emit(state, { kind: 'escalated', duckId: d.id, source: d.woundSource ?? 'predator' });
       (lost ??= []).push(d.id);
     } else {
-      // Mercy rail (offline budget spent): hold at the brink. The player returns
-      // to a wounded duck to TREAT, not a corpse.
+      // Mercy rail (offline budget spent): hold at the brink, don't kill.
       d.woundElapsed = threshold;
     }
   }

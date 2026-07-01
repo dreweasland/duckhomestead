@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
+import { rollWoundSeverity } from './predators';
 import { breedingEstablished, coopCapacity, flockRatio, phenotype, type Duck, type GameState } from './state';
 
 const B = BALANCE.BREEDING;
@@ -39,6 +40,7 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
     victim.wounded = true;
     victim.woundSource = 'overcrowd';
     victim.woundElapsed = 0;
+    victim.severity = rollWoundSeverity(false, victim.genome, rng); // harassment, not a strike
     (state.pendingPredatorEvents ??= []).push({ kind: 'crowdInjury', duckId: victim.id });
   }
 }
