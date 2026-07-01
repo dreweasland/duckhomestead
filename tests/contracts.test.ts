@@ -336,6 +336,16 @@ describe('hatch: breeding stock to spec', () => {
     expect(s.contracts.active?.completed).toBe(true);
   });
 
+  it('a Prime gene (Phase 6c) satisfies a specified slot exactly like the real wanted gene — the shared matcher', () => {
+    const s = pairReady();
+    const pattern: (import('../src/game/state').Gene | null)[] = Array(BALANCE.GENOME.SLOTS).fill(null);
+    pattern[0] = 'V';
+    s.contracts.active = { ...anySpec(), genePattern: pattern };
+    const duckPrime: Duck = { id: 'z', genotype: ['Bl', 'bl'], genome: ['P', 'D', 'D', 'D', 'D', 'D'], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
+    onHatch(s, duckPrime);
+    expect(s.contracts.active?.completed).toBe(true);
+  });
+
   it('a color-gated spec only completes on a matching phenotype', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;

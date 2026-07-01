@@ -13,6 +13,7 @@ import {
   layMult,
   maturationMult,
   recordColor,
+  slotMatches,
   slotOdds,
   targetMatch,
   woundResistChance,
@@ -127,7 +128,7 @@ describe('isGodClone + geneProfile', () => {
     expect(isGodClone(g('LLVHD'), target)).toBe(false); // too short — never a clone
   });
   it('geneProfile tallies each gene in the genome', () => {
-    expect(geneProfile(g('LLVHDD'))).toEqual({ L: 2, V: 1, H: 1, D: 2 });
+    expect(geneProfile(g('LLVHDD'))).toEqual({ L: 2, V: 1, H: 1, D: 2, P: 0 });
   });
 });
 
@@ -263,6 +264,67 @@ describe('phenotype band (free, coarse, intrinsic — the phone-it-in floor)', (
     // and a high-genome duck out-bands a dud regardless of any feed multiplier — the
     // band never multiplies by output, it reads the STAT_PER_GENE ceiling.
     expect(axisTier(g('LLLLLL'), 'lay')).toBeGreaterThan(axisTier(g('DDDDDD'), 'lay'));
+  });
+});
+
+describe('the Prime gene — mutation-only, tier-gated wildcard (Phase 6c)', () => {
+  const G = BALANCE.GENOME;
+
+  it('is a wildcard: matches ANY target gene in targetMatch/isGodClone/slotMatches', () => {
+    expect(slotMatches('P', 'L')).toBe(true);
+    expect(slotMatches('L', 'L')).toBe(true);
+    expect(slotMatches('D', 'L')).toBe(false);
+    expect(targetMatch(g('PPPPPP'), g('LLLLLL'))).toBe(6); // all-wildcard = a perfect match to ANY target
+    expect(targetMatch(g('PLVHDP'), g('LLLLLL'))).toBe(3); // the 2 P's + the 1 real L
+    expect(isGodClone(g('PPPPPP'), g('LLLLLL'))).toBe(true);
+    expect(isGodClone(g('PPPPPD'), g('LLLLLL'))).toBe(false); // one real Dud still breaks it
+  });
+
+  it('is strictly a GENERALIST: every P stat stays below its axis specialist', () => {
+    expect(G.STAT_PER_GENE.P.eggOutput).toBeLessThan(G.STAT_PER_GENE.L.eggOutput);
+    expect(G.STAT_PER_GENE.P.maturationSpeed).toBeLessThan(G.STAT_PER_GENE.V.maturationSpeed);
+    expect(G.STAT_PER_GENE.P.woundResist).toBeLessThan(G.STAT_PER_GENE.H.woundResist);
+  });
+
+  it('never appears in a mutation when primeEligible is false, even forced every slot', () => {
+    // Force the dominance choice AND the mutation roll every slot (both rng()
+    // calls return 0); the third call (uniform gene pick) is real randomness —
+    // maximal opportunity for a bug to leak 'P' in without eligibility.
+    let call = 0;
+    const forceMutation = () => {
+      const slot = call++ % 3;
+      return slot < 2 ? 0 : Math.random();
+    };
+    for (let trial = 0; trial < 300; trial++) {
+      const child = breedGenome(g('DDDDDD'), g('DDDDDD'), forceMutation); // primeEligible defaults false
+      expect(child.includes('P' as Gene)).toBe(false);
+    }
+  });
+
+  it('never appears in SEED_GENE_WEIGHTS or the uniform-mutation gene pool', () => {
+    expect(G.SEED_GENE_WEIGHTS.P).toBeUndefined();
+    expect((G.GENES as readonly string[]).includes('P')).toBe(false);
+  });
+
+  it('breedGenome empirically mirrors slotOdds for a Prime-eligible cross (the preview never lies)', () => {
+    const a = g('LVHDLV');
+    const b = g('DLVHDL');
+    const N = 50000;
+    const counts: Record<Gene, number>[] = Array.from({ length: 6 }, () => ({ L: 0, V: 0, H: 0, D: 0, P: 0 }));
+    for (let i = 0; i < N; i++) {
+      const child = breedGenome(a, b, Math.random, true);
+      child.forEach((gene, slot) => counts[slot][gene]++);
+    }
+    const odds = slotOdds(a, b, true);
+    for (let slot = 0; slot < 6; slot++) {
+      for (const gene of ['L', 'V', 'H', 'D', 'P'] as Gene[]) {
+        const actual = counts[slot][gene] / N;
+        expect(Math.abs(actual - odds[slot][gene])).toBeLessThan(0.02);
+      }
+    }
+    // And a Prime-INeligible cross must show zero chance of P at every slot.
+    const ineligibleOdds = slotOdds(a, b, false);
+    for (const dist of ineligibleOdds) expect(dist.P).toBe(0);
   });
 });
 

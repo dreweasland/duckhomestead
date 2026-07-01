@@ -23,12 +23,14 @@ function migrateGenome(vigor: number | undefined): Genome {
   return genome;
 }
 
-/** A genome is valid iff it's an array of SLOTS genes from the gene set. */
+/** A genome is valid iff it's an array of SLOTS genes from the gene set. Must
+ *  accept 'P' (Phase 6c Prime, mutation-only) — otherwise every Prime-carrying
+ *  save gets its genomes silently rejected (re-rolled) on load. */
 function validGenome(g: unknown): g is Genome {
   return (
     Array.isArray(g) &&
     g.length === BALANCE.GENOME.SLOTS &&
-    g.every((x) => x === 'L' || x === 'V' || x === 'H' || x === 'D')
+    g.every((x) => x === 'L' || x === 'V' || x === 'H' || x === 'D' || x === 'P')
   );
 }
 

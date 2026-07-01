@@ -101,7 +101,8 @@ export function runBreeding(
         continue;
       }
       const genotype = breedGenotype(drake.genotype, hen.genotype);
-      const genome = breedGenome(drake.genome, hen.genome);
+      const primeEligible = state.legacyTier >= BALANCE.GENOME.PRIME_MIN_TIER;
+      const genome = breedGenome(drake.genome, hen.genome, Math.random, primeEligible);
       // God-clone DING fires when a hatch first achieves the target and the flock
       // had none — so it re-fires if you lose every god clone and rebreed one.
       const hadGodClone = state.ducks.some((d) => isGodClone(d.genome, godTarget));

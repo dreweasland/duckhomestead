@@ -149,9 +149,11 @@ export type Sex = 'drake' | 'hen';
 export type Stage = 'duckling' | 'juvenile' | 'adult';
 
 // ── Breeding rework: the hidden 6-gene genome ────────────────────────
-/** A single gene: Lay, Vigor, Hardy, or Dud. */
-export type Gene = 'L' | 'V' | 'H' | 'D';
-export const GENES: Gene[] = ['L', 'V', 'H', 'D'];
+/** A single gene: Lay, Vigor, Hardy, Dud, or (Phase 6c) the mutation-only Prime
+ *  wildcard. `P` is never seeded, never a hatch-spec/target gene — see
+ *  BALANCE.GENOME.PRIME_MIN_TIER and genetics.ts's breedGenome/targetMatch. */
+export type Gene = 'L' | 'V' | 'H' | 'D' | 'P';
+export const GENES: Gene[] = ['L', 'V', 'H', 'D', 'P'];
 /** A duck's heritable quality: GENOME.SLOTS genes, position-linked. */
 export type Genome = Gene[];
 

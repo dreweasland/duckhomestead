@@ -14,7 +14,7 @@ import { buildGeneReader, createPair, placeStation, setGenomeTarget } from '../s
 import { runBreeding } from '../src/game/breeding';
 import { serialize, deserialize } from '../src/game/save';
 import { layMult, targetMatch } from '../src/game/genetics';
-import type { Duck } from '../src/game/state';
+import type { Duck, GameState } from '../src/game/state';
 import { build, fullSetup, stockAll, run, setHens, FLAT_GENOME, genome } from './helpers';
 
 describe('Bl-locus phenotype', () => {
@@ -167,6 +167,48 @@ describe('god-clone target + DING', () => {
     const child = s.ducks.find((d) => d.id !== 'D' && d.id !== 'H')!;
     expect(targetMatch(child.genome, s.genomeTarget)).toBe(BALANCE.GENOME.SLOTS); // a god clone
     expect(s.pendingGodClone).toBe(1); // the DING was queued
+  });
+});
+
+describe('Prime gene integration (Phase 6c): breeding threads legacyTier eligibility', () => {
+  /** A pair ready to hatch on the next runBreeding tick, forced to mutate EVERY
+   *  slot (rng≡0: <MUTATION_CHANCE is always true) — maximal chance to leak
+   *  Prime through if the tier gate weren't wired into breeding.ts. */
+  function pairAboutToHatch(tier: number): { s: GameState; drake: Duck; hen: Duck } {
+    const s = build({ coop: 4 });
+    s.legacyTier = tier;
+    const drake: Duck = { id: 'D', genotype: ['Bl', 'bl'], genome: genome('DDDDDD'), genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 };
+    const hen: Duck = { id: 'H', genotype: ['Bl', 'bl'], genome: genome('DDDDDD'), genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
+    s.ducks = [drake, hen];
+    s.nextDuckId = 50;
+    s.breedingPairs = [{ id: 'p', drakeId: 'D', henId: 'H', clutchProgress: 0, incubating: [BALANCE.BREEDING.INCUBATE_S - 0.5] }];
+    return { s, drake, hen };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('below PRIME_MIN_TIER, a fully-forced mutation NEVER produces a Prime gene', () => {
+    const { s } = pairAboutToHatch(BALANCE.GENOME.PRIME_MIN_TIER - 1);
+    vi.spyOn(Math, 'random').mockReturnValue(0); // forces mutation every slot
+    runBreeding(s, 1);
+    const child = s.ducks.find((d) => d.id !== 'D' && d.id !== 'H')!;
+    expect(child.genome.includes('P' as never)).toBe(false);
+  });
+
+  it('at PRIME_MIN_TIER+, the same forced-mutation roll CAN produce a Prime gene', () => {
+    const { s } = pairAboutToHatch(BALANCE.GENOME.PRIME_MIN_TIER);
+    vi.spyOn(Math, 'random').mockReturnValue(0); // forces mutation AND the prime-share roll
+    runBreeding(s, 1);
+    const child = s.ducks.find((d) => d.id !== 'D' && d.id !== 'H')!;
+    expect(child.genome.every((gene) => gene === 'P')).toBe(true);
+  });
+
+  it('the seed flock never rolls a Prime gene (mutation-only, never seeded)', () => {
+    for (let i = 0; i < 100; i++) {
+      const s = initialState(0);
+      seedFlock(s);
+      for (const d of s.ducks) expect(d.genome.includes('P' as never)).toBe(false);
+    }
   });
 });
 

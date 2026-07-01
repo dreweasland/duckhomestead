@@ -96,6 +96,19 @@ describe('save round-trip', () => {
     expect(r.legacyHall).toEqual(s.legacyHall);
     expect(r.zones.pond.unlocked).toBe(true);
   });
+
+  it('Phase 6c: a Prime-carrying duck genome round-trips intact (validGenome must accept P)', () => {
+    const s = fullSetup();
+    s.ducks = [
+      { id: 'd1', genotype: ['Bl', 'bl'], genome: ['P', 'P', 'L', 'V', 'H', 'D'], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 },
+    ] as Duck[];
+    s.nextDuckId = 2;
+    const r = deserialize(serialize(s), 999);
+    // The footgun: an unaccepted 'P' would have failed validGenome and silently
+    // re-rolled/reset this genome instead of round-tripping it.
+    expect(r.ducks).toEqual(s.ducks);
+    expect(r.ducks[0].genome).toEqual(['P', 'P', 'L', 'V', 'H', 'D']);
+  });
 });
 
 describe('back-compat + robustness', () => {

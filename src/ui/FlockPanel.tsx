@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
+import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotMatches, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
 import { targetForTier } from '../game/prestige';
 import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
@@ -21,6 +21,8 @@ export const GENE_META: Record<Gene, { label: string; color: string }> = {
   V: { label: 'Vigor', color: '#e8c45a' },
   H: { label: 'Hardy', color: '#7fb8e8' },
   D: { label: 'Dud', color: '#6a5a4a' },
+  // Phase 6c: the Prime wildcard — a distinct pixel-gold, never one of the axis colors.
+  P: { label: 'Prime', color: '#ffd23f' },
 };
 
 /**
@@ -126,7 +128,7 @@ const idNum = (d: Duck): number => parseInt(d.id.replace(/^\D+/, ''), 10) || 0;
  * cell is the probability that slot lands that gene, shaded by likelihood. A
  * slot's target gene is ringed so you can read progress-to-target at a glance.
  */
-function OddsPreview({ a, b, target }: { a: Duck; b: Duck; target: Gene[] }) {
+function OddsPreview({ a, b, target, primeEligible }: { a: Duck; b: Duck; target: Gene[]; primeEligible: boolean }) {
   if (!a.genomeKnown || !b.genomeKnown) {
     return (
       <div className="mt-1 text-[10px] text-[#7a6a4a]">
@@ -134,21 +136,26 @@ function OddsPreview({ a, b, target }: { a: Duck; b: Duck; target: Gene[] }) {
       </div>
     );
   }
-  const odds = slotOdds(a.genome, b.genome);
+  const odds = slotOdds(a.genome, b.genome, primeEligible);
+  // Prime (Phase 6c) only ever shows a row once the cross is eligible to roll it
+  // (tier-gated) — an ineligible cross has genuinely zero chance of it.
+  const rows = primeEligible ? [...GENE_ORDER, 'P' as Gene] : GENE_ORDER;
   return (
     <div className="mt-1.5">
       <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[#7a6a4a]">
         Offspring odds (per slot)
       </div>
       <div className="flex flex-col gap-0.5">
-        {GENE_ORDER.map((gene) => (
+        {rows.map((gene) => (
           <div key={gene} className="flex items-center gap-0.5">
             <span className="w-7 text-[9px] font-bold" style={{ color: GENE_META[gene].color }}>
               {gene}
             </span>
             {odds.map((dist, i) => {
               const p = dist[gene];
-              const isTarget = target[i] === gene;
+              // A Prime cell is ALWAYS a target-slot match (the wildcard) — ring it
+              // like any other landed slot, mirroring targetMatch/slotMatches.
+              const isTarget = slotMatches(gene, target[i]);
               return (
                 <span
                   key={i}
@@ -315,6 +322,9 @@ function Breeding({
 }) {
   const B = BALANCE.BREEDING;
   const target = state.genomeTarget;
+  // Phase 6c: Prime only ever rolls in a mutation once the RUN is tier-gated —
+  // the odds preview must mirror breedGenome's own eligibility check exactly.
+  const primeEligible = state.legacyTier >= BALANCE.GENOME.PRIME_MIN_TIER;
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
   // Index by id once: the breeding-pairs list calls byId twice per pair, so a linear
   // `.find` made that O(pairs × ducks) per render (~15Hz while open, ducks up to 216).
@@ -460,7 +470,7 @@ function Breeding({
                     </span>
                   ))}
                 </div>
-                <OddsPreview a={dr} b={he} target={target} />
+                <OddsPreview a={dr} b={he} target={target} primeEligible={primeEligible} />
               </>
             )}
           </div>
@@ -526,7 +536,7 @@ function Breeding({
             {/* Crossbreed-odds preview for the candidate pair (the in-game calculator). */}
             {dr && he && (
               <div className="mt-1.5 rounded bg-[#171009] px-2 py-1.5">
-                <OddsPreview a={dr} b={he} target={target} />
+                <OddsPreview a={dr} b={he} target={target} primeEligible={primeEligible} />
               </div>
             )}
           </div>

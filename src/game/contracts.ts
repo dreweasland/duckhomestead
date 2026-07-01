@@ -1,4 +1,5 @@
 import { BALANCE } from '../config/balance';
+import { slotMatches } from './genetics';
 import { grantModule } from './loot';
 import {
   COLORS,
@@ -200,7 +201,9 @@ export function onHatch(state: GameState, duck: Duck): void {
   if (c.color && phenotype(duck.genotype) !== c.color) return;
   for (let i = 0; i < c.genePattern.length; i++) {
     const want = c.genePattern[i];
-    if (want != null && duck.genome[i] !== want) return;
+    // null = "don't care" slot; otherwise the SAME wildcard rule as targetMatch
+    // (a Prime gene satisfies any wanted slot) — one shared matcher, no drift.
+    if (want != null && !slotMatches(duck.genome[i], want)) return;
   }
   c.completed = true;
 }

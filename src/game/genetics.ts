@@ -21,7 +21,7 @@ function sumStat(genome: Genome, key: 'eggOutput' | 'maturationSpeed' | 'woundRe
 
 /** Count of each gene in a genome — the profile the stats read from. */
 export function geneProfile(genome: Genome): Record<Gene, number> {
-  const p: Record<Gene, number> = { L: 0, V: 0, H: 0, D: 0 };
+  const p: Record<Gene, number> = { L: 0, V: 0, H: 0, D: 0, P: 0 };
   for (const gene of genome) p[gene] += 1;
   return p;
 }
@@ -101,10 +101,21 @@ export function axisTier(genome: Genome, axis: PhenoAxis): number {
   return BALANCE.PHENOTYPE.AXIS_THRESHOLDS.reduce((n, t) => n + (score >= t ? 1 : 0), 0);
 }
 
-/** Slots matching the target profile (0..SLOTS) — distance-to-god-clone, inverted. */
+/** Whether a genome slot counts as matching a wanted gene — the ONE rule for
+ *  "does this gene satisfy this target/spec slot", shared by every place a
+ *  genome is judged against a profile (targetMatch below AND the Grange's
+ *  hatch-spec check, contracts.ts onHatch) so they can't drift. Prime (`P`) is
+ *  a WILDCARD: it counts as matching ANY wanted gene. */
+export function slotMatches(gene: Gene, want: Gene): boolean {
+  return gene === 'P' || gene === want;
+}
+
+/** Slots matching the target profile (0..SLOTS) — distance-to-god-clone,
+ *  inverted. A Prime slot counts as a match against ANY target gene (the
+ *  wildcard) — meanQuality/isGodClone inherit this for free. */
 export function targetMatch(genome: Genome, target: Genome): number {
   let n = 0;
-  for (let i = 0; i < genome.length; i++) if (genome[i] === target[i]) n += 1;
+  for (let i = 0; i < genome.length; i++) if (slotMatches(genome[i], target[i])) n += 1;
   return n;
 }
 
@@ -126,7 +137,15 @@ export function isGodClone(genome: Genome, target: Genome): boolean {
  *      random gene — the occasional upgrade, and the escape hatch from a flock of
  *      two-Dud parents.
  */
-export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random): Genome {
+/**
+ * `primeEligible` (Phase 6c: state.legacyTier >= GENOME.PRIME_MIN_TIER) gates a
+ * MUTATION roll toward the Prime wildcard: with prob PRIME_MUTATION_SHARE it
+ * becomes 'P' instead of the ordinary uniform {L,V,H,D} mutation. Ineligible
+ * (or a plain miss) mutates exactly as before — 'P' NEVER appears otherwise
+ * (never seeded, never a hatch-spec/target gene). Must mirror slotOdds exactly
+ * (see the preview-mirror test) so the odds preview never lies.
+ */
+export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random, primeEligible = false): Genome {
   const dom = G.DOMINANCE;
   const genes = G.GENES;
   const out: Genome = [];
@@ -137,7 +156,7 @@ export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random): Genom
     const wb = dom[gb] ?? 1;
     let gene: Gene = rng() * (wa + wb) < wa ? ga : gb;
     if (rng() < G.MUTATION_CHANCE) {
-      gene = (genes[Math.floor(rng() * genes.length)] as Gene) ?? gene;
+      gene = primeEligible && rng() < G.PRIME_MUTATION_SHARE ? 'P' : ((genes[Math.floor(rng() * genes.length)] as Gene) ?? gene);
     }
     out.push(gene);
   }
@@ -151,10 +170,11 @@ export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random): Genom
  * breedGenome exactly, so the preview never lies. Both parents' genomes must be
  * known to the caller (a "?" genome can't be previewed).
  */
-export function slotOdds(a: Genome, b: Genome): Record<Gene, number>[] {
+export function slotOdds(a: Genome, b: Genome, primeEligible = false): Record<Gene, number>[] {
   const dom = G.DOMINANCE;
   const m = G.MUTATION_CHANCE;
-  const genes = G.GENES;
+  const genes = G.GENES; // the uniform-mutation pool — excludes P by design
+  const primeShare = primeEligible ? G.PRIME_MUTATION_SHARE : 0;
   const out: Record<Gene, number>[] = [];
   for (let i = 0; i < a.length; i++) {
     const ga = a[i];
@@ -163,10 +183,12 @@ export function slotOdds(a: Genome, b: Genome): Record<Gene, number>[] {
     const wb = dom[gb] ?? 1;
     const pa = wa / (wa + wb);
     const pb = wb / (wa + wb);
-    const dist: Record<Gene, number> = { L: 0, V: 0, H: 0, D: 0 };
+    const dist: Record<Gene, number> = { L: 0, V: 0, H: 0, D: 0, P: 0 };
     dist[ga] += (1 - m) * pa; // parent a wins this slot (no mutation)
     dist[gb] += (1 - m) * pb; // parent b wins this slot (no mutation)
-    for (const gn of genes) dist[gn] += m / genes.length; // mutation: uniform
+    dist.P += m * primeShare; // mutation → Prime (eligible crosses only)
+    const uniformShare = m * (1 - primeShare);
+    for (const gn of genes) dist[gn] += uniformShare / genes.length; // mutation: uniform over {L,V,H,D}
     out.push(dist);
   }
   return out;

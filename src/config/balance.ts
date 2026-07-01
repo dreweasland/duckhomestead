@@ -628,17 +628,31 @@ export const BALANCE = {
       V: { eggOutput: 0.05, maturationSpeed: 0.1 },
       H: { woundResist: 0.1, waterSynergy: 0.08 },
       D: {},
+      // Phase 6c: Prime is a GENERALIST, never a specialist — each contribution
+      // stays strictly below its axis's specialist gene (L's eggOutput, V's
+      // maturationSpeed, H's woundResist) so the phenotype-band normalizers
+      // (maxStatPerGene) are untouched and "best at one thing" still holds.
+      P: { eggOutput: 0.08, maturationSpeed: 0.05, woundResist: 0.05 },
     } as Record<string, { eggOutput?: number; maturationSpeed?: number; woundResist?: number; waterSynergy?: number }>,
     /** Hard ceiling on derived wound-resist (a chance to shrug off a wound), so a
      *  full-Hardy clone is very tanky but never invulnerable. */
     WOUND_RESIST_CAP: 0.6,
     // ── inheritance ──
     /** Relative weight a gene passes its slot (good genes weighted to pass → the
-     *  cross is plannable; D rarely wins a contested slot). */
-    DOMINANCE: { L: 3, V: 3, H: 3, D: 1 } as Record<string, number>,
+     *  cross is plannable; D rarely wins a contested slot). Prime's high weight
+     *  is the whole point of catching one — once caught, it tends to pass on. */
+    DOMINANCE: { L: 3, V: 3, H: 3, D: 1, P: 4 } as Record<string, number>,
     /** Per-slot chance the inherited gene is replaced by a uniformly-random gene
      *  (the occasional upgrade / escape from two-Dud parents). */
     MUTATION_CHANCE: 0.04,
+    /** Phase 6c: THE PRIME GENE. Mutation-only, tier-gated wildcard — never in
+     *  SEED_GENE_WEIGHTS, HATCH_GENES, or TARGETS_BY_TIER (see genetics.ts's
+     *  breedGenome/slotOdds + PHASE6c.md). Never appears below this legacy tier. */
+    PRIME_MIN_TIER: 2,
+    /** Share of MUTATION_CHANCE rolls (when Prime-eligible) that resolve to 'P'
+     *  instead of the ordinary uniform {L,V,H,D} mutation — ≈0.02 × 0.04 =
+     *  ~0.08%/slot/hatch. Ultra rare; the lottery-ticket long-tail chase. */
+    PRIME_MUTATION_SHARE: 0.02,
     // ── gene-reader (Step 3) ──
     /** Eggs to build the gene-reader. Once built it reveals genomes passively/in
      *  bulk (the whole flock at build time, then every new duck auto-reads on
