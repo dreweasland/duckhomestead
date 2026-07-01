@@ -677,6 +677,22 @@ export const BALANCE = {
     TIER_CURRENCY_GROWTH: 1.5,
     CURRENCY_OVERSHOOT_EXP: 1.3,
     CURRENCY_QUALITY_EXP: 1.5,
+    /**
+     * The champion gate's target profile per tier — AUTHORITATIVE (the player's
+     * genomeTarget is a tracking aid only; letting it drive the gate meant you
+     * could point the gate at whatever the flock already was). Hand-authored so
+     * each tier demands a genuinely different breeding LINE; cycles past the end.
+     * Patterned entries (alternating/paired slots) are real new puzzles because
+     * inheritance is position-linked. Tier 0 matches GENOME.DEFAULT_TARGET.
+     */
+    TARGETS_BY_TIER: [
+      ['L', 'L', 'L', 'L', 'L', 'L'], // T0: the classic lay god-clone
+      ['L', 'L', 'V', 'V', 'H', 'H'], // T1: the generalist — three lines at once
+      ['H', 'H', 'H', 'H', 'H', 'H'], // T2: the tank (pairs with 6c siege predators)
+      ['V', 'V', 'V', 'V', 'L', 'L'], // T3: growth-heavy
+      ['L', 'H', 'L', 'H', 'L', 'H'], // T4: alternating — a pure position puzzle
+      ['H', 'H', 'V', 'V', 'L', 'L'], // T5: the generalist, re-slotted
+    ] as readonly (readonly string[])[],
     /** Stackable global-scalar boosts. perLevel = fractional bump per level;
      *  cost for level L = round(baseCost · costGrowth^L). Renown/Husbandry (6a)
      *  hit the two clocks that actually pace a re-run — rank XP and the breeding

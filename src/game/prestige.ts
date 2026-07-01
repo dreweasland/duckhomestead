@@ -1,6 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { targetMatch } from './genetics';
-import { COLORS, initialState, type ChampionSnapshot, type GameState } from './state';
+import { COLORS, initialState, type ChampionSnapshot, type GameState, type Genome } from './state';
 
 /**
  * prestige.ts — Phase 4e meta loop.
@@ -30,12 +30,25 @@ export const BOOST_IDS: BoostId[] = [
 ];
 
 // ── The champion goal: three concrete requirements ───────────────────
-/** Live average flock GENOME QUALITY = mean slots matching the god-clone target
- *  (0..GENOME.SLOTS; 0 when there's no flock). The breeding-mastery axis. */
+/**
+ * The tier-authoritative champion target. The gate, currency, snapshot, and
+ * god-clone DING all read THIS — never the player-set tracking target (which
+ * would let you point the gate at whatever the flock already is). Rotates
+ * through hand-authored profiles so each tier is a NEW breeding puzzle, then
+ * cycles. Returns a fresh copy (callers may hold/mutate it).
+ */
+export function targetForTier(tier: number): Genome {
+  const targets = P.TARGETS_BY_TIER;
+  return [...targets[tier % targets.length]] as Genome;
+}
+
+/** Live average flock GENOME QUALITY = mean slots matching the TIER's champion
+ *  target (0..GENOME.SLOTS; 0 when there's no flock). The breeding-mastery axis. */
 export function meanQuality(state: GameState): number {
   const n = state.ducks.length;
   if (n === 0) return 0;
-  return state.ducks.reduce((a, d) => a + targetMatch(d.genome, state.genomeTarget), 0) / n;
+  const target = targetForTier(state.legacyTier);
+  return state.ducks.reduce((a, d) => a + targetMatch(d.genome, target), 0) / n;
 }
 
 /** Distinct colours bred this run (the dex). */
@@ -160,10 +173,11 @@ export const husbandryBoostMult = (state: GameState): number => boostMult(state,
 // ── The reset ────────────────────────────────────────────────────────
 /** A memorial snapshot of the flock about to be wiped. */
 export function championSnapshot(state: GameState, now: number): ChampionSnapshot {
+  const target = targetForTier(state.legacyTier);
   return {
     tier: state.legacyTier + 1,
     meanQuality: meanQuality(state),
-    bestQuality: state.ducks.reduce((m, d) => Math.max(m, targetMatch(d.genome, state.genomeTarget)), 0),
+    bestQuality: state.ducks.reduce((m, d) => Math.max(m, targetMatch(d.genome, target)), 0),
     flockSize: state.ducks.length,
     colors: [...state.dexSeen],
     timestamp: now,
@@ -184,6 +198,9 @@ export function prestigeReset(state: GameState, now: number): GameState {
   fresh.legacyCurrency = state.legacyCurrency + granted;
   fresh.purchasedBoosts = { ...state.purchasedBoosts };
   fresh.legacyHall = [...state.legacyHall, snapshot];
+  // Start the tracking target on the NEW tier's puzzle (the player can retune it;
+  // the gate reads targetForTier regardless).
+  fresh.genomeTarget = targetForTier(fresh.legacyTier);
   return fresh;
 }
 

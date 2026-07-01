@@ -561,11 +561,12 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
   return done(true);
 }
 
-// ── God-clone target (the player's breeding goal) ─────────────────────
+// ── Tracking target (the player's breeding-workbench goal) ────────────
 /**
- * Set the god-clone target profile the flock is steered toward. Drives the
- * genome-quality readouts, the Legacy Score, and the god-clone DING. Validated
- * to GENOME.SLOTS genes from the gene set; rejected otherwise.
+ * Set the TRACKING target the flock browser/pair-preview measures against — a
+ * planning aid only. The champion gate, currency, and god-clone DING read the
+ * tier-authoritative targetForTier() (prestige.ts), never this. Validated to
+ * GENOME.SLOTS genes from the gene set; rejected otherwise.
  */
 export function setGenomeTarget(state: GameState, target: Gene[]): ActionResult<unknown> {
   const genes = BALANCE.GENOME.GENES as readonly string[];

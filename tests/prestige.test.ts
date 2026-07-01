@@ -19,6 +19,7 @@ import {
   prestigeCurrency,
   prestigeReset,
   championSnapshot,
+  targetForTier,
   boostCost,
   buyBoost,
   boostMult,
@@ -45,6 +46,14 @@ const duck = (id: string, q: number, o: Partial<Duck> = {}): Duck => {
     ageTicks: 5,
     ...o,
   };
+};
+
+/** A duck matching the GIVEN target in its first `q` slots ('D' elsewhere — no
+ *  rotation target contains a Dud, so unmatched slots never match by accident). */
+const duckFor = (id: string, target: Gene[], q: number, o: Partial<Duck> = {}): Duck => {
+  const m = Math.max(0, Math.min(BALANCE.GENOME.SLOTS, Math.round(q)));
+  const genome = Array.from({ length: BALANCE.GENOME.SLOTS }, (_, i): Gene => (i < m ? target[i] : 'D'));
+  return { ...duck(id, 0, o), genome };
 };
 
 /** A deliberately messy, deep-into-the-game run — everything that could dangle. */
@@ -111,13 +120,15 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     const reset = prestigeReset(s, NOW);
 
     // The single strongest assertion: the reset deep-equals initialState() with
-    // ONLY the four meta fields overridden. If any run field survived (a duck, a
-    // pair, an unlocked zone, a non-default ration, a stray module/wound), this fails.
+    // ONLY the meta fields (+ the new tier's tracking target) overridden. If any
+    // run field survived (a duck, a pair, an unlocked zone, a non-default ration,
+    // a stray module/wound), this fails.
     const expected = initialState(NOW);
     expected.legacyTier = 3;
     expected.legacyCurrency = 7 + prestigeCurrency(s);
     expected.purchasedBoosts = { output: 3, eggValue: 1 };
     expected.legacyHall = [...s.legacyHall, championSnapshot(s, NOW)];
+    expected.genomeTarget = targetForTier(3); // tracking starts on the new tier's puzzle
     expect(reset).toEqual(expected);
   });
 
@@ -134,7 +145,7 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expect(reset.dust).toBe(0);
     expect(reset.rank).toBe(1);
     expect(reset.geneReader).toBe(false); // a fresh run must re-build the reader
-    expect(reset.genomeTarget).toEqual([...BALANCE.GENOME.DEFAULT_TARGET]);
+    expect(reset.genomeTarget).toEqual(targetForTier(3)); // tracking = the new tier's gate target
     expect(reset.predatorsIntroduced).toBe(false);
     expect(reset.ration).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 });
     expect(zoneUnlocked(reset, 'yard')).toBe(true);
@@ -232,16 +243,73 @@ describe('champion goal: three concrete requirements', () => {
   });
 
   it('a flock that clears tier 0 can FAIL the higher tier-1 quality gate', () => {
-    // mean quality 4.55: clears tier-0 gate 4.5, but not tier-1's 4.6.
+    // mean quality 4.55 AGAINST EACH TIER'S OWN TARGET: clears tier-0's gate 4.5,
+    // but not tier-1's 4.6 — the bar itself rises even at equal mastery.
     const mk = (tier: number) => {
       const s = { ...initialState(0), legacyTier: tier };
-      // 110 ducks at quality 5 + 90 at quality 4 → mean 4.55.
-      s.ducks = Array.from({ length: 200 }, (_, i) => duck(`v${i}`, i < 110 ? 5 : 4));
+      // 110 ducks at quality 5 + 90 at quality 4 → mean 4.55 (built vs the tier's target).
+      s.ducks = Array.from({ length: 200 }, (_, i) => duckFor(`v${i}`, targetForTier(tier), i < 110 ? 5 : 4));
       s.dexSeen = ['black', 'blue', 'splash'];
       return s;
     };
     expect(championGoal(mk(0)).quality.met).toBe(true);
     expect(championGoal(mk(1)).quality.met).toBe(false);
+  });
+});
+
+describe('Phase 6a: the gate target is tier-authoritative and ROTATES', () => {
+  it('targetForTier cycles through TARGETS_BY_TIER (and tier 0 matches the old default)', () => {
+    const targets = BALANCE.PRESTIGE.TARGETS_BY_TIER;
+    expect(targetForTier(0)).toEqual([...BALANCE.GENOME.DEFAULT_TARGET]);
+    for (let t = 0; t < targets.length; t++) expect(targetForTier(t)).toEqual([...targets[t]]);
+    expect(targetForTier(targets.length)).toEqual(targetForTier(0)); // cycles
+    expect(targetForTier(targets.length + 2)).toEqual(targetForTier(2));
+  });
+
+  it('every rotation target is a valid Dud-free profile (always breedable-toward)', () => {
+    for (const t of BALANCE.PRESTIGE.TARGETS_BY_TIER) {
+      expect(t).toHaveLength(BALANCE.GENOME.SLOTS);
+      for (const g of t) expect(['L', 'V', 'H']).toContain(g);
+    }
+  });
+
+  it('the gate IGNORES the player-set tracking target (the self-set-gate exploit is closed)', () => {
+    const champ = championRun();
+    const before = meanQuality(champ);
+    expect(championGoal(champ).quality.met).toBe(true);
+    // Point the tracking target at the flock's exact profile — the old exploit.
+    champ.genomeTarget = ['L', 'L', 'L', 'L', 'L', 'D'] as Gene[];
+    expect(meanQuality(champ)).toBe(before);
+    expect(prestigeCurrency(champ)).toBe(currencyAtSize(champ, champ.ducks.length));
+    // And pointing it somewhere absurd doesn't break readiness either.
+    champ.genomeTarget = ['D', 'D', 'D', 'D', 'D', 'D'] as Gene[];
+    expect(canPrestige(champ)).toBe(true);
+  });
+
+  it('quality is judged per-tier: a lay flock aces T0 (all-L) but flunks T2 (all-H)', () => {
+    const mk = (tier: number) => {
+      const s = { ...initialState(0), legacyTier: tier };
+      s.ducks = Array.from({ length: 10 }, (_, i) => duck(`q${i}`, 6)); // all-L god clones
+      return s;
+    };
+    expect(meanQuality(mk(0))).toBe(BALANCE.GENOME.SLOTS); // perfect vs LLLLLL
+    expect(meanQuality(mk(2))).toBe(0); // worthless vs HHHHHH — a NEW puzzle
+  });
+
+  it('the threshold grant rises with tier at the SAME relative mastery', () => {
+    const mk = (tier: number) => {
+      const s = { ...initialState(0), legacyTier: tier };
+      // Exactly at the size target, perfect quality vs the tier's own target.
+      s.ducks = Array.from({ length: sizeTarget(s) }, (_, i) =>
+        duckFor(`g${i}`, targetForTier(tier), BALANCE.GENOME.SLOTS),
+      );
+      s.dexSeen = ['black', 'blue', 'splash'];
+      return s;
+    };
+    const g0 = prestigeCurrency(mk(0));
+    const g1 = prestigeCurrency(mk(1));
+    expect(g0).toBeGreaterThanOrEqual(BALANCE.PRESTIGE.CURRENCY_AT_THRESHOLD);
+    expect(g1).toBeGreaterThan(g0); // deeper legacies bank more — boost costs keep escalating
   });
 });
 
