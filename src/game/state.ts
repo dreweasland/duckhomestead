@@ -505,7 +505,10 @@ export function initialPredators(): Record<string, PredatorState> {
 /** Total secure slots from built Secure Coops. A duck can be secured (excluded
  *  from targeting) only while secured ducks ≤ this. */
 export function secureCapacity(state: GameState): number {
-  return state.secureCoops * BALANCE.PREDATORS.SECURE_SLOTS_PER_COOP;
+  const P = BALANCE.PREDATORS;
+  if (state.secureCoops <= 0) return 0;
+  // First coop = SECURE_SLOTS_PER_COOP; each additional = SECURE_SLOTS_ADDITIONAL.
+  return P.SECURE_SLOTS_PER_COOP + (state.secureCoops - 1) * P.SECURE_SLOTS_ADDITIONAL;
 }
 
 /** Total recovery slots across all built infirmaries. */
@@ -519,6 +522,20 @@ export function infirmaryOccupied(state: GameState): number {
   for (const d of state.ducks) if (d.recovering) n++;
   return n;
 }
+
+/** Escalating build cost: the (built+1)th defense of a kind costs base ×
+ *  DEFENSE_COST_GROWTH^built — so each additional one is a real decision. */
+function defenseBuildCost(base: number, built: number): number {
+  return Math.round(base * Math.pow(BALANCE.PREDATORS.DEFENSE_COST_GROWTH, built));
+}
+export const deterrentCost = (state: GameState): number =>
+  defenseBuildCost(BALANCE.PREDATORS.DETERRENT_COST_EGGS, state.deterrents);
+export const hardwareClothCost = (state: GameState): number =>
+  defenseBuildCost(BALANCE.PREDATORS.HARDWARE_CLOTH_COST_EGGS, state.hardwareCloth);
+export const secureCoopCost = (state: GameState): number =>
+  defenseBuildCost(BALANCE.PREDATORS.SECURE_COOP_COST_EGGS, state.secureCoops);
+export const infirmaryCost = (state: GameState): number =>
+  defenseBuildCost(BALANCE.PREDATORS.INFIRMARY.COST_EGGS, state.infirmaries);
 
 /** Homestead-wide protection floor from built deterrents (capped), scaled by their
  *  integrity. Passive and offline-safe, but it WEARS — a neglected floor sags

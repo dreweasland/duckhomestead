@@ -2,7 +2,17 @@ import { BALANCE, PREDATOR_DEFS } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { currentThreat } from '../game/predators';
 import { waterWoundMult } from '../game/water';
-import { defenseFloor, infirmaryCapacity, infirmaryOccupied, secureCapacity, type GameState } from '../game/state';
+import {
+  defenseFloor,
+  deterrentCost as deterrentCostFn,
+  hardwareClothCost as hardwareClothCostFn,
+  infirmaryCapacity,
+  infirmaryCost as infirmaryCostFn,
+  infirmaryOccupied,
+  secureCapacity,
+  secureCoopCost as secureCoopCostFn,
+  type GameState,
+} from '../game/state';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, EggIcon, HealIcon, NetIcon, OwlIcon, ShieldIcon } from './icons';
 import { useEscapeKey } from './useEscapeKey';
@@ -42,10 +52,11 @@ export function WatchPanel({
   const threat = currentThreat(state);
   const wounded = state.ducks.filter((d) => d.wounded);
 
-  const deterrentCost = P.DETERRENT_COST_EGGS;
-  const secureCost = P.SECURE_COOP_COST_EGGS;
+  // Build costs escalate with each of a kind already built (the price shown is the NEXT).
+  const deterrentCost = deterrentCostFn(state);
+  const secureCost = secureCoopCostFn(state);
   // Infirmary: recovery slots for wounded ducks (admit = the save; slots are scarce).
-  const infCost = P.INFIRMARY.COST_EGGS;
+  const infCost = infirmaryCostFn(state);
   const infCap = infirmaryCapacity(state);
   const infUsed = infirmaryOccupied(state);
   const infFree = infCap - infUsed;
@@ -67,7 +78,7 @@ export function WatchPanel({
 
   // Hardware cloth (ground defense vs the raccoon) — shown once the raccoon debuts.
   const raccoonHere = (state.predatorsSeen ?? []).includes('raccoon');
-  const clothCost = P.HARDWARE_CLOTH_COST_EGGS;
+  const clothCost = hardwareClothCostFn(state);
   const clothFloorPct = Math.round(defenseFloor(state, 'cloth') * 100);
   const clothMaxed = state.hardwareCloth * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP;
   const clothIntegrity = state.hardwareClothIntegrity;

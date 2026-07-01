@@ -371,7 +371,12 @@ export const BALANCE = {
      *  RECOVERING duck (admitted to the infirmary) lays nothing instead. */
     WOUND_OUTPUT_MULT: 0.5,
 
-    /** Eggs to build one deterrent (raises the floor). */
+    /** Every BUILT defense (nets, cloth, secure coops, infirmaries) escalates in cost:
+     *  the Nth of a kind costs its base × DEFENSE_COST_GROWTH^(N-1). Eggs are abundant
+     *  by the time predators bite, so flat costs were trivially cheap — escalation
+     *  makes each additional defense a real decision. (Repairs stay wear-prorated.) */
+    DEFENSE_COST_GROWTH: 1.5,
+    /** Eggs to build the FIRST deterrent (then × DEFENSE_COST_GROWTH each). */
     DETERRENT_COST_EGGS: 150,
     /** Eggs to build one length of hardware cloth (the GROUND defense — raises the
      *  floor against the raccoon, exactly as nets do against the owl, but a separate
@@ -392,7 +397,11 @@ export const BALANCE = {
     /** Eggs to build one Secure Coop. Each adds SECURE_SLOTS_PER_COOP slots; a
      *  duck marked secured (up to the slot total) is excluded from targeting. */
     SECURE_COOP_COST_EGGS: 400,
+    /** The FIRST secure coop adds this many slots; each additional one adds
+     *  SECURE_SLOTS_ADDITIONAL. Diminishing slots + escalating cost together keep
+     *  securing to a few PRIZE breeders — securing the whole flock is prohibitive. */
     SECURE_SLOTS_PER_COOP: 4,
+    SECURE_SLOTS_ADDITIONAL: 2,
 
     /**
      * The Infirmary. Wounds are no longer instantly cured for eggs — a wounded duck
@@ -403,7 +412,7 @@ export const BALANCE = {
      * night; offline the infirmary auto-admits up to capacity.
      */
     INFIRMARY: {
-      COST_EGGS: 250, // eggs to build one infirmary
+      COST_EGGS: 250, // eggs for the FIRST infirmary (then × DEFENSE_COST_GROWTH each)
       SLOTS_PER: 2, // recovery slots each infirmary adds
       /** Recovery time (seconds) by injury severity, before the water multiplier
        *  (recovery = RECOVERY_SEC / waterWoundMult — good water heals faster). */
