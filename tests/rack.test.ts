@@ -8,7 +8,14 @@ import {
   autoFillRack,
   bulkSalvageByTier,
 } from '../src/game/actions';
-import { spareOutlook, rackBonus } from '../src/game/loot';
+import {
+  spareOutlook,
+  rackBonus,
+  installMarginal,
+  moduleContribution,
+  rackScore,
+  activeStatWeights,
+} from '../src/game/loot';
 import { build } from './helpers';
 
 let id = 0;
@@ -200,5 +207,57 @@ describe('install / swap / uninstall flow + outlook', () => {
     expect(uninstallModule(s, m.id).ok).toBe(true);
     expect(s.rack).toHaveLength(0);
     expect(s.inventory.some((x) => x.id === m.id)).toBe(true);
+  });
+});
+
+// The marginal-value math behind the Auto-fill optimizer + the spare "upgrade?" hints.
+describe('marginal scoring: installMarginal / moduleContribution / rackScore', () => {
+  it('a lone installed module contributes its full applied bonus (== the rack bonus)', () => {
+    const s = build({ plot: 1 });
+    const m = mod('stationYield', 'rare', 0.2);
+    s.rack = [m];
+    // Only module of its stat, so removing it drops the whole bonus to 0.
+    expect(moduleContribution(s, m)).toBeCloseTo(rackBonus(s, 'stationYield'), 10);
+    expect(moduleContribution(s, m)).toBeGreaterThan(0);
+  });
+
+  it('KEY INVARIANT: a spare gains exactly what it will then contribute once installed', () => {
+    const s = build({ plot: 1 });
+    s.rack = [mod('stationYield', 'common', 0.1)];
+    const spare = mod('stationYield', 'epic', 0.3);
+    const predictedGain = installMarginal(s, spare);
+    s.rack = [...s.rack, spare]; // install it
+    // The delta the optimizer used to decide === the delta it now actually holds.
+    expect(moduleContribution(s, spare)).toBeCloseTo(predictedGain, 10);
+  });
+
+  it('marginal value diminishes as the same stat stacks (soft cap)', () => {
+    const s = build({ plot: 1 });
+    const spare = mod('stationYield', 'rare', 0.2);
+    s.rack = [];
+    const first = installMarginal(s, spare); // into an empty rack
+    s.rack = [mod('stationYield', 'rare', 0.2), mod('stationYield', 'rare', 0.2)];
+    const later = installMarginal(s, spare); // onto an already-stacked stat
+    expect(later).toBeLessThan(first);
+    expect(later).toBeGreaterThan(0);
+  });
+
+  it('marginal value is independent of OTHER stats in the rack', () => {
+    const s = build({ plot: 1 });
+    const spare = mod('stationYield', 'rare', 0.2);
+    s.rack = [];
+    const alone = installMarginal(s, spare);
+    s.rack = [mod('stationSpeed', 'legendary', 0.4), mod('tendPower', 'epic', 0.3)];
+    const withOtherStats = installMarginal(s, spare);
+    expect(withOtherStats).toBeCloseTo(alone, 10);
+  });
+
+  it('rackScore rewards a strictly-stronger loadout; an empty rack scores 0', () => {
+    const s = build({ plot: 1 });
+    const w = activeStatWeights(s);
+    expect(rackScore([], w)).toBe(0);
+    expect(rackScore([mod('stationYield', 'legendary', 0.4)], w)).toBeGreaterThan(
+      rackScore([mod('stationYield', 'common', 0.1)], w),
+    );
   });
 });
