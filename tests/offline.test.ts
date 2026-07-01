@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { runOfflineCatchUp } from '../src/game/save';
-import { build, fullSetup, stockAll, setHens, INGREDIENTS } from './helpers';
+import { build, fullSetup, stockAll, setHens, run, INGREDIENTS } from './helpers';
 
 const N = BALANCE.NUTRITION;
 const HOUR = 3600 * 1000;
@@ -56,6 +56,27 @@ describe('offline catch-up × nutrition', () => {
     const a2 = runOfflineCatchUp(future, 0);
     expect(a2.creditedSeconds).toBe(0);
     expect(Object.keys(a2.produced)).toHaveLength(0);
+  });
+
+  it('offline production equals online production × OFFLINE_RATE_MULT (raw producers)', () => {
+    const T = 3600; // 1 hour, well under the 8h cap
+    const mult = BALANCE.OFFLINE_RATE_MULT;
+
+    // Lone plots: no flock → no nutrition or predators to muddy the comparison.
+    const online = build({ plot: 3 });
+    const beforeOn = online.resources.corn;
+    run(online, T);
+    const gainedOnline = online.resources.corn - beforeOn;
+
+    const offline = build({ plot: 3 });
+    const beforeOff = offline.resources.corn;
+    offline.lastSeen = -T * 1000;
+    runOfflineCatchUp(offline, 0);
+    const gainedOffline = offline.resources.corn - beforeOff;
+
+    expect(gainedOnline).toBeGreaterThan(0);
+    // Offline is the same sim, only throttled by the rate multiplier.
+    expect(gainedOffline / gainedOnline).toBeCloseTo(mult, 2);
   });
 
   it('idle exposes you: long offline with no niacin leaves a duck limping', () => {

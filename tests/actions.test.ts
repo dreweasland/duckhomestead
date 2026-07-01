@@ -47,6 +47,33 @@ describe('move', () => {
     expect(moveStation(s, id, 4, 4).ok).toBe(true);
     expect(s.stations[0]).toMatchObject({ x: 4, y: 4 });
   });
+
+  it('allows dropping a station back on its OWN tile (drag-to-origin is not "occupied")', () => {
+    const s = initialState(0);
+    s.resources.eggs = 1000;
+    placeStation(s, 'plot', 2, 2);
+    const st = s.stations[0];
+    expect(moveStation(s, st.id, 2, 2).ok).toBe(true); // own tile → allowed
+    expect(st).toMatchObject({ x: 2, y: 2 });
+  });
+
+  it('preserves the station level, buffer, and cycle progress (only its position changes)', () => {
+    const s = initialState(0);
+    s.resources.eggs = 100000;
+    placeStation(s, 'plot', 0, 0);
+    const st = s.stations[0];
+    st.level = 3;
+    st.buffer = { corn: 12 };
+    st.cycleProgress = 1.5;
+    expect(moveStation(s, st.id, 5, 5).ok).toBe(true);
+    expect(st).toMatchObject({ x: 5, y: 5, level: 3, cycleProgress: 1.5 });
+    expect(st.buffer).toEqual({ corn: 12 });
+  });
+
+  it('rejects moving a station that does not exist', () => {
+    const s = initialState(0);
+    expect(moveStation(s, 'nope', 1, 1).ok).toBe(false);
+  });
 });
 
 describe('remove', () => {

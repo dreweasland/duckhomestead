@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { serialize, deserialize } from '../src/game/save';
+import { type Duck, type Module } from '../src/game/state';
 import { fullSetup } from './helpers';
 
 const N = BALANCE.NUTRITION;
@@ -27,6 +28,64 @@ describe('save round-trip', () => {
     expect(r.resources.mealworms).toBe(88);
     expect(r.stations.find((x) => x.type === 'coop')!.debuffed).toBe(true);
     expect(r.stations[0].level).toBe(3);
+  });
+
+  it('preserves the full Phase 4 deep-game state (breeding / loot / predators / prestige / zones)', () => {
+    const s = fullSetup();
+    // breeding
+    s.ducks = [
+      { id: 'd1', genotype: ['Bl', 'bl'], genome: ['L', 'L', 'V', 'H', 'D', 'L'], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 3, secured: true },
+      { id: 'd2', genotype: ['bl', 'bl'], genome: ['D', 'D', 'D', 'D', 'D', 'D'], genomeKnown: false, sex: 'drake', stage: 'juvenile', ageTicks: 1, wounded: true, woundElapsed: 7, woundSource: 'predator' },
+    ] as Duck[];
+    s.nextDuckId = 3;
+    s.breedingPairs = [{ id: 'p1', drakeId: 'd2', henId: 'd1', clutchProgress: 4, incubating: [1, 2] }];
+    s.nextPairId = 2;
+    s.genomeTarget = ['L', 'L', 'V', 'H', 'D', 'L'];
+    s.geneReader = true;
+    s.dexSeen = ['black', 'blue'];
+    // loot
+    s.rack = [{ id: 'm1', stat: 'stationYield', rarity: 'epic', magnitude: 0.3 }] as Module[];
+    s.inventory = [{ id: 'm2', stat: 'tendPower', rarity: 'rare', magnitude: 0.2 }] as Module[];
+    s.nextModuleId = 3;
+    s.dust = 55;
+    s.statWeights = { ...s.statWeights, stationYield: 3 };
+    s.statWeightPreset = 'idle';
+    // predators
+    s.deterrents = 2;
+    s.deterrentIntegrity = 0.6;
+    s.secureCoops = 1;
+    s.predatorsIntroduced = true;
+    // prestige
+    s.legacyTier = 3;
+    s.legacyCurrency = 40;
+    s.purchasedBoosts = { output: 2, eggValue: 1 };
+    s.legacyHall = [{ tier: 1, meanQuality: 4.2, bestQuality: 6, flockSize: 80, colors: ['black'], timestamp: 123 }];
+    // zones
+    s.zones.pond.unlocked = true;
+
+    const r = deserialize(serialize(s), 999);
+    expect(r.ducks).toEqual(s.ducks);
+    expect(r.nextDuckId).toBe(3);
+    expect(r.breedingPairs).toEqual(s.breedingPairs);
+    expect(r.nextPairId).toBe(2);
+    expect(r.genomeTarget).toEqual(s.genomeTarget);
+    expect(r.geneReader).toBe(true);
+    expect(r.dexSeen).toEqual(['black', 'blue']);
+    expect(r.rack).toEqual(s.rack);
+    expect(r.inventory).toEqual(s.inventory);
+    expect(r.nextModuleId).toBe(3);
+    expect(r.dust).toBe(55);
+    expect(r.statWeights.stationYield).toBe(3);
+    expect(r.statWeightPreset).toBe('idle');
+    expect(r.deterrents).toBe(2);
+    expect(r.deterrentIntegrity).toBe(0.6);
+    expect(r.secureCoops).toBe(1);
+    expect(r.predatorsIntroduced).toBe(true);
+    expect(r.legacyTier).toBe(3);
+    expect(r.legacyCurrency).toBe(40);
+    expect(r.purchasedBoosts).toEqual({ output: 2, eggValue: 1 });
+    expect(r.legacyHall).toEqual(s.legacyHall);
+    expect(r.zones.pond.unlocked).toBe(true);
   });
 });
 
