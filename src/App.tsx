@@ -251,7 +251,7 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-full w-full p-4">
+    <div className={`min-h-full w-full p-4 ${threat?.phase === 'open' ? 'threat-cursor' : ''}`}>
       {milestoneFlash > 0 && (
         <div key={milestoneFlash} className="milestone-flash pointer-events-none fixed inset-0 z-40" />
       )}
@@ -538,17 +538,25 @@ export default function App() {
             state.secureCoops > 0 ||
             state.ducks.some((d) => d.wounded)) &&
             (() => {
-              // Reuse the hoisted `threat`; compute the wound count once.
-              const woundedCount = state.ducks.reduce((n, d) => n + (d.wounded ? 1 : 0), 0);
-              const attention = threat != null || woundedCount > 0;
+              // Reuse the hoisted `threat`; split waiting-wounded (urgent — admit them)
+              // from recovering (safe, in a slot). Only waiting/threat flags attention.
+              let waiting = 0;
+              let recovering = 0;
+              for (const d of state.ducks) {
+                if (d.recovering) recovering++;
+                else if (d.wounded) waiting++;
+              }
+              const attention = threat != null || waiting > 0;
               const label =
-                woundedCount > 0
-                  ? `${woundedCount} wounded`
-                  : threat?.phase === 'open'
-                    ? `hunting ${Math.ceil(threat.seconds)}s`
-                    : threat?.phase === 'incoming'
-                      ? `in ${Math.ceil(threat.seconds)}s`
-                      : `floor ${Math.round(defenseFloor(state) * 100)}%`;
+                waiting > 0
+                  ? `${waiting} wounded`
+                  : recovering > 0
+                    ? `${recovering} recovering`
+                    : threat?.phase === 'open'
+                      ? `hunting ${Math.ceil(threat.seconds)}s`
+                      : threat?.phase === 'incoming'
+                        ? `in ${Math.ceil(threat.seconds)}s`
+                        : `floor ${Math.round(defenseFloor(state) * 100)}%`;
               return (
                 <button
                   onClick={() => setWatchOpen(true)}
