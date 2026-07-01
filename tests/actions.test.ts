@@ -9,6 +9,8 @@ import {
   upgradeCost,
   outputPerCycle,
   UPGRADE_OUTPUT,
+  PRODUCER_OUTPUT,
+  producerMaxed,
 } from '../src/game/actions';
 import { build, run } from './helpers';
 
@@ -122,12 +124,26 @@ describe('outputPerCycle — the UI yield mirrors the sim', () => {
     expect(s.resources.corn - before).toBeCloseTo(perCycle * 10, 6);
   });
 
-  it('scales with station level by the upgrade curve', () => {
+  it('a producer scales on the gentler CAPPED curve, not the standard upgrade curve', () => {
     const s = build({ plot: 1 });
     const plot = plotOf(s);
     const lvl1 = cornPerCycle(s, plot);
     plot.level = 3;
-    expect(cornPerCycle(s, plot)).toBeCloseTo(lvl1 * (UPGRADE_OUTPUT(3) / UPGRADE_OUTPUT(1)), 10);
+    expect(cornPerCycle(s, plot)).toBeCloseTo(lvl1 * (PRODUCER_OUTPUT(3) / PRODUCER_OUTPUT(1)), 10);
+    // ...and it's gentler than the standard curve a coop/mill would use.
+    expect(PRODUCER_OUTPUT(3)).toBeLessThan(UPGRADE_OUTPUT(3));
+  });
+
+  it('producer output CAPS at levelCap — past it upgrades are blocked (build another)', () => {
+    const cap = BALANCE.UPGRADE.PRODUCER.levelCap;
+    expect(PRODUCER_OUTPUT(cap + 5)).toBe(PRODUCER_OUTPUT(cap)); // no output past the cap
+    const s = build({ plot: 1 });
+    s.resources.eggs = 1e12;
+    const plot = plotOf(s);
+    plot.level = cap;
+    expect(producerMaxed(plot)).toBe(true);
+    expect(upgradeStation(s, plot.id).ok).toBe(false); // can't waste eggs upgrading a maxed producer
+    expect(plot.level).toBe(cap); // unchanged
   });
 
   it('scales up with installed rack yield', () => {

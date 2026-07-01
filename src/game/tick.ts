@@ -1,7 +1,7 @@
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import type { Resource } from './state';
 import type { GameState, Station } from './state';
-import { UPGRADE_OUTPUT } from './actions';
+import { UPGRADE_OUTPUT, stationOutputMult } from './actions';
 import { cycleMult, yieldMult } from './loot';
 import { outputBoostMult, speedBoostMult } from './prestige';
 import { runNutrition, runDucklingNutrition, runDrakeNutrition } from './nutrition';
@@ -32,7 +32,7 @@ export interface TickOptions {
  *  recomputing the O(rack) yieldMult per cycle/output was pure waste). */
 function stationOutput(station: Station, resource: Resource, throughput: number): number {
   const base = STATION_DEFS[station.type].outputs[resource] ?? 0;
-  return base * UPGRADE_OUTPUT(station.level) * throughput;
+  return base * stationOutputMult(station.type, station.level) * throughput;
 }
 
 
