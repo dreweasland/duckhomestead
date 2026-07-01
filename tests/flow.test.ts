@@ -38,6 +38,29 @@ describe('resourceFlow — currency in/out breakdown', () => {
   });
 });
 
+// The net (in − out) is what the ResourceFlowPanel colours green (growing) / red
+// (draining). Pin the sign so the panel can never read backwards.
+describe('resourceFlow — net drain vs growth (in − out)', () => {
+  it('an ingredient consumed but not produced drains: out > in, net < 0', () => {
+    const s = stockAll(build({ mill: 1, coop: 1 })); // NO mealworm producer
+    setHens(s, 4);
+    run(s, 60); // settle nutrition so the layers are actively feeding
+    const f = resourceFlow(s, 'mealworms');
+    expect(f.in).toBe(0); // nothing produces mealworms
+    expect(f.out).toBeGreaterThan(0); // the layers eat them (DEFAULT_RATION.mealworms = 1)
+    expect(f.in - f.out).toBeLessThan(0); // net < 0 → the panel shows red (draining)
+  });
+
+  it('an ingredient produced but not consumed grows: in > out, net > 0', () => {
+    const s = build({ plot: 2 });
+    s.ration = { corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 };
+    const f = resourceFlow(s, 'corn');
+    expect(f.in).toBeGreaterThan(0); // two plots produce corn
+    expect(f.out).toBe(0); // nothing consumes it (ration zeroed, no ducklings/pairs)
+    expect(f.in - f.out).toBeGreaterThan(0); // net > 0 → green (growing)
+  });
+});
+
 describe('millLoad — feed demand vs mill capacity', () => {
   it('a small flock with a mill has capacity headroom (ratio < 1, finite)', () => {
     const s = stockAll(setHens(fullSetup(), 2));
