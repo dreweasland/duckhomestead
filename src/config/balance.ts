@@ -375,7 +375,7 @@ export const BALANCE = {
      *  the Nth of a kind costs its base × DEFENSE_COST_GROWTH^(N-1). Eggs are abundant
      *  by the time predators bite, so flat costs were trivially cheap — escalation
      *  makes each additional defense a real decision. (Repairs stay wear-prorated.) */
-    DEFENSE_COST_GROWTH: 1.5,
+    DEFENSE_COST_GROWTH: 1.6,
     /** Eggs to build the FIRST deterrent (then × DEFENSE_COST_GROWTH each). */
     DETERRENT_COST_EGGS: 150,
     /** Eggs to build one length of hardware cloth (the GROUND defense — raises the
