@@ -764,7 +764,10 @@ function rollSeedGenome(): Genome {
   const genome: Genome = [];
   for (let i = 0; i < BALANCE.GENOME.SLOTS; i++) {
     let r = Math.random() * total;
-    let pick: Gene = GENES[GENES.length - 1];
+    // Fallback must be a HARMLESS gene: GENES' last entry became 'P' (Phase 6c,
+    // mutation-only) — an FP-rounding miss in the weighted walk must never seed
+    // a Prime. 'D' matches the Dud-leaning intent of the seed roll.
+    let pick: Gene = 'D';
     for (const g of GENES) {
       r -= w[g] ?? 0;
       if (r < 0) {
