@@ -329,6 +329,25 @@ export const SwoopOwlIcon = (p: PixProps) => (
   />
 );
 
+/** The raccoon — a masked ground raider. Front-facing so it reads as it scurries in. */
+export const RaccoonIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ g: '#8f8f8f', d: '#4a4a4a', k: '#1a1410', w: '#e6e6e6' }}
+    rows={[
+      '..d.....d..',
+      '.dgd...dgd.',
+      '.ggggggggg.',
+      'gkkkgggkkkg',
+      'gkwkgggkwkg',
+      'gkkkgggkkkg',
+      '.ggkkkkkgg.',
+      '..ggkkkgg..',
+      '...dkwkd...',
+    ]}
+  />
+);
+
 /** Protection floor / deterrent netting — a woven mesh. */
 export const NetIcon = (p: PixProps) => (
   <Pix

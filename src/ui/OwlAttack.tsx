@@ -3,7 +3,7 @@ import { playScare } from '../audio/sfx';
 import type { GameEngine } from '../game/engine';
 import { activeStrike } from '../game/predators';
 import type { GameState } from '../game/state';
-import { SwoopOwlIcon } from './icons';
+import { RaccoonIcon, SwoopOwlIcon } from './icons';
 
 /**
  * The interactive owl — the active "be present" save made real. While a strike is
@@ -54,7 +54,7 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
   const onScare = () => {
     if (!strike) return;
     const spot = DIVE_SPOTS[strike.strike.spot % DIVE_SPOTS.length];
-    const res = engine.scare('owl');
+    const res = engine.scare(strike.predatorId); // scare THIS predator (owl or raccoon)
     if (!res) return;
     if (res.kind === 'foiled') playScare(); // feint's re-dive screech plays via onPredator
     setPuff({ id: Date.now(), kind: res.kind, left: spot.left, top: spot.top });
@@ -68,6 +68,8 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
   const multi = s ? s.clicksLanded > 0 : false; // reveal pips only once it's juked
   // ACTIVE play: the passive floor is suppressed, so the scare is mandatory.
   const active = state.activeRemaining > 0;
+  // The raccoon scurries up from the ground; the owl dives from above — different art.
+  const isRaccoon = strike?.predatorId === 'raccoon';
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[70] overflow-hidden">
@@ -97,11 +99,11 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
               wind-up, ending on the reticle. Keyed by (id, clicks) so a feint
               restarts the dive at the new spot. */}
           <button
-            key={`owl-${s.id}-${s.clicksLanded}`}
+            key={`pred-${s.id}-${s.clicksLanded}`}
             type="button"
             onClick={onScare}
-            aria-label="Scare off the owl"
-            className="owl-swoop pointer-events-auto absolute flex flex-col items-center"
+            aria-label={`Scare off the ${isRaccoon ? 'raccoon' : 'owl'}`}
+            className={`${isRaccoon ? 'raccoon-scurry' : 'owl-swoop'} pointer-events-auto absolute flex flex-col items-center`}
             style={
               {
                 left: `${spot.left}%`,
@@ -110,8 +112,8 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
               } as CSSProperties
             }
           >
-            <span className="owl-flap inline-block">
-              <SwoopOwlIcon size={84} />
+            <span className={`${isRaccoon ? 'raccoon-waddle' : 'owl-flap'} inline-block`}>
+              {isRaccoon ? <RaccoonIcon size={76} /> : <SwoopOwlIcon size={84} />}
             </span>
             <span
               className={`mt-1 whitespace-nowrap rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-wider shadow ring-1 ${

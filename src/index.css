@@ -154,6 +154,43 @@ body {
   animation: owl-flap 0.32s ease-in-out infinite;
 }
 
+/* The RACCOON's raid: a GROUND predator, so it scurries UP from the bottom edge of
+   the board toward the target (the opposite read of the owl's dive from above).
+   Duration is set inline to the wind-up, same as the owl. */
+@keyframes raccoon-scurry {
+  0% {
+    top: 120%;
+    transform: translate(-50%, -50%) scale(0.7) rotate(4deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    top: var(--spot-top, 58%);
+    transform: translate(-50%, -50%) scale(1.35) rotate(-4deg);
+    opacity: 1;
+  }
+}
+.raccoon-scurry {
+  animation: raccoon-scurry linear both;
+}
+
+/* A quick side-to-side scamper layered on the approach — the ground analog of the
+   owl's wing-beat. */
+@keyframes raccoon-waddle {
+  0%,
+  100% {
+    transform: translateX(-1.5px) rotate(-3deg);
+  }
+  50% {
+    transform: translateX(1.5px) rotate(3deg);
+  }
+}
+.raccoon-waddle {
+  animation: raccoon-waddle 0.24s ease-in-out infinite;
+}
+
 /* Danger vignette: a red edge-glow that pulses over the board while a dive is in
    flight — the unmissable "an attack is happening NOW" cue. */
 @keyframes danger-vignette {
@@ -238,7 +275,8 @@ body {
     animation: none;
     filter: brightness(1.2);
   }
-  .owl-flap {
+  .owl-flap,
+  .raccoon-waddle {
     animation: none;
   }
   /* Danger vignette — a static red edge-glow instead of a pulse. */
@@ -254,10 +292,11 @@ body {
   }
   /* The diving owl — no swoop; drop it straight onto the landing spot, fully
      visible and clickable, so the scare interaction still works. */
-  .owl-swoop {
+  .owl-swoop,
+  .raccoon-scurry {
     animation: none;
     top: var(--spot-top, 58%);
-    transform: translate(-50%, -50%) scale(1.4);
+    transform: translate(-50%, -50%) scale(1.35);
     opacity: 1;
   }
 }

@@ -102,6 +102,20 @@ describe('GameEngine.scare()', () => {
     expect(strike!.clicksLanded).toBe(1);
     expect(strike!.windupRemaining).toBe(strike!.windupTotal); // reaction window fully reset
   });
+
+  it('scares the RACCOON too, not just the owl (the overlay passes the real predatorId)', () => {
+    const eng = new GameEngine(0);
+    eng.state.predators.raccoon = {
+      timeToNextWindow: 0,
+      windowRemaining: 10,
+      windowElapsed: 0,
+      attacksFired: 1,
+      strike: { targetId: 'r1', windupRemaining: 2, windupTotal: 5, id: 1, spot: 0, clicksRequired: 1, clicksLanded: 0 },
+    };
+    const r = eng.scare('raccoon');
+    expect(r).toEqual({ kind: 'foiled', duckId: 'r1' });
+    expect(eng.state.predators.raccoon.strike).toBeUndefined();
+  });
 });
 
 describe('GameEngine.cullExcessDrakes()', () => {
