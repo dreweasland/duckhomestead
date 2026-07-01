@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { playCollect, playRemove, playUpgrade } from '../audio/sfx';
 import { BALANCE, STATION_DEFS } from '../config/balance';
-import { millLoad, outputPerCycle, stationStatus, upgradeCost } from '../game/actions';
+import { millLoad, outputPerCycle, producerMaxed, stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import { coopCapacity, type GameState, type Resource, type Station } from '../game/state';
 import {
@@ -72,7 +72,8 @@ export function StationBar({
 
   const def = STATION_DEFS[station.type];
   const cost = upgradeCost(station);
-  const canUpgrade = state.resources.eggs >= cost;
+  const maxed = producerMaxed(station); // producer at its output cap — build another instead
+  const canUpgrade = !maxed && state.resources.eggs >= cost;
   const onCooldown = station.tendCooldownRemaining > 0;
   const hasBuffer = Object.values(station.buffer).some((v) => (v ?? 0) > 0);
   const status = stationStatus(state, station);
@@ -196,13 +197,18 @@ export function StationBar({
             flash(r.ok ? 'Upgraded!' : r.reason);
           }}
           disabled={!canUpgrade}
+          title={maxed ? 'Output capped — build another producer to grow' : undefined}
           className={`${btn} ${canUpgrade ? 'bg-[#e2b94f] text-[#2a2018] hover:bg-[#efc864]' : off}`}
         >
           <UpgradeIcon size={12} /> Upgrade
-          <span className="inline-flex items-center gap-0.5">
-            <EggIcon size={10} />
-            {cost}
-          </span>
+          {maxed ? (
+            <span className="font-black tracking-wide">MAX</span>
+          ) : (
+            <span className="inline-flex items-center gap-0.5">
+              <EggIcon size={10} />
+              {cost}
+            </span>
+          )}
         </button>
         {!state.autoHaulUnlocked && (
           <button

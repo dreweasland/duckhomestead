@@ -32,6 +32,35 @@ export function UPGRADE_OUTPUT(level: number): number {
   return Math.pow(BALANCE.UPGRADE.outputMultPerLevel, level - 1);
 }
 
+/** The ingredient producers (plot + the four ingredient farms). They scale on a
+ *  gentler, CAPPED curve so producer COUNT grows with the flock (fill the board),
+ *  rather than one towering tile feeding everything. Coops + mill are NOT here. */
+export const INGREDIENT_PRODUCERS = new Set<StationType>([
+  'plot',
+  'peaPatch',
+  'mealwormFarm',
+  'yeastVat',
+  'oysterSource',
+]);
+
+/** Output multiplier for an ingredient producer: gentler slope, capped at levelCap. */
+export function PRODUCER_OUTPUT(level: number): number {
+  const { outputMultPerLevel, levelCap } = BALANCE.UPGRADE.PRODUCER;
+  return Math.pow(outputMultPerLevel, Math.min(level, levelCap) - 1);
+}
+
+/** Output multiplier for a station: the capped producer curve for ingredient farms,
+ *  the standard uncapped upgrade curve for everything else (coops, mill). */
+export function stationOutputMult(type: StationType, level: number): number {
+  return INGREDIENT_PRODUCERS.has(type) ? PRODUCER_OUTPUT(level) : UPGRADE_OUTPUT(level);
+}
+
+/** A producer at its output cap — further upgrades would cost eggs for no gain, so
+ *  they're blocked (build another producer instead). Non-producers never cap. */
+export function producerMaxed(station: Station): boolean {
+  return INGREDIENT_PRODUCERS.has(station.type) && station.level >= BALANCE.UPGRADE.PRODUCER.levelCap;
+}
+
 /** Egg cost to upgrade a station from its current level to the next. */
 export function upgradeCost(station: Station): number {
   const base = BALANCE.UPGRADE.baseCost[station.type];
@@ -73,7 +102,7 @@ export function outputPerCycle(
   throughputMult = yieldMult(state) * outputBoostMult(state),
 ): { resource: Resource; amount: number }[] {
   const def = STATION_DEFS[station.type];
-  const m = UPGRADE_OUTPUT(station.level) * throughputMult;
+  const m = stationOutputMult(station.type, station.level) * throughputMult;
   return (Object.keys(def.outputs) as Resource[])
     .map((resource) => ({ resource, amount: (def.outputs[resource] ?? 0) * m }))
     .filter((o) => o.amount > 0);
@@ -246,6 +275,7 @@ export function unlockZone(state: GameState, zoneId: string): ActionResult<{ nam
 export function upgradeStation(state: GameState, stationId: string): ActionResult<Station> {
   const station = state.stations.find((s) => s.id === stationId);
   if (!station) return fail('No such station');
+  if (producerMaxed(station)) return fail('At max level — build another producer');
   const cost = upgradeCost(station);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;

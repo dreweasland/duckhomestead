@@ -103,6 +103,17 @@ export const BALANCE = {
     costGrowth: 1.6,
     /** Output multiplier per level. Level N output = base * mult^(N-1). */
     outputMultPerLevel: 1.5,
+    /**
+     * Ingredient producers (the plot + the four ingredient farms) scale on a
+     * GENTLER, CAPPED curve instead of the geometric one above. With the full
+     * 1.5^(N-1) curve a single upgraded tile feeds thousands, so a big flock never
+     * needs a second producer — you can bulldoze ~90% of the board. The capped curve
+     * makes producer COUNT scale with the flock: the board fills (build wide first —
+     * placement is already cheaper per unit than upgrading — then top out at the
+     * cap), and the per-zone board size bounds the flock (grow by unlocking the next
+     * zone). Housing (coops) + mill blend capacity keep the full uncapped curve.
+     */
+    PRODUCER: { outputMultPerLevel: 1.3, levelCap: 14 },
   },
 
   // ── Online vs Offline (the core law) ────────────────────────────────
