@@ -389,7 +389,9 @@ export default function App() {
                 the water canvases (which have their own header). The wrapper
                 ignores pointer events so the board beneath stays clickable. */}
             {activeZone === 'yard' && (
-              <div className="pointer-events-none absolute inset-x-0 top-1.5 z-10 flex justify-center">
+              // Vertically centered in the board's empty top headroom (canvas OY 30 +
+              // the box's p-2) so there's equal brown above and below the pills.
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-[38px] items-center justify-center">
                 <div className="pointer-events-auto">
                   <StatusPills state={state} />
                 </div>
