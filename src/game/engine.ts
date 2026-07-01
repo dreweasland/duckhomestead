@@ -93,7 +93,7 @@ export interface TendEvent {
 /** Emitted when a module enters the inventory — the loot moment. */
 export interface LootEvent {
   module: Module;
-  source: 'drop' | 'milestone';
+  source: 'drop' | 'milestone' | 'siege';
 }
 
 /** Emitted when a never-before-bred color first hatches — the collection DING. */
@@ -259,6 +259,12 @@ export class GameEngine {
     if (!pending || pending.length === 0) return;
     for (const e of pending) {
       onContractPredatorEvent(this.state, e);
+      if (e.kind === 'siegeFoiled') {
+        // Sim-side grant already ran (grantModule pushed into state.inventory);
+        // this is purely the surfacing beat — a flawless siege IS a banner moment.
+        const module = this.state.inventory.find((m) => m.id === e.moduleId);
+        if (module) this.emitLoot({ module, source: 'siege' });
+      }
       if (e.kind === 'introduced') {
         const raccoon = e.predatorId === 'raccoon';
         this.emitDing({

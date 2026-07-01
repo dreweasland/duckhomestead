@@ -373,6 +373,16 @@ describe('defense: prove the watch', () => {
     expect((s.contracts.active as { scareProgress: number }).scareProgress).toBe(0);
   });
 
+  it('a siege scare (Phase 6c) feeds an active defense contract exactly like any other predator — no special-casing', () => {
+    const s = initialState(0);
+    s.legacyTier = C.UNLOCK_TIER;
+    s.contracts.active = { id: 'd1', type: 'defense', notch: 0, reward: { dust: 0, shards: 0 }, completed: false, scareTarget: 2, scareProgress: 0 };
+    onPredatorEvent(s, { kind: 'scared', predatorId: 'greatHorned', duckId: 'd0' });
+    expect((s.contracts.active as { scareProgress: number }).scareProgress).toBe(1);
+    onPredatorEvent(s, { kind: 'scared', predatorId: 'greatHorned', duckId: 'd0' });
+    expect(s.contracts.active?.completed).toBe(true);
+  });
+
   it('an offline attack (real predator wound) never touches an active defense contract', () => {
     const s = build({ coop: 1 });
     s.rank = BALANCE.PREDATORS.INTRO_RANK;

@@ -331,6 +331,77 @@ describe('the siege (The Great Horned) — tier-gated, offline-frozen EVENT (Pha
   });
 });
 
+describe('the siege jackpot — flawless-defense grant + streak (Phase 6c)', () => {
+  const SIEGE = PREDATOR_DEFS.find((d) => d.id === 'greatHorned')!;
+  const JACKPOT = SIEGE.jackpot!;
+
+  /** Force greatHorned's window to close THIS tick with a given committed-dive /
+   *  landed tally, so resolveJackpot's grading fires deterministically. */
+  function closeWindow(s: GameState, dives: number, landed: number): void {
+    s.predators.greatHorned = {
+      timeToNextWindow: 0,
+      windowRemaining: 0.5,
+      windowElapsed: 10,
+      attacksFired: dives,
+      jackpotDives: dives,
+      jackpotLanded: landed,
+    };
+    runPredators(s, 1, { mode: 'online', rng: never }); // dt exceeds remaining -> closes
+  }
+
+  function readySiege(): GameState {
+    const s = flock(6);
+    s.rank = SIEGE.introRank;
+    s.legacyTier = SIEGE.minLegacyTier!;
+    s.predatorsSeen = ['greatHorned'];
+    return s;
+  }
+
+  it('a flawless window (≥1 committed dive, zero landed) pays dust + a guaranteed module exactly once', () => {
+    const s = readySiege();
+    const before = s.dust;
+    closeWindow(s, 3, 0);
+    expect(s.dust).toBe(before + JACKPOT.dust);
+    expect(s.inventory.length).toBe(1);
+    expect(s.inventory[0].rarity).toBe(JACKPOT.moduleRarity);
+    const ev = events(s).find((e) => e.kind === 'siegeFoiled') as { moduleId: string; dust: number } | undefined;
+    expect(ev).toBeTruthy();
+    expect(ev!.dust).toBe(JACKPOT.dust);
+    expect(ev!.moduleId).toBe(s.inventory[0].id);
+    expect(s.predatorFlawlessStreak).toBe(1);
+  });
+
+  it('one landed hit voids the jackpot AND resets the flawless streak', () => {
+    const s = readySiege();
+    s.predatorFlawlessStreak = 2; // two prior flawless sieges this run
+    const before = s.dust;
+    closeWindow(s, 3, 1); // one of the three dives landed
+    expect(s.dust).toBe(before); // no grant
+    expect(s.inventory.length).toBe(0);
+    expect(events(s).some((e) => e.kind === 'siegeFoiled')).toBe(false);
+    expect(s.predatorFlawlessStreak).toBe(0); // voided
+  });
+
+  it('a window with zero committed dives grades neither way (streak untouched)', () => {
+    const s = readySiege();
+    s.predatorFlawlessStreak = 2;
+    closeWindow(s, 0, 0);
+    expect(s.predatorFlawlessStreak).toBe(2); // untouched — nothing to grade
+    expect(events(s).some((e) => e.kind === 'siegeFoiled')).toBe(false);
+  });
+
+  it('the streak\'s Nth consecutive flawless siege upgrades the grant to the streak rarity', () => {
+    const s = readySiege();
+    closeWindow(s, 1, 0); // streak 1
+    expect(s.inventory[0].rarity).toBe(JACKPOT.moduleRarity);
+    closeWindow(s, 1, 0); // streak 2
+    expect(s.inventory[1].rarity).toBe(JACKPOT.moduleRarity);
+    closeWindow(s, 1, 0); // streak 3 === streakForLegendary -> upgraded
+    expect(s.predatorFlawlessStreak).toBe(3);
+    expect(s.inventory[2].rarity).toBe(JACKPOT.flawlessStreakRarity);
+  });
+});
+
 describe('brutality dial defaults OFF', () => {
   it('ALLOW_INSTANT_SNATCH is false', () => {
     expect(P.ALLOW_INSTANT_SNATCH).toBe(false);

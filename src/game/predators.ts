@@ -8,10 +8,12 @@ import {
   type Genome,
   type PredatorEvent,
   type PredatorState,
+  type Rarity,
   type WoundSeverity,
 } from './state';
 import { woundResistChance } from './genetics';
 import { waterWoundMult } from './water';
+import { grantModule } from './loot';
 
 const P = BALANCE.PREDATORS;
 const SEVERITIES: WoundSeverity[] = ['minor', 'serious', 'critical'];
@@ -245,19 +247,28 @@ export function rankDifficulty(state: GameState): number {
   return Math.max(0, Math.min(1, (state.rank - P.INTRO_RANK) / span));
 }
 
-/** Dive wind-up (reaction window) in seconds, shrinking with rank difficulty. */
-export function strikeWindupSec(state: GameState): number {
+/** Dive wind-up (reaction window) in seconds, shrinking with rank difficulty.
+ *  A def with `windupScale` set (siege) OVERRIDES the rank ramp with a fixed
+ *  fraction of STRIKE_WINDUP_SEC — a siege stays harsh regardless of rank. */
+export function strikeWindupSec(state: GameState, def?: PredatorDef): number {
+  if (def?.windupScale != null) return P.STRIKE_WINDUP_SEC * def.windupScale;
   const d = rankDifficulty(state);
   return P.STRIKE_WINDUP_SEC * (1 + (P.RANK_WINDUP_MIN_SCALE - 1) * d);
 }
 
-/** Weighted pick of how many scare clicks a strike needs (1..3), interpolating the
- *  distribution from the easy default toward the hard one as rank climbs. */
-function pickClicksRequired(state: GameState, rng: () => number): number {
-  const d = rankDifficulty(state);
-  const easy = P.STRIKE_CLICK_WEIGHTS;
-  const hard = P.STRIKE_CLICK_WEIGHTS_HARD;
-  const w = easy.map((e, i) => e + ((hard[i] ?? e) - e) * d);
+/** Weighted pick of how many scare clicks a strike needs (1..N), interpolating the
+ *  distribution from the easy default toward the hard one as rank climbs. A def
+ *  with `clickWeights` set (siege) OVERRIDES this with a fixed distribution. */
+function pickClicksRequired(state: GameState, rng: () => number, def?: PredatorDef): number {
+  let w: readonly number[];
+  if (def?.clickWeights != null) {
+    w = def.clickWeights;
+  } else {
+    const d = rankDifficulty(state);
+    const easy = P.STRIKE_CLICK_WEIGHTS;
+    const hard = P.STRIKE_CLICK_WEIGHTS_HARD;
+    w = easy.map((e, i) => e + ((hard[i] ?? e) - e) * d);
+  }
   const total = w.reduce((a, b) => a + b, 0);
   let r = rng() * total;
   for (let i = 0; i < w.length; i++) {
@@ -288,16 +299,19 @@ function beginStrike(state: GameState, def: PredatorDef, ps: PredatorState, rng:
   const target = pickTarget(state, rng);
   if (!target) return; // nothing exposed — no dive
   const id = (state.predatorStrikeSeq = (state.predatorStrikeSeq ?? 0) + 1);
-  const windup = strikeWindupSec(state);
+  const windup = strikeWindupSec(state, def);
   ps.strike = {
     targetId: target.id,
     windupRemaining: windup,
     windupTotal: windup,
     id,
     spot: pickSpot(rng),
-    clicksRequired: pickClicksRequired(state, rng),
+    clicksRequired: pickClicksRequired(state, rng, def),
     clicksLanded: 0,
   };
+  // Jackpot-eligible predators (siege) count each COMMITTED dive this window —
+  // the flawless-defense grant needs ≥1 to ever pay out.
+  if (def.jackpot) ps.jackpotDives = (ps.jackpotDives ?? 0) + 1;
   emit(state, { kind: 'winding', predatorId: def.id, duckId: target.id });
 }
 
@@ -317,6 +331,7 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
     // committed dive lands (the scare was the only defense). The floor didn't engage,
     // so it doesn't wear: your nets/cloth only erode while they're actually doing the
     // job (idle/offline). Actively scaring keeps them pristine.
+    if (def.jackpot) ps.jackpotLanded = (ps.jackpotLanded ?? 0) + 1;
     landHit(state, def, opts, target, rng);
     return;
   }
@@ -325,6 +340,7 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
   const success = attackChance(state, def, true);
   if (rng() >= success) return; // missed — defenses/presence held
   wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
+  if (def.jackpot) ps.jackpotLanded = (ps.jackpotLanded ?? 0) + 1;
   landHit(state, def, opts, target, rng);
 }
 
@@ -440,7 +456,9 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
       else resolveAttack(state, def, opts, rng);
     }
     if (ps.windowRemaining <= 0) {
-      // Window closed — schedule the next interval.
+      // Window closed — grade any jackpot-eligible flawless defense, then schedule
+      // the next interval.
+      resolveJackpot(state, def, ps, rng);
       ps.windowElapsed = 0;
       ps.attacksFired = 0;
       ps.timeToNextWindow = def.windowEverySec;
@@ -459,11 +477,40 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     ps.windowElapsed = 0;
     ps.attacksFired = 0;
     ps.windowAttacks = rollWindowAttacks(def, rng); // hidden 1..3 — no "2 and done"
+    // Jackpot-eligible predators re-arm their per-window dive/landed tally.
+    if (def.jackpot) {
+      ps.jackpotDives = 0;
+      ps.jackpotLanded = 0;
+    }
     // The window weathers the floor only when the floor is on duty (idle/offline). An
     // actively-scaring player isn't relying on it, so it doesn't erode.
     if (!opts.activeDefense) wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_WINDOW);
     emit(state, { kind: 'open', predatorId: def.id });
   }
+}
+
+/** Grade a jackpot-eligible predator's window at close: a flawless defense (≥1
+ *  committed dive, zero landed) grants dust + a guaranteed module — upgraded to
+ *  the streak rarity once the same-run flawless streak crosses
+ *  streakForLegendary. A landed hit voids this window's grant AND resets the
+ *  streak. A window with zero committed dives (nothing was ever exposed) grades
+ *  neither way. Sim-side grant; surfaced via a 'siegeFoiled' event so the engine
+ *  drain fires the loot banner (the module is already in state.inventory). */
+function resolveJackpot(state: GameState, def: PredatorDef, ps: PredatorState, rng: () => number): void {
+  const jackpot = def.jackpot;
+  if (!jackpot) return;
+  const dives = ps.jackpotDives ?? 0;
+  const landed = ps.jackpotLanded ?? 0;
+  if (dives === 0) return;
+  if (landed > 0) {
+    state.predatorFlawlessStreak = 0;
+    return;
+  }
+  const streak = (state.predatorFlawlessStreak = (state.predatorFlawlessStreak ?? 0) + 1);
+  const rarity = (streak >= jackpot.streakForLegendary ? jackpot.flawlessStreakRarity : jackpot.moduleRarity) as Rarity;
+  state.dust += jackpot.dust;
+  const module = grantModule(state, rarity, rng);
+  emit(state, { kind: 'siegeFoiled', predatorId: def.id, dust: jackpot.dust, moduleId: module.id });
 }
 
 /** Advance every wound by raw `dt`. Three cases per wounded duck:

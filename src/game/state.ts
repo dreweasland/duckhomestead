@@ -402,6 +402,11 @@ export interface GameState {
   /** Monotonic counter for telegraphed strikes, so each dive carries a distinct
    *  id the UI can key its swoop animation on. Runtime-only. */
   predatorStrikeSeq?: number;
+  /** Phase 6c: consecutive FLAWLESS jackpot-eligible siege windows this run (a
+   *  landed hit voids the current window's jackpot AND resets this to 0). At
+   *  def.jackpot.streakForLegendary it upgrades the grant to the streak rarity.
+   *  Resets to 0 on prestige for free (a fresh initialState omits it). */
+  predatorFlawlessStreak?: number;
 
   // ── Phase 4e: prestige (META — the ONLY state that survives a reset) ──
   /** Times prestiged. Drives the current Legacy Score threshold. */
@@ -461,6 +466,12 @@ export interface PredatorState {
    *  Never set offline (catch-up resolves immediately) and dropped on load, so it
    *  is pure runtime feedback, never authoritative. */
   strike?: PendingStrike;
+  /** Phase 6c (jackpot-eligible predators only, i.e. def.jackpot is set): dives
+   *  committed / landed THIS window, reset when the window opens. A window
+   *  closing with ≥1 committed dive and zero landed is a flawless defense — the
+   *  jackpot grant. Unused (stays undefined) for non-jackpot predators. */
+  jackpotDives?: number;
+  jackpotLanded?: number;
 }
 
 /** A telegraphed strike mid-dive: which duck, and how long until it lands. The
@@ -497,7 +508,11 @@ export type PredatorEvent =
   | { kind: 'crowdInjury'; duckId: string }
   | { kind: 'wound'; predatorId: string; duckId: string }
   | { kind: 'snatched'; predatorId: string; duckId: string }
-  | { kind: 'escalated'; duckId: string; source?: 'predator' | 'overcrowd' };
+  | { kind: 'escalated'; duckId: string; source?: 'predator' | 'overcrowd' }
+  // Phase 6c: a jackpot-eligible siege window closed flawless (≥1 committed
+  // dive, zero landed) — grantModule already ran sim-side; the engine drain
+  // surfaces this as the loot banner (the module is already in state.inventory).
+  | { kind: 'siegeFoiled'; predatorId: string; dust: number; moduleId: string };
 
 // ── Phase 6b: THE GRANGE (contracts board) ───────────────────────────
 /** The three contract shapes — a discriminated union so a new type later is a

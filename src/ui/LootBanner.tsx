@@ -40,7 +40,7 @@ export function LootBanner({ loot, onDone }: Props) {
       }}
     >
           <div className="text-[10px] font-bold uppercase tracking-widest text-white/80">
-            {source === 'milestone' ? 'Milestone reward' : 'Loot drop'}
+            {source === 'milestone' ? 'Milestone reward' : source === 'siege' ? 'Flawless siege' : 'Loot drop'}
           </div>
           <div
             className="text-lg font-black uppercase tracking-wide drop-shadow"
