@@ -373,6 +373,10 @@ export const BALANCE = {
 
     /** Eggs to build one deterrent (raises the floor). */
     DETERRENT_COST_EGGS: 150,
+    /** Eggs to build one length of hardware cloth (the GROUND defense — raises the
+     *  floor against the raccoon, exactly as nets do against the owl, but a separate
+     *  pool: nets don't stop raccoons and cloth doesn't stop owls). */
+    HARDWARE_CLOTH_COST_EGGS: 180,
     /**
      * Deterrents weather: their protection floor scales with an integrity meter
      * (1 = pristine). Each threat window weathers them a little; a landed attack
@@ -420,6 +424,9 @@ export const BALANCE = {
     /** Predators stay dormant until the player has a flock AND reaches this rank,
      *  so the risk layer never ambushes a brand-new homestead mid-onboarding. */
     INTRO_RANK: 3,
+    /** Rank the raccoon (the second, ground predator) debuts — later than the owl,
+     *  so a second threat + defense line arrives as the homestead grows. */
+    RACCOON_INTRO_RANK: 8,
 
     /** Offline mercy rail: a single catch-up can permanently lose AT MOST this
      *  fraction of the (non-secured) flock — past it, escalating wounds are held
@@ -439,6 +446,16 @@ export const BALANCE = {
       // Hidden per-window roll: sometimes 1 dive (quiet), usually 2, sometimes 3 (a
       // swarm). Mean stays 2, but you can never bank on "2 already hit, I'm safe."
       attackCountWeights: [0.25, 0.5, 0.25],
+    },
+    /** The RACCOON: a ground raider. Rarer, longer windows than the owl, stopped by
+     *  hardware cloth (not nets). Debuts at RACCOON_INTRO_RANK. */
+    RACCOON: {
+      windowEverySec: 360, // prowls a bit less often than the owl
+      windowDurationSec: 90, // but lingers longer once it's in
+      warningLeadSec: 20,
+      baseAttackChance: 0.4,
+      attacksPerWindow: 2,
+      attackCountWeights: [0.3, 0.45, 0.25],
     },
   },
 
@@ -817,6 +834,10 @@ export const zoneDef = (id: string): ZoneDef | undefined => ZONE_DEFS.find((z) =
  * logic. The numbers live in BALANCE.PREDATORS so balance.ts stays the single
  * source of feel.
  */
+/** Which built defense line protects against a predator: nets (aerial) or hardware
+ *  cloth (ground). Each predator reads its OWN floor, so defense is a portfolio. */
+export type DefenseType = 'net' | 'cloth';
+
 export interface PredatorDef {
   id: string;
   name: string;
@@ -834,6 +855,11 @@ export interface PredatorDef {
    *  i → i+1 attacks. Rolled hidden at each window open so the count is never
    *  predictable ("2 and done"). Falls back to attacksPerWindow when absent. */
   attackCountWeights?: readonly number[];
+  /** Which built defense line reduces this predator's attack chance. */
+  defense: DefenseType;
+  /** Rank at which this predator starts hunting (debuts online, telegraphed). Lets
+   *  new threats arrive as the homestead grows rather than all at once. */
+  introRank: number;
 }
 
 export const PREDATOR_DEFS: PredatorDef[] = [
@@ -841,6 +867,15 @@ export const PREDATOR_DEFS: PredatorDef[] = [
     id: 'owl',
     name: 'Owl',
     ...BALANCE.PREDATORS.OWL,
+    defense: 'net',
+    introRank: BALANCE.PREDATORS.INTRO_RANK,
+  },
+  {
+    id: 'raccoon',
+    name: 'Raccoon',
+    ...BALANCE.PREDATORS.RACCOON,
+    defense: 'cloth',
+    introRank: BALANCE.PREDATORS.RACCOON_INTRO_RANK,
   },
 ];
 

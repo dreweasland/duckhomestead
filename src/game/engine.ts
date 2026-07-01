@@ -4,10 +4,12 @@ import {
   autoFillRack,
   buildDeterrent,
   buildGeneReader,
+  buildHardwareCloth,
   buildInfirmary,
   buildSecureCoop,
   bulkSalvageByTier,
   repairDeterrents,
+  repairHardwareCloth,
   collectAll,
   collectStation,
   createPair,
@@ -218,15 +220,17 @@ export class GameEngine {
     if (!pending || pending.length === 0) return;
     for (const e of pending) {
       if (e.kind === 'introduced') {
+        const raccoon = e.predatorId === 'raccoon';
         this.emitDing({
           newRank: this.state.rank,
           levelsGained: 0,
           milestones: [
             {
               rank: this.state.rank,
-              title: 'Predators',
-              description:
-                'An owl now hunts the homestead in telegraphed windows. Build deterrents, secure your prize breeders, and treat any wounds before they turn fatal — open The Watch.',
+              title: raccoon ? 'The Raccoon' : 'Predators',
+              description: raccoon
+                ? 'A raccoon now raids from the ground in its own telegraphed windows. Nets won’t stop it — build HARDWARE CLOTH in The Watch. Its threat is separate from the owl’s.'
+                : 'An owl now hunts the homestead in telegraphed windows. Build deterrents, secure your prize breeders, and admit any wounded ducks to an infirmary before they turn fatal — open The Watch.',
               kind: 'predator',
             },
           ],
@@ -545,6 +549,18 @@ export class GameEngine {
   /** Repair the deterrent floor back to pristine (active-only upkeep). */
   repairDeterrents(): ActionResult<{ cost: number }> {
     const r = repairDeterrents(this.state);
+    this.notify();
+    return r;
+  }
+  /** Build one length of hardware cloth — the ground defense vs the raccoon. */
+  buildHardwareCloth(): ActionResult<{ hardwareCloth: number }> {
+    const r = buildHardwareCloth(this.state);
+    this.notify();
+    return r;
+  }
+  /** Repair the hardware-cloth floor back to pristine. */
+  repairHardwareCloth(): ActionResult<{ cost: number }> {
+    const r = repairHardwareCloth(this.state);
     this.notify();
     return r;
   }

@@ -654,6 +654,33 @@ export function repairDeterrents(state: GameState): ActionResult<{ cost: number 
   return done({ cost });
 }
 
+/** Build one length of hardware cloth — the GROUND defense (vs the raccoon). Its own
+ *  pool + integrity, parallel to nets. */
+export function buildHardwareCloth(state: GameState): ActionResult<{ hardwareCloth: number }> {
+  const cost = BALANCE.PREDATORS.HARDWARE_CLOTH_COST_EGGS;
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.hardwareClothIntegrity =
+    (state.hardwareClothIntegrity * state.hardwareCloth + 1) / (state.hardwareCloth + 1);
+  state.hardwareCloth += 1;
+  return done({ hardwareCloth: state.hardwareCloth });
+}
+
+/** Repair the hardware-cloth floor back to pristine (prorated by wear). Active-only. */
+export function repairHardwareCloth(state: GameState): ActionResult<{ cost: number }> {
+  const P = BALANCE.PREDATORS;
+  if (state.hardwareCloth <= 0) return fail('No hardware cloth to repair');
+  if (state.hardwareClothIntegrity >= 1) return fail('Hardware cloth is already pristine');
+  const cost = Math.max(
+    1,
+    Math.round(state.hardwareCloth * P.DETERRENT_REPAIR_COST_PER_NET * (1 - state.hardwareClothIntegrity)),
+  );
+  if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
+  state.resources.eggs -= cost;
+  state.hardwareClothIntegrity = 1;
+  return done({ cost });
+}
+
 /**
  * Build one Secure Coop — adds SECURE_SLOTS_PER_COOP secure slots. A duck marked
  * secured (up to the slot total) is excluded from predator targeting: the lever
