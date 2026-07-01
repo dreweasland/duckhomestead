@@ -243,6 +243,11 @@ export class GameEngine {
 
   // ── Loop ──────────────────────────────────────────────────────────
   start(now: number) {
+    // Loading the page IS being present — arm active mode so a fresh session starts
+    // "active" (the guard countdown then runs), not falsely "guarded". Offline catch-up
+    // already ran in the constructor with the saved activeRemaining (0), so this only
+    // affects live play from here on.
+    this.markActive();
     this.lastTime = now;
     this.accumulator = 0;
     const frame = (t: number) => {
