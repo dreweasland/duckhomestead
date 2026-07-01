@@ -86,6 +86,16 @@ export function predatorsActive(state: GameState): boolean {
   return state.ducks.length > 0 && state.rank >= P.INTRO_RANK;
 }
 
+/** Whether this def's rank + (Phase 6c) legacy-tier gates are BOTH met — the
+ *  same two checks runPredators' per-def loop gates on. The single source of
+ *  truth for "has this predator actually debuted", so the UI (e.g. The Watch's
+ *  calm-state listing) never names a not-yet-live threat ahead of its tease. */
+export function predatorLive(state: GameState, def: PredatorDef): boolean {
+  if (state.rank < def.introRank) return false;
+  if (def.minLegacyTier != null && state.legacyTier < def.minLegacyTier) return false;
+  return true;
+}
+
 /** True while the named predator's window is currently open. */
 export function windowOpen(ps: PredatorState): boolean {
   return ps.windowRemaining > 0;

@@ -329,6 +329,27 @@ export const SwoopOwlIcon = (p: PixProps) => (
   />
 );
 
+/** The Great Horned — Phase 6c's siege boss. Same round-faced owl silhouette as
+ *  OwlIcon, but bigger (taller canvas) with a pair of ear tufts and a fiercer,
+ *  narrowed-eye look, so it reads as a distinct, meaner threat at a glance. */
+export const SiegeOwlIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ b: '#4a3d2c', d: '#2e2418', y: '#ffb32a', k: '#1a1410', o: '#d98a3a' }}
+    rows={[
+      'b.....b',
+      'bd...db',
+      'bb...bb',
+      'byybyyb',
+      'bykbkyb',
+      'bbbobbb',
+      '.bbobb.',
+      '.b.k.b.',
+      '.d...d.',
+    ]}
+  />
+);
+
 /** The raccoon — a masked ground raider. Front-facing so it reads as it scurries in. */
 export const RaccoonIcon = (p: PixProps) => (
   <Pix
@@ -435,6 +456,24 @@ export const GrangeIcon = (p: PixProps) => (
       'dwkwwwwd',
       'dwwwwrwd',
       'dddddddd',
+    ]}
+  />
+);
+
+/** The Prime gene (Phase 6c) — a four-point wildcard star in pixel-gold,
+ *  distinct from the faceted-gem ModuleIcon so it never reads as loot. */
+export const PrimeIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ y: '#ffd23f', h: '#fff2b8', d: '#c79a1f' }}
+    rows={[
+      '...y...',
+      '..hyh..',
+      '.hyyyh.',
+      'yyyyyyy',
+      '.hyyyh.',
+      '..hyh..',
+      '...d...',
     ]}
   />
 );

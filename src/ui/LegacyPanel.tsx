@@ -17,7 +17,7 @@ import { COLORS, type Color, type GameState, type Genome } from '../game/state';
 import { playDing, playUpgrade } from '../audio/sfx';
 import { ColorSwatch, COLOR_META, GENE_META } from './FlockPanel';
 import { useEscapeKey } from './useEscapeKey';
-import { CheckIcon, CloseIcon, DuckIcon, GrangeIcon, LegacyIcon, LockIcon } from './icons';
+import { CheckIcon, CloseIcon, DuckIcon, GrangeIcon, LegacyIcon, LockIcon, PrimeIcon, SiegeOwlIcon } from './icons';
 
 /** One champion requirement: icon, label, value, a progress bar, and met state. */
 function GoalRow({
@@ -268,6 +268,24 @@ export function LegacyPanel({
               <GrangeIcon size={14} className="opacity-40" /> The Grange
             </span>
             <span className="text-[#7a6a4a]">opens at Tier {BALANCE.CONTRACTS.UNLOCK_TIER}</span>
+          </div>
+        )}
+        {state.legacyTier < BALANCE.PREDATORS.SIEGE.MIN_LEGACY_TIER && (
+          <div className="mb-3 flex items-center justify-between rounded-md bg-[#1f1812] px-3 py-2 text-[11px]">
+            <span className="flex items-center gap-1.5 font-bold text-[#7a6a4a]">
+              <LockIcon size={11} />
+              <SiegeOwlIcon size={14} className="opacity-40" /> The Siege — a named hunter
+            </span>
+            <span className="text-[#7a6a4a]">opens at Tier {BALANCE.PREDATORS.SIEGE.MIN_LEGACY_TIER}</span>
+          </div>
+        )}
+        {state.legacyTier < BALANCE.GENOME.PRIME_MIN_TIER && (
+          <div className="mb-3 flex items-center justify-between rounded-md bg-[#1f1812] px-3 py-2 text-[11px]">
+            <span className="flex items-center gap-1.5 font-bold text-[#7a6a4a]">
+              <LockIcon size={11} />
+              <PrimeIcon size={14} className="opacity-40" /> The Prime gene — a wildcard chase
+            </span>
+            <span className="text-[#7a6a4a]">opens at Tier {BALANCE.GENOME.PRIME_MIN_TIER}</span>
           </div>
         )}
 

@@ -1,6 +1,6 @@
 import { BALANCE, PREDATOR_DEFS } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { currentThreat } from '../game/predators';
+import { currentThreat, predatorLive } from '../game/predators';
 import { waterWoundMult } from '../game/water';
 import {
   defenseFloor,
@@ -90,6 +90,13 @@ export function WatchPanel({
   const clothColor = clothIntegrity >= 0.66 ? '#8fe388' : clothIntegrity >= 0.33 ? '#e8c45a' : '#e8835a';
   const canRepairCloth = state.hardwareCloth > 0 && clothIntegrity < 1 && eggs >= clothRepairCost;
 
+  // Phase 6c: only name predators that have actually debuted (rank + tier gates
+  // met) — a not-yet-live siege stays a Legacy-panel tease, never spoiled here.
+  const liveDefs = PREDATOR_DEFS.filter((d) => predatorLive(state, d));
+  const siege = PREDATOR_DEFS.find((d) => d.jackpot);
+  const siegeLive = !!siege && predatorLive(state, siege);
+  const streak = state.predatorFlawlessStreak ?? 0;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
@@ -127,7 +134,7 @@ export function WatchPanel({
             </span>
           ) : (
             <span>
-              All quiet. {PREDATOR_DEFS.map((d) => d.name).join(', ')} hunt in telegraphed windows —
+              All quiet. {liveDefs.map((d) => d.name).join(', ')} hunt in telegraphed windows —
               you’ll always get a warning.
             </span>
           )}
@@ -148,6 +155,17 @@ export function WatchPanel({
           )}
           <StatRow label="Secured breeders" value={`${securedCount} / ${slots}`} hint="excluded from attacks" />
           <StatRow label="Wounded" value={`${wounded.length}`} hint={wounded.length ? 'treat before they escalate' : 'none'} />
+          {siegeLive && siege?.jackpot && (
+            <StatRow
+              label="Siege flawless streak"
+              value={`${streak}`}
+              hint={
+                streak > 0
+                  ? `every dive scared, nothing landed · ${siege.jackpot.streakForLegendary}× → legendary loot`
+                  : 'a clean defense (no landed hits) pays a jackpot'
+              }
+            />
+          )}
         </div>
 
         {/* Deterrent integrity + repair — the upkeep loop */}
