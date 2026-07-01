@@ -435,7 +435,10 @@ export const BALANCE = {
       windowDurationSec: 60, // how long the window stays open
       warningLeadSec: 20, // telegraph: warn this long BEFORE the window opens
       baseAttackChance: 0.45, // per attack attempt, before defenses/presence
-      attacksPerWindow: 2, // attempts spread across each open window
+      attacksPerWindow: 2, // fallback / mean
+      // Hidden per-window roll: sometimes 1 dive (quiet), usually 2, sometimes 3 (a
+      // swarm). Mean stays 2, but you can never bank on "2 already hit, I'm safe."
+      attackCountWeights: [0.25, 0.5, 0.25],
     },
   },
 
@@ -825,8 +828,12 @@ export interface PredatorDef {
   warningLeadSec: number;
   /** Per-attack success before defenses/presence. */
   baseAttackChance: number;
-  /** Attack attempts spread across each open window. */
+  /** Attack attempts spread across each open window (fallback / mean). */
   attacksPerWindow: number;
+  /** Optional weighted distribution of how many attempts THIS window brings — index
+   *  i → i+1 attacks. Rolled hidden at each window open so the count is never
+   *  predictable ("2 and done"). Falls back to attacksPerWindow when absent. */
+  attackCountWeights?: readonly number[];
 }
 
 export const PREDATOR_DEFS: PredatorDef[] = [

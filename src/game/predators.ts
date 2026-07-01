@@ -368,6 +368,21 @@ export function activeStrike(state: GameState): ActiveStrike | null {
 /** Advance one predator's window machine by raw `dt` seconds and resolve any
  *  attacks whose moment falls in this step. Windows are wall-clock danger, so
  *  `dt` is REAL seconds (never the offline rate-scaled step). */
+/** How many attacks THIS window brings — a hidden per-window roll from the def's
+ *  weighted distribution (so the count is never "2 and done"). Falls back to the fixed
+ *  attacksPerWindow for a def without weights. */
+export function rollWindowAttacks(def: PredatorDef, rng: () => number): number {
+  const weights = def.attackCountWeights;
+  if (!weights || weights.length === 0) return def.attacksPerWindow;
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r < 0) return i + 1;
+  }
+  return weights.length;
+}
+
 function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts, dt: number, rng: () => number): void {
   const ps = (state.predators[def.id] ??= {
     timeToNextWindow: def.windowEverySec,
@@ -397,7 +412,7 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     // Attacks are staggered across the window so a player who reacts to the
     // telegraph (secure / be present) is covered before they land. Online each
     // attack opens a visible, scareable dive; offline it resolves at once.
-    const n = def.attacksPerWindow;
+    const n = ps.windowAttacks ?? def.attacksPerWindow;
     while (ps.attacksFired < n && ps.windowElapsed >= ((ps.attacksFired + 1) * def.windowDurationSec) / (n + 1)) {
       ps.attacksFired += 1;
       if (opts.mode === 'online') beginStrike(state, def, ps, rng);
@@ -422,6 +437,7 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     ps.windowRemaining = def.windowDurationSec;
     ps.windowElapsed = 0;
     ps.attacksFired = 0;
+    ps.windowAttacks = rollWindowAttacks(def, rng); // hidden 1..3 — no "2 and done"
     wearDeterrents(state, P.DETERRENT_WEAR_PER_WINDOW); // the night weathers the nets
     emit(state, { kind: 'open', predatorId: def.id });
   }

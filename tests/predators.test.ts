@@ -17,6 +17,7 @@ import {
   windowOpen,
   activeStrike,
   currentThreat,
+  rollWindowAttacks,
   rollWoundSeverity,
   scareOff,
   rankDifficulty,
@@ -71,6 +72,27 @@ const events = (s: GameState) => s.pendingPredatorEvents ?? [];
 afterEach(() => {
   // Restore the brutality dial in case a test flipped it.
   (BALANCE.PREDATORS as { ALLOW_INSTANT_SNATCH: boolean }).ALLOW_INSTANT_SNATCH = false;
+});
+
+describe('rollWindowAttacks — variable hidden per-window count (no "2 and done")', () => {
+  it('rolls a weighted 1..3 (all occur), and falls back to attacksPerWindow without weights', () => {
+    const owl = PREDATOR_DEFS[0];
+    const seen = new Set<number>();
+    for (let i = 0; i < 500; i++) seen.add(rollWindowAttacks(owl, Math.random));
+    expect([...seen].every((n) => n >= 1 && n <= 3)).toBe(true);
+    expect(seen.has(1) && seen.has(2) && seen.has(3)).toBe(true); // all three show up
+    // A def with no weights → the fixed count (backward compatible).
+    expect(rollWindowAttacks({ ...owl, attackCountWeights: undefined }, Math.random)).toBe(owl.attacksPerWindow);
+  });
+
+  it('a window stores its rolled count when it opens (1..3)', () => {
+    const s = flock(6);
+    s.predators.owl = { timeToNextWindow: 0.5, windowRemaining: 0, windowElapsed: 0, attacksFired: 0 };
+    runPredators(s, 1, { mode: 'online', rng: Math.random }); // crosses the counter → window opens
+    const n = s.predators.owl.windowAttacks!;
+    expect(n).toBeGreaterThanOrEqual(1);
+    expect(n).toBeLessThanOrEqual(3);
+  });
 });
 
 describe('currentThreat — the UI telegraph selector', () => {

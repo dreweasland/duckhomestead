@@ -433,6 +433,9 @@ export interface PredatorState {
   windowElapsed: number;
   /** Attacks already resolved in the current window. */
   attacksFired: number;
+  /** How many attacks THIS window will bring — rolled hidden when it opens (from the
+   *  def's attackCountWeights). Absent → the def's fixed attacksPerWindow. */
+  windowAttacks?: number;
   /** Online only: an in-flight, telegraphed strike — the owl is visibly diving at
    *  a duck and will land when the wind-up expires unless the player scares it.
    *  Never set offline (catch-up resolves immediately) and dropped on load, so it
