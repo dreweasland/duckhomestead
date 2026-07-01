@@ -11,7 +11,7 @@ import {
   tendPowerMult,
   yieldMult,
 } from './loot';
-import { outputBoostMult, speedBoostMult } from './prestige';
+import { outputBoostMult, renownBoostMult, speedBoostMult } from './prestige';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { Gene, GameState, Ingredient, Module, Rarity, Resource, Station } from './state';
 import {
@@ -561,11 +561,12 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
   return done(true);
 }
 
-// ── God-clone target (the player's breeding goal) ─────────────────────
+// ── Tracking target (the player's breeding-workbench goal) ────────────
 /**
- * Set the god-clone target profile the flock is steered toward. Drives the
- * genome-quality readouts, the Legacy Score, and the god-clone DING. Validated
- * to GENOME.SLOTS genes from the gene set; rejected otherwise.
+ * Set the TRACKING target the flock browser/pair-preview measures against — a
+ * planning aid only. The champion gate, currency, and god-clone DING read the
+ * tier-authoritative targetForTier() (prestige.ts), never this. Validated to
+ * GENOME.SLOTS genes from the gene set; rejected otherwise.
  */
 export function setGenomeTarget(state: GameState, target: Gene[]): ActionResult<unknown> {
   const genes = BALANCE.GENOME.GENES as readonly string[];
@@ -618,7 +619,8 @@ export function doseNiacin(state: GameState): ActionResult<DoseResult> {
   state.resources.brewersYeast -= cost;
   duck.debuffed = false;
   state.doseCooldownRemaining = BALANCE.NUTRITION.DOSE_COOLDOWN_S;
-  const xp = gainXP(state, BALANCE.NUTRITION.DOSE_XP);
+  // Renown (legacy boost) scales active-action XP — online-only law holds.
+  const xp = gainXP(state, Math.round(BALANCE.NUTRITION.DOSE_XP * renownBoostMult(state)));
   return done({ xp });
 }
 
@@ -793,6 +795,7 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   }
 
   station.tendCooldownRemaining = BALANCE.TEND_COOLDOWN_S * tendCooldownMult(state);
-  const xp = gainXP(state, BALANCE.TEND_XP);
+  // Renown (legacy boost) scales active-action XP — online-only law holds.
+  const xp = gainXP(state, Math.round(BALANCE.TEND_XP * renownBoostMult(state)));
   return done({ station, burst, xp });
 }

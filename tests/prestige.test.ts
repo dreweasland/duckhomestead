@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { runBreeding } from '../src/game/breeding';
 import { BALANCE } from '../src/config/balance';
 import {
   initialState,
@@ -15,15 +16,18 @@ import {
   sizeTarget,
   qualityGate,
   canPrestige,
+  currencyAtSize,
   prestigeCurrency,
   prestigeReset,
   championSnapshot,
+  targetForTier,
   boostCost,
   buyBoost,
   boostMult,
 } from '../src/game/prestige';
+import { tend } from '../src/game/actions';
 import { deserialize } from '../src/game/save';
-import { build, fullSetup, stockAll, setHens, run } from './helpers';
+import { build, fullSetup, stockAll, setHens, run, FLAT_GENOME } from './helpers';
 
 const NOW = 1_700_000_000_000;
 /**
@@ -43,6 +47,14 @@ const duck = (id: string, q: number, o: Partial<Duck> = {}): Duck => {
     ageTicks: 5,
     ...o,
   };
+};
+
+/** A duck matching the GIVEN target in its first `q` slots ('D' elsewhere — no
+ *  rotation target contains a Dud, so unmatched slots never match by accident). */
+const duckFor = (id: string, target: Gene[], q: number, o: Partial<Duck> = {}): Duck => {
+  const m = Math.max(0, Math.min(BALANCE.GENOME.SLOTS, Math.round(q)));
+  const genome = Array.from({ length: BALANCE.GENOME.SLOTS }, (_, i): Gene => (i < m ? target[i] : 'D'));
+  return { ...duck(id, 0, o), genome };
 };
 
 /** A deliberately messy, deep-into-the-game run — everything that could dangle. */
@@ -109,13 +121,15 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     const reset = prestigeReset(s, NOW);
 
     // The single strongest assertion: the reset deep-equals initialState() with
-    // ONLY the four meta fields overridden. If any run field survived (a duck, a
-    // pair, an unlocked zone, a non-default ration, a stray module/wound), this fails.
+    // ONLY the meta fields (+ the new tier's tracking target) overridden. If any
+    // run field survived (a duck, a pair, an unlocked zone, a non-default ration,
+    // a stray module/wound), this fails.
     const expected = initialState(NOW);
     expected.legacyTier = 3;
     expected.legacyCurrency = 7 + prestigeCurrency(s);
     expected.purchasedBoosts = { output: 3, eggValue: 1 };
     expected.legacyHall = [...s.legacyHall, championSnapshot(s, NOW)];
+    expected.genomeTarget = targetForTier(3); // tracking starts on the new tier's puzzle
     expect(reset).toEqual(expected);
   });
 
@@ -132,7 +146,7 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expect(reset.dust).toBe(0);
     expect(reset.rank).toBe(1);
     expect(reset.geneReader).toBe(false); // a fresh run must re-build the reader
-    expect(reset.genomeTarget).toEqual([...BALANCE.GENOME.DEFAULT_TARGET]);
+    expect(reset.genomeTarget).toEqual(targetForTier(3)); // tracking = the new tier's gate target
     expect(reset.predatorsIntroduced).toBe(false);
     expect(reset.ration).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 });
     expect(zoneUnlocked(reset, 'yard')).toBe(true);
@@ -230,16 +244,186 @@ describe('champion goal: three concrete requirements', () => {
   });
 
   it('a flock that clears tier 0 can FAIL the higher tier-1 quality gate', () => {
-    // mean quality 4.55: clears tier-0 gate 4.5, but not tier-1's 4.6.
+    // mean quality 4.55 AGAINST EACH TIER'S OWN TARGET: clears tier-0's gate 4.5,
+    // but not tier-1's 4.6 — the bar itself rises even at equal mastery.
     const mk = (tier: number) => {
       const s = { ...initialState(0), legacyTier: tier };
-      // 110 ducks at quality 5 + 90 at quality 4 → mean 4.55.
-      s.ducks = Array.from({ length: 200 }, (_, i) => duck(`v${i}`, i < 110 ? 5 : 4));
+      // 110 ducks at quality 5 + 90 at quality 4 → mean 4.55 (built vs the tier's target).
+      s.ducks = Array.from({ length: 200 }, (_, i) => duckFor(`v${i}`, targetForTier(tier), i < 110 ? 5 : 4));
       s.dexSeen = ['black', 'blue', 'splash'];
       return s;
     };
     expect(championGoal(mk(0)).quality.met).toBe(true);
     expect(championGoal(mk(1)).quality.met).toBe(false);
+  });
+});
+
+describe('Phase 6a: the gate target is tier-authoritative and ROTATES', () => {
+  it('targetForTier cycles through TARGETS_BY_TIER (and tier 0 matches the old default)', () => {
+    const targets = BALANCE.PRESTIGE.TARGETS_BY_TIER;
+    expect(targetForTier(0)).toEqual([...BALANCE.GENOME.DEFAULT_TARGET]);
+    for (let t = 0; t < targets.length; t++) expect(targetForTier(t)).toEqual([...targets[t]]);
+    expect(targetForTier(targets.length)).toEqual(targetForTier(0)); // cycles
+    expect(targetForTier(targets.length + 2)).toEqual(targetForTier(2));
+  });
+
+  it('every rotation target is a valid Dud-free profile (always breedable-toward)', () => {
+    for (const t of BALANCE.PRESTIGE.TARGETS_BY_TIER) {
+      expect(t).toHaveLength(BALANCE.GENOME.SLOTS);
+      for (const g of t) expect(['L', 'V', 'H']).toContain(g);
+    }
+  });
+
+  it('the gate IGNORES the player-set tracking target (the self-set-gate exploit is closed)', () => {
+    const champ = championRun();
+    const before = meanQuality(champ);
+    expect(championGoal(champ).quality.met).toBe(true);
+    // Point the tracking target at the flock's exact profile — the old exploit.
+    champ.genomeTarget = ['L', 'L', 'L', 'L', 'L', 'D'] as Gene[];
+    expect(meanQuality(champ)).toBe(before);
+    expect(prestigeCurrency(champ)).toBe(currencyAtSize(champ, champ.ducks.length));
+    // And pointing it somewhere absurd doesn't break readiness either.
+    champ.genomeTarget = ['D', 'D', 'D', 'D', 'D', 'D'] as Gene[];
+    expect(canPrestige(champ)).toBe(true);
+  });
+
+  it('quality is judged per-tier: a lay flock aces T0 (all-L) but flunks T2 (all-H)', () => {
+    const mk = (tier: number) => {
+      const s = { ...initialState(0), legacyTier: tier };
+      s.ducks = Array.from({ length: 10 }, (_, i) => duck(`q${i}`, 6)); // all-L god clones
+      return s;
+    };
+    expect(meanQuality(mk(0))).toBe(BALANCE.GENOME.SLOTS); // perfect vs LLLLLL
+    expect(meanQuality(mk(2))).toBe(0); // worthless vs HHHHHH — a NEW puzzle
+  });
+
+  it('the threshold grant rises with tier at the SAME relative mastery', () => {
+    const mk = (tier: number) => {
+      const s = { ...initialState(0), legacyTier: tier };
+      // Exactly at the size target, perfect quality vs the tier's own target.
+      s.ducks = Array.from({ length: sizeTarget(s) }, (_, i) =>
+        duckFor(`g${i}`, targetForTier(tier), BALANCE.GENOME.SLOTS),
+      );
+      s.dexSeen = ['black', 'blue', 'splash'];
+      return s;
+    };
+    const g0 = prestigeCurrency(mk(0));
+    const g1 = prestigeCurrency(mk(1));
+    expect(g0).toBeGreaterThanOrEqual(BALANCE.PRESTIGE.CURRENCY_AT_THRESHOLD);
+    expect(g1).toBeGreaterThan(g0); // deeper legacies bank more — boost costs keep escalating
+  });
+});
+
+describe('Phase 6a: the god-clone DING judges the TIER target, not tracking', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a hatch matching the tier target DINGs even when tracking points elsewhere', () => {
+    // rng 0.4: never mutates (0.4 > MUTATION_CHANCE) and every contested L-vs-D
+    // slot resolves to L (0.4·(3+1) < 3 picks the L parent; ≥ 1 rejects the D one),
+    // so complementary LDLDLD × DLDLDL half-clones deterministically ASSEMBLE an
+    // all-L god clone — neither parent is one, so the first-clone DING must fire.
+    vi.spyOn(Math, 'random').mockReturnValue(0.4);
+    const s = build({ coop: 1 });
+    const half = (id: string, sex: 'drake' | 'hen', evenSlots: boolean): Duck => ({
+      id,
+      genotype: ['Bl', 'bl'] as Genotype,
+      genome: Array.from({ length: 6 }, (_, i): Gene => (i % 2 === (evenSlots ? 0 : 1) ? 'L' : 'D')),
+      genomeKnown: true,
+      sex,
+      stage: 'adult',
+      ageTicks: 0,
+    });
+    s.ducks = [half('dr', 'drake', true), half('he', 'hen', false)];
+    s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
+    s.genomeTarget = ['H', 'H', 'H', 'H', 'H', 'H'] as Gene[]; // tracking points elsewhere
+    runBreeding(s, BALANCE.BREEDING.CLUTCH_INTERVAL_S + BALANCE.BREEDING.INCUBATE_S + 1);
+    expect(s.ducks.length).toBeGreaterThan(2); // something hatched
+    expect(s.pendingGodClone ?? 0).toBeGreaterThan(0); // tier-0 target (all-L) → DING
+  });
+});
+
+describe('Phase 6a: the push-vs-reset currency curve', () => {
+  it('overshoot is SUPERLINEAR in size — pushing past the gate out-earns resetting', () => {
+    const champ = championRun();
+    const target = sizeTarget(champ);
+    const atGate = currencyAtSize(champ, target);
+    const atDouble = currencyAtSize(champ, target * 2);
+    // Superlinear: doubling the flock more than doubles the grant (2^EXP, EXP > 1).
+    expect(BALANCE.PRESTIGE.CURRENCY_OVERSHOOT_EXP).toBeGreaterThan(1);
+    expect(atDouble / atGate).toBeCloseTo(Math.pow(2, BALANCE.PRESTIGE.CURRENCY_OVERSHOOT_EXP), 1);
+    expect(atDouble).toBeGreaterThan(atGate * 2);
+  });
+
+  it('prestigeCurrency IS currencyAtSize at the live flock size (the projection never lies)', () => {
+    const champ = championRun();
+    expect(prestigeCurrency(champ)).toBe(currencyAtSize(champ, champ.ducks.length));
+  });
+
+  it('the projection is 0 until the champion goal is met (no phantom payouts)', () => {
+    const s = initialState(0);
+    s.ducks = [duck('a', 6)];
+    expect(currencyAtSize(s, 500)).toBe(0);
+  });
+});
+
+describe('Phase 6a: Renown scales active-action XP (the re-run rank clock)', () => {
+  it('a tend grants TEND_XP × the renown multiplier', () => {
+    const plain = build({ plot: 1 });
+    const boosted = build({ plot: 1 });
+    boosted.purchasedBoosts = { renown: 5 }; // +50%
+    const rp = tend(plain, plain.stations[0].id);
+    const rb = tend(boosted, boosted.stations[0].id);
+    if (!rp.ok || !rb.ok) throw new Error('tend failed');
+    expect(rp.value.xp.xpGained).toBe(BALANCE.TEND_XP);
+    expect(rb.value.xp.xpGained).toBe(Math.round(BALANCE.TEND_XP * 1.5));
+  });
+});
+
+describe('Phase 6a: Husbandry scales the breeding clocks (never the puzzle)', () => {
+  /** A stocked full setup with one adult pairable flock + one duckling. */
+  const withDuckling = (): GameState => {
+    const s = setHens(stockAll(fullSetup()), 1);
+    s.ducks.push({
+      id: 'dk1',
+      genotype: ['Bl', 'bl'],
+      genome: [...FLAT_GENOME],
+      genomeKnown: true,
+      sex: 'hen',
+      stage: 'duckling',
+      ageTicks: 0,
+    });
+    return s;
+  };
+
+  it('ducklings mature proportionally faster under a husbandry boost', () => {
+    const plain = withDuckling();
+    const boosted = withDuckling();
+    boosted.purchasedBoosts = { husbandry: 5 }; // +50%
+    run(plain, 60);
+    run(boosted, 60);
+    const age = (s: GameState) => s.ducks.find((d) => d.id === 'dk1')!.ageTicks;
+    expect(age(plain)).toBeGreaterThan(0);
+    expect(age(boosted) / age(plain)).toBeCloseTo(1.5, 1);
+  });
+
+  it('pairs accrue clutch progress proportionally faster — and the RATION SIDE is untouched', () => {
+    const mk = (): GameState => {
+      const s = stockAll(fullSetup());
+      s.ducks = [
+        { id: 'dr', genotype: ['Bl', 'bl'], genome: [...FLAT_GENOME], genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 },
+        { id: 'he', genotype: ['Bl', 'bl'], genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 },
+      ];
+      s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
+      return s;
+    };
+    const plain = mk();
+    const boosted = mk();
+    boosted.purchasedBoosts = { husbandry: 5 };
+    run(plain, 60);
+    run(boosted, 60);
+    expect(boosted.breedingPairs[0].clutchProgress / plain.breedingPairs[0].clutchProgress).toBeCloseTo(1.5, 1);
+    // Guardrail: husbandry never touches the duckling/drake REQUIREMENT profiles.
+    expect(BALANCE.BREEDING.DUCKLING_REQUIREMENT).toEqual({ energy: 1, protein: 3, niacin: 2, calcium: 0 });
   });
 });
 
@@ -276,6 +460,19 @@ describe('back-compat: legacy Hall entries migrate from older fields', () => {
     expect(r.legacyHall[0].meanQuality).toBe(0); // no genome data to derive — defaults, doesn't crash
     expect(typeof r.legacyHall[0].meanQuality).toBe('number');
     expect(r.legacyHall[0].flockSize).toBe(30);
+  });
+
+  it('a pre-6a save (no renown/husbandry keys) loads with the new boosts at level 0', () => {
+    const legacy = JSON.stringify({
+      version: 1,
+      resources: { eggs: 1 },
+      stations: [],
+      purchasedBoosts: { output: 2 },
+    });
+    const r = deserialize(legacy, 0);
+    expect(boostMult(r, 'renown')).toBe(1);
+    expect(boostMult(r, 'husbandry')).toBe(1);
+    expect(boostMult(r, 'output')).toBeCloseTo(1 + 2 * BALANCE.PRESTIGE.BOOSTS.output.perLevel, 6);
   });
 });
 

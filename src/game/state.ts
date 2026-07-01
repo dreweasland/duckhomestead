@@ -344,8 +344,10 @@ export interface GameState {
   breedingPairs: BreedingPair[];
   /** Monotonic id counter for pairs. */
   nextPairId: number;
-  /** The god-clone target profile the player steers toward (length GENOME.SLOTS).
-   *  Drives genome-quality progress + the Legacy Score. */
+  /** The player's TRACKING target (length GENOME.SLOTS) — a browser/sort/preview
+   *  aid only. The champion gate, currency, and god-clone DING read the
+   *  tier-authoritative targetForTier() instead (see prestige.ts), so pointing
+   *  this at the flock's existing profile can't game the gate. */
   genomeTarget: Genome;
   /** Whether the gene-reader is built (reveals genomes passively/in bulk). */
   geneReader: boolean;

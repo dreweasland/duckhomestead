@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
+import { targetForTier } from './prestige';
 import { rollWoundSeverity } from './predators';
 import { breedingEstablished, coopCapacity, flockRatio, phenotype, type Duck, type GameState } from './state';
 
@@ -55,6 +56,9 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
  */
 export function runBreeding(state: GameState, step: number, matureRate = 1, breedRate = 1): void {
   const capacity = coopCapacity(state);
+  // The god-clone DING is judged against the TIER's champion target (the same one
+  // the prestige gate reads), not the player's tracking target.
+  const godTarget = targetForTier(state.legacyTier);
   // Index ducks by id once so pair-parent lookups are O(1) — this ran two
   // `state.ducks.find` per pair every tick (O(pairs × ducks)). Ducklings pushed
   // mid-loop are never pair parents, so the up-front map stays valid.
@@ -90,7 +94,7 @@ export function runBreeding(state: GameState, step: number, matureRate = 1, bree
       const genome = breedGenome(drake.genome, hen.genome);
       // God-clone DING fires when a hatch first achieves the target and the flock
       // had none — so it re-fires if you lose every god clone and rebreed one.
-      const hadGodClone = state.ducks.some((d) => isGodClone(d.genome, state.genomeTarget));
+      const hadGodClone = state.ducks.some((d) => isGodClone(d.genome, godTarget));
       const duckling: Duck = {
         id: `d${state.nextDuckId++}`,
         genotype,
@@ -107,7 +111,7 @@ export function runBreeding(state: GameState, step: number, matureRate = 1, bree
       if (recordColor(state, phenotype(genotype))) {
         (state.pendingDex ??= []).push(phenotype(genotype));
       }
-      if (!hadGodClone && isGodClone(genome, state.genomeTarget)) {
+      if (!hadGodClone && isGodClone(genome, godTarget)) {
         state.pendingGodClone = (state.pendingGodClone ?? 0) + 1;
       }
     }
