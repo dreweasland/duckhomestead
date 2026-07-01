@@ -81,7 +81,8 @@ export function outputPerCycle(
 
 /** Per-second economy flow for one resource: what's PRODUCED (in) vs what the feed
  *  blend + duckling grow-out ration CONSUME (out). Powers the currency-flow
- *  breakdown. Rates, not stock — `out − in < 0` means the stock is draining.
+ *  breakdown. Rates, not stock — the net is `in − out`, so `out > in` (consumption
+ *  outpacing production) means the stock is draining.
  *
  *  Income: raw producers run input-free so their rate is steady (output/cycle ÷
  *  effective cycle time); eggs come from the flock at the live nutrition egg rate.

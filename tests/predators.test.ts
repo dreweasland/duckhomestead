@@ -457,6 +457,33 @@ describe('wound → escalation → treat (the checkpoint)', () => {
     expect(s.ducks.find((d) => d.id === 'd0')).toBeDefined(); // treated -> safe
     expect(s.resources.eggs).toBe(1000 - P.TREAT_COST_EGGS);
   });
+
+  // The success path is above; these pin the guard branches + exact effects.
+  it('rejects a missing duck and a healthy (unwounded) duck', () => {
+    const s = flock(4);
+    expect(treatDuck(s, 'nope').ok).toBe(false); // no such duck
+    expect(treatDuck(s, 'd0').ok).toBe(false); // d0 exists but isn't wounded
+  });
+
+  it('needs the eggs: a broke player cannot treat — the duck stays wounded, eggs untouched', () => {
+    const s = flock(4);
+    s.ducks[0].wounded = true;
+    s.ducks[0].woundElapsed = 5;
+    s.resources.eggs = P.TREAT_COST_EGGS - 1;
+    const r = treatDuck(s, 'd0');
+    expect(r.ok).toBe(false);
+    expect(s.ducks[0].wounded).toBe(true); // still hurt
+    expect(s.resources.eggs).toBe(P.TREAT_COST_EGGS - 1); // not charged on a failed treat
+  });
+
+  it('on success resets the escalation timer to 0 (a full heal, not a partial one)', () => {
+    const s = flock(4);
+    s.resources.eggs = 1000;
+    s.ducks[0].wounded = true;
+    s.ducks[0].woundElapsed = 42;
+    expect(treatDuck(s, 'd0').ok).toBe(true);
+    expect(s.ducks[0].woundElapsed).toBe(0);
+  });
 });
 
 describe('secured ducks are excluded from targeting', () => {
