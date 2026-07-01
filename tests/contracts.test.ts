@@ -289,6 +289,8 @@ describe('delivery: the egg sink', () => {
     expect(s.contracts.active).toBeNull(); // freed — no other side effect
     expect(s.dust).toBe(0);
     expect(s.legacyCurrency).toBe(0);
+    // …but never SILENTLY: the expiry is flagged for the engine's toast drain.
+    expect(s.pendingContractExpired).toBe(1);
   });
 });
 

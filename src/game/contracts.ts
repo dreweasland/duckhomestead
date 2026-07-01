@@ -247,6 +247,11 @@ export function runContracts(state: GameState, dt: number): void {
 
   if (cs.active && cs.active.type === 'delivery' && !cs.active.completed) {
     cs.active.limitRemaining -= dt;
-    if (cs.active.limitRemaining <= 0) cs.active = null; // expired — freed slot, no penalty
+    if (cs.active.limitRemaining <= 0) {
+      // Expired — freed slot, no penalty. Flag it so the engine surfaces a quiet
+      // toast: a contract must never vanish with zero feedback (legibility law).
+      cs.active = null;
+      state.pendingContractExpired = (state.pendingContractExpired ?? 0) + 1;
+    }
   }
 }

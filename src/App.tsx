@@ -154,6 +154,16 @@ export default function App() {
     return () => clearTimeout(t);
   }, [grangeClaim]);
 
+  // A delivery that hits its deadline must never vanish silently — quiet toast,
+  // slightly longer hold than the happy beats (it's a miss, worth reading).
+  const [grangeExpired, setGrangeExpired] = useState<{ id: number } | null>(null);
+  useEffect(() => engine.onContractExpire(() => setGrangeExpired({ id: Date.now() })), [engine]);
+  useEffect(() => {
+    if (!grangeExpired) return;
+    const t = window.setTimeout(() => setGrangeExpired(null), 2500);
+    return () => clearTimeout(t);
+  }, [grangeExpired]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
@@ -301,6 +311,14 @@ export default function App() {
           >
             Contract claimed · +{grangeClaim.dust} dust · +{grangeClaim.shards} shards
             {grangeClaim.module ? ' · +module' : ''}
+          </span>
+        )}
+        {grangeExpired && (
+          <span
+            key={grangeExpired.id}
+            className="salvage-toast rounded-full bg-[#3a2a1a] px-3 py-1 text-xs font-bold text-[#e8a45a] shadow ring-1 ring-[#5a3e22]"
+          >
+            Delivery expired — the Grange slot freed up
           </span>
         )}
       </NotifyRail>

@@ -417,6 +417,10 @@ export interface GameState {
   /** The rotating offer board + at most one active contract. Wiped by prestige
    *  (composed fresh in initialState()) exactly like every other run field. */
   contracts: ContractsState;
+  /** Transient: delivery contracts that hit their deadline this tick, drained by
+   *  the engine for a quiet "contract expired" toast. Only ever set online
+   *  (expiry clocks are online-only), so it can't accrue during catch-up. */
+  pendingContractExpired?: number;
 
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;

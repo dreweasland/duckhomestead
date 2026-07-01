@@ -125,6 +125,9 @@ export class GameEngine {
   /** Fires when a Grange contract is claimed — a quiet rhythm beat (reward
    *  amounts), not a celebratory DING like a milestone. */
   private contractClaimListeners = new Set<(e: ClaimResult) => void>();
+  /** Fires when an active delivery contract hits its deadline — a contract must
+   *  never vanish with zero feedback. */
+  private contractExpireListeners = new Set<() => void>();
 
   private rafId = 0;
   private lastTime = 0;
@@ -179,6 +182,11 @@ export class GameEngine {
     this.contractClaimListeners.add(fn);
     return () => this.contractClaimListeners.delete(fn);
   }
+  /** Fires when an active delivery contract expires at its deadline. */
+  onContractExpire(fn: () => void): () => void {
+    this.contractExpireListeners.add(fn);
+    return () => this.contractExpireListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
@@ -202,6 +210,13 @@ export class GameEngine {
   }
   private emitContractClaim(e: ClaimResult) {
     for (const fn of this.contractClaimListeners) fn(e);
+  }
+  /** Surface any delivery-deadline expiry accrued during ticks (quiet toast). */
+  private drainContractExpiry() {
+    const n = this.state.pendingContractExpired ?? 0;
+    if (n <= 0) return;
+    this.state.pendingContractExpired = 0;
+    for (let i = 0; i < n; i++) for (const fn of this.contractExpireListeners) fn();
   }
   /** Fire DINGs for any first-of-color hatches accrued during ticks. */
   private drainDex() {
@@ -290,6 +305,7 @@ export class GameEngine {
       this.drainDex(); // fire DINGs for any first-of-color hatches this frame
       this.drainGodClone(); // fire the god-clone DING for a perfect-target hatch
       this.drainPredatorEvents(); // telegraph / attack / loss feedback this frame
+      this.drainContractExpiry(); // a deadline lapse gets a toast, never silence
       if (t - this.lastNotify >= this.notifyIntervalMs) {
         this.lastNotify = t;
         this.notify();
