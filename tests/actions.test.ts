@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { BALANCE } from '../src/config/balance';
-import { initialState } from '../src/game/state';
+import { BALANCE, STATION_DEFS } from '../src/config/balance';
+import { initialState, type Module } from '../src/game/state';
 import {
   placeStation,
   moveStation,
   removeStation,
   upgradeStation,
   upgradeCost,
+  outputPerCycle,
+  UPGRADE_OUTPUT,
 } from '../src/game/actions';
+import { build, run } from './helpers';
 
 describe('placement', () => {
   it('charges eggs and places on an empty tile', () => {
@@ -71,5 +74,40 @@ describe('upgrade', () => {
     expect(upgradeStation(s, st.id).ok).toBe(true);
     expect(st.level).toBe(2);
     expect(upgradeCost(st)).toBeGreaterThan(c1);
+  });
+});
+
+describe('outputPerCycle — the UI yield mirrors the sim', () => {
+  const plotOf = (s: ReturnType<typeof build>) => s.stations.find((st) => st.type === 'plot')!;
+  const cornPerCycle = (s: ReturnType<typeof build>, st: (typeof s.stations)[number]) =>
+    outputPerCycle(s, st).find((o) => o.resource === 'corn')!.amount;
+
+  it("equals what the sim actually deposits per cycle — including the rack's throughput scalar", () => {
+    const s = build({ plot: 1 });
+    // A yield module lifts the shared throughput multiplier. outputPerCycle recomputes
+    // it; the sim (tick) hoists it once. The UI number must still match the deposit.
+    s.rack = [{ id: 'm1', stat: 'stationYield', rarity: 'legendary', magnitude: 0.4 } as Module];
+    const plot = plotOf(s);
+    const perCycle = cornPerCycle(s, plot);
+    const cycleSeconds = STATION_DEFS.plot.cycleSeconds; // no speed modules → effective == base
+    const before = s.resources.corn;
+    run(s, cycleSeconds * 10 + 0.5); // exactly 10 cycles, auto-hauled into storage
+    expect(s.resources.corn - before).toBeCloseTo(perCycle * 10, 6);
+  });
+
+  it('scales with station level by the upgrade curve', () => {
+    const s = build({ plot: 1 });
+    const plot = plotOf(s);
+    const lvl1 = cornPerCycle(s, plot);
+    plot.level = 3;
+    expect(cornPerCycle(s, plot)).toBeCloseTo(lvl1 * (UPGRADE_OUTPUT(3) / UPGRADE_OUTPUT(1)), 10);
+  });
+
+  it('scales up with installed rack yield', () => {
+    const s = build({ plot: 1 });
+    const plot = plotOf(s);
+    const base = cornPerCycle(s, plot);
+    s.rack = [{ id: 'm1', stat: 'stationYield', rarity: 'epic', magnitude: 0.3 } as Module];
+    expect(cornPerCycle(s, plot)).toBeGreaterThan(base);
   });
 });

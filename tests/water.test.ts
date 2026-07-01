@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
-import { initialState, zoneUnlocked, type Duck, type GameState, type Genotype } from '../src/game/state';
+import { initialState, zoneUnlocked, type Duck, type Gene, type GameState, type Genotype } from '../src/game/state';
 import {
   waterProvision,
   flockRequirement,
@@ -9,6 +9,7 @@ import {
   waterConditionMult,
   waterWoundMult,
 } from '../src/game/water';
+import { waterSynergy, flockWaterSynergy } from '../src/game/genetics';
 import { unlockZone } from '../src/game/actions';
 import { placePondFeature, pondFeatureUpgradeCost, upgradePondFeature } from '../src/game/pond';
 import { runPredators } from '../src/game/predators';
@@ -212,5 +213,37 @@ describe('offline + back-compat', () => {
     const r = deserialize(serialize(s), 0);
     expect(r.pond).toEqual(s.pond);
     expect(waterProvision(r)).toBe(waterProvision(s));
+  });
+});
+
+describe('H-gene water synergy — a wellness reward, never a requirement change', () => {
+  const allH: Gene[] = ['H', 'H', 'H', 'H', 'H', 'H'];
+  const hFlock = (n: number): Duck[] => ducks(n).map((d) => ({ ...d, genome: [...allH] }));
+
+  it('waterSynergy: an all-Dud genome contributes nothing; each H adds the per-gene bonus', () => {
+    expect(waterSynergy(['D', 'D', 'D', 'D', 'D', 'D'])).toBe(0);
+    const one = waterSynergy(['H', 'D', 'D', 'D', 'D', 'D']);
+    const two = waterSynergy(['H', 'H', 'D', 'D', 'D', 'D']);
+    expect(one).toBeGreaterThan(0);
+    expect(two).toBeCloseTo(one * 2, 10); // linear in H count
+  });
+
+  it('flockWaterSynergy is the flock mean (0 for an empty flock)', () => {
+    const s = initialState(0);
+    expect(flockWaterSynergy(s)).toBe(0); // no ducks
+    s.ducks = [...hFlock(1), ...ducks(1)]; // one all-H + one all-Dud
+    expect(flockWaterSynergy(s)).toBeCloseTo(waterSynergy(allH) / 2, 10);
+  });
+
+  it('the same water gives an H-heavy flock MORE condition regen — but the SAME access + requirement', () => {
+    const base = initialState(0);
+    const N = 10;
+    const hardy: GameState = { ...base, ducks: hFlock(N) };
+    const plain: GameState = { ...base, ducks: ducks(N) }; // identical but all-Dud
+    // Wellness reward: H genes extract more condition regen from the same water.
+    expect(waterConditionMult(hardy)).toBeGreaterThan(waterConditionMult(plain));
+    // Locked principle: synergy NEVER touches the water requirement or access ratio.
+    expect(flockRequirement(hardy)).toBe(flockRequirement(plain));
+    expect(waterAccess(hardy)).toBeCloseTo(waterAccess(plain), 10);
   });
 });

@@ -6,6 +6,7 @@ import {
   featureProvisions,
   placePondFeature,
   pondLayoutBase,
+  pondView,
   removePondFeature,
 } from '../src/game/pond';
 import { waterProvision } from '../src/game/water';
@@ -101,5 +102,44 @@ describe('Stage 1: placement actions', () => {
     expect(s.pond.features).toHaveLength(0);
     expect(s.pond.freshness['1,1']).toBeUndefined();
     expect(s.resources.eggs).toBe(afterPlace + Math.floor(F.deepZone.costEggs * BALANCE.REFUND_FRACTION));
+  });
+});
+
+describe('pondView — the WaterBoard reader (aggregates features + flow + circulation)', () => {
+  it('layoutBase and circulationHealth match the standalone computations (the reuse is faithful)', () => {
+    const s = withFeatures([
+      { x: 1, y: 1, type: 'spring' },
+      { x: 1, y: 0, type: 'bathingPool' }, // spring-adjacent → earns the bonus
+      { x: 3, y: 3, type: 'deepZone' },
+    ]);
+    const v = pondView(s);
+    // #33 passed the prebuilt provisions map into both; the results must be identical
+    // to calling them standalone (which rebuild the map themselves).
+    expect(v.layoutBase).toBeCloseTo(pondLayoutBase(s), 10);
+    expect(v.circulationHealth).toBeCloseTo(circulationHealth(s), 10);
+    expect(v.layoutBase).toBeGreaterThan(W.YARD_BASELINE_PROVISION); // features lifted it
+  });
+
+  it("surfaces each feature's provision and freshness for the grid", () => {
+    const s = withFeatures([
+      { x: 1, y: 1, type: 'spring' },
+      { x: 1, y: 0, type: 'bathingPool' },
+    ]);
+    s.pond.freshness['1,0'] = 0.7;
+    const v = pondView(s);
+    const pool = v.features.find((f) => f.x === 1 && f.y === 0)!;
+    expect(pool.provision).toBeCloseTo(featureProvisions(s).get('1,0')!, 10);
+    expect(pool.freshness).toBe(0.7);
+    // A feature with no freshness entry reads as fully fresh (1).
+    expect(v.features.find((f) => f.x === 1 && f.y === 1)!.freshness).toBe(1);
+  });
+
+  it('reports live fountains + the Waterworks unlock state, and passes flow through', () => {
+    const s = withFeatures([{ x: 2, y: 2, type: 'bathingPool' }]);
+    const v = pondView(s);
+    expect(v.worksUnlocked).toBe(false); // Waterworks zone still locked
+    expect(v.liveKeys.size).toBe(0); // no flow network → nothing live
+    expect(v.features.every((f) => f.covered === false)).toBe(true); // coverage needs Waterworks
+    expect(v.flow).toBe(s.pond.flow); // flow passed straight through
   });
 });
