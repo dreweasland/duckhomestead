@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import {
   BOOST_IDS,
@@ -16,7 +17,7 @@ import { COLORS, type Color, type GameState, type Genome } from '../game/state';
 import { playDing, playUpgrade } from '../audio/sfx';
 import { ColorSwatch, COLOR_META, GENE_META } from './FlockPanel';
 import { useEscapeKey } from './useEscapeKey';
-import { CheckIcon, CloseIcon, DuckIcon, LegacyIcon } from './icons';
+import { CheckIcon, CloseIcon, DuckIcon, GrangeIcon, LegacyIcon, LockIcon } from './icons';
 
 /** One champion requirement: icon, label, value, a progress bar, and met state. */
 function GoalRow({
@@ -257,6 +258,18 @@ export function LegacyPanel({
           Only your legacy + boosts persist. The size target, quality gate, and target profile all
           change each tier.
         </div>
+
+        {/* Tier-gated content tease — the same aspirational-silhouette trick as a
+            locked zone: one row, shown only until it unlocks. */}
+        {state.legacyTier < BALANCE.CONTRACTS.UNLOCK_TIER && (
+          <div className="mb-3 flex items-center justify-between rounded-md bg-[#1f1812] px-3 py-2 text-[11px]">
+            <span className="flex items-center gap-1.5 font-bold text-[#7a6a4a]">
+              <LockIcon size={11} />
+              <GrangeIcon size={14} className="opacity-40" /> The Grange
+            </span>
+            <span className="text-[#7a6a4a]">opens at Tier {BALANCE.CONTRACTS.UNLOCK_TIER}</span>
+          </div>
+        )}
 
         {/* Legacy shop */}
         <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">

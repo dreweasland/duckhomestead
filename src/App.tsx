@@ -10,14 +10,15 @@ import {
   playThreat,
   playUpgrade,
 } from './audio/sfx';
-import { zoneDef, type StationType } from './config/balance';
+import { BALANCE, zoneDef, type StationType } from './config/balance';
 import { WaterBoard } from './ui/WaterBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
 import { championGoal } from './game/prestige';
+import { GrangePanel } from './ui/GrangePanel';
 import { LegacyPanel } from './ui/LegacyPanel';
 import { defenseFloor, flockRatio, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
-import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
+import { DuckIcon, GrangeIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
@@ -135,6 +136,24 @@ export default function App() {
     return () => clearTimeout(t);
   }, [salvage]);
 
+  // The Grange: claiming a contract is a quiet rhythm beat, not a milestone DING.
+  const [grangeClaim, setGrangeClaim] = useState<{ id: number; dust: number; shards: number; module?: boolean } | null>(
+    null,
+  );
+  useEffect(
+    () =>
+      engine.onContractClaim((e) => {
+        setGrangeClaim({ id: Date.now(), dust: e.dust, shards: e.shards, module: !!e.module });
+        playCollect();
+      }),
+    [engine],
+  );
+  useEffect(() => {
+    if (!grangeClaim) return;
+    const t = window.setTimeout(() => setGrangeClaim(null), 1500);
+    return () => clearTimeout(t);
+  }, [grangeClaim]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
@@ -145,6 +164,7 @@ export default function App() {
   const [flockOpen, setFlockOpen] = useState(false);
   const [watchOpen, setWatchOpen] = useState(false);
   const [legacyOpen, setLegacyOpen] = useState(false);
+  const [grangeOpen, setGrangeOpen] = useState(false);
   const [welcomeSeen, setWelcomeSeen] = useState(() => {
     try {
       return !!localStorage.getItem(WELCOME_SEEN_KEY);
@@ -274,6 +294,15 @@ export default function App() {
             Auto-salvaged spare · +{salvage.dust} dust
           </span>
         )}
+        {grangeClaim && (
+          <span
+            key={grangeClaim.id}
+            className="salvage-toast rounded-full bg-[#2e3a26] px-3 py-1 text-xs font-bold text-[#bfe8a8] shadow ring-1 ring-[#3a5a3a]"
+          >
+            Contract claimed · +{grangeClaim.dust} dust · +{grangeClaim.shards} shards
+            {grangeClaim.module ? ' · +module' : ''}
+          </span>
+        )}
       </NotifyRail>
       {engine.away && awayOpen && (
         <AwayModal
@@ -294,6 +323,7 @@ export default function App() {
       {flockOpen && <FlockPanel engine={engine} state={state} onClose={() => setFlockOpen(false)} />}
       {watchOpen && <WatchPanel engine={engine} state={state} onClose={() => setWatchOpen(false)} />}
       {legacyOpen && <LegacyPanel engine={engine} state={state} onClose={() => setLegacyOpen(false)} />}
+      {grangeOpen && <GrangePanel engine={engine} state={state} onClose={() => setGrangeOpen(false)} />}
 
       {/* First-run welcome — shown once per browser instead of an inline note. */}
       {showWelcome && (
@@ -531,6 +561,31 @@ export default function App() {
                   </span>
                   <span className="tabular-nums">
                     {ready ? 'champion ready!' : `T${state.legacyTier} · ${Math.round(goal.readiness * 100)}%`}
+                  </span>
+                </button>
+              );
+            })()}
+          {state.legacyTier >= BALANCE.CONTRACTS.UNLOCK_TIER &&
+            (() => {
+              const claimable = !!state.contracts.active?.completed;
+              return (
+                <button
+                  onClick={() => setGrangeOpen(true)}
+                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${
+                    claimable
+                      ? 'bg-[#5a4320] text-[#ffe9a8] ring-1 ring-[#e2b94f] hover:bg-[#6a4f28]'
+                      : 'bg-[#2e3a26] text-[#bfe8a8] hover:bg-[#36422c]'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <GrangeIcon size={16} /> The Grange
+                  </span>
+                  <span className="tabular-nums">
+                    {claimable
+                      ? 'ready to claim!'
+                      : state.contracts.active
+                        ? 'contract active'
+                        : `${state.contracts.offers.length} offers`}
                   </span>
                 </button>
               );

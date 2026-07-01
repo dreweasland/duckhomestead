@@ -422,6 +422,23 @@ export const WaterIcon = (p: PixProps) => (
   />
 );
 
+/** The Grange — a notice board with pinned offers (Phase 6b contracts). */
+export const GrangeIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ d: '#8a6a42', w: '#e8d9b8', k: '#4a3a22', r: '#d95f5f' }}
+    rows={[
+      'dddddddd',
+      'dwwwwwwd',
+      'dwrwwrwd',
+      'dwwkwwwd',
+      'dwkwwwwd',
+      'dwwwwrwd',
+      'dddddddd',
+    ]}
+  />
+);
+
 /** Legacy / prestige — a champion's trophy cup. */
 export const LegacyIcon = (p: PixProps) => (
   <Pix
@@ -451,6 +468,15 @@ export const NutritionIcon = (p: PixProps) => (
       '.dgd.',
       '..d..',
     ]}
+  />
+);
+
+/** Dust — reroll/salvage currency, a scattered speckle. */
+export const DustIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ d: '#b8a26a', h: '#e2d29a' }}
+    rows={['d.h.d', '.d.h.', 'h.d.h', '.h.d.']}
   />
 );
 
