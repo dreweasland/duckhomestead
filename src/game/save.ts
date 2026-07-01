@@ -126,6 +126,9 @@ export function deserialize(raw: string, now: number): GameState {
       deterrentIntegrity: parsed.deterrentIntegrity ?? 1,
       secureCoops: parsed.secureCoops ?? 0,
       infirmaries: parsed.infirmaries ?? 0,
+      hardwareCloth: parsed.hardwareCloth ?? 0,
+      hardwareClothIntegrity: parsed.hardwareClothIntegrity ?? 1,
+      predatorsSeen: parsed.predatorsSeen ?? [],
       // Phase 4e prestige meta — persists across resets; pre-4e saves load at
       // tier 0 with no currency/boosts/hall.
       legacyTier: parsed.legacyTier ?? 0,

@@ -4,6 +4,7 @@ import {
   PREDATOR_DEFS,
   ZONE_DEFS,
   zoneDef,
+  type DefenseType,
   type StationType,
 } from '../config/balance';
 
@@ -373,6 +374,14 @@ export interface GameState {
   /** Deterrent integrity (0..1): the floor scales with it. Worn by threat windows
    *  + breaches; restored by the Repair action. The defense upkeep loop. */
   deterrentIntegrity: number;
+  /** Hardware cloth — the GROUND defense line (vs the raccoon). A separate pool from
+   *  nets, with its own integrity + upkeep. */
+  hardwareCloth: number;
+  hardwareClothIntegrity: number;
+  /** Predator ids that have DEBUTED (been seen online). Drives the "no bolt from the
+   *  blue" grace for later predators (the raccoon) just as predatorsIntroduced does
+   *  for the owl. */
+  predatorsSeen?: string[];
 
   // ── Phase 4c: secure housing ──
   /** Built Secure Coops (count) — each adds SECURE_SLOTS_PER_COOP secure slots. */
@@ -464,7 +473,7 @@ export interface PendingStrike {
 
 /** Transient predator events for UI feedback + the away summary. Not authoritative. */
 export type PredatorEvent =
-  | { kind: 'introduced' }
+  | { kind: 'introduced'; predatorId?: string }
   | { kind: 'incoming'; predatorId: string }
   | { kind: 'open'; predatorId: string }
   // The owl committed a dive (online): the telegraphed wind-up began — scare it!
@@ -514,10 +523,11 @@ export function infirmaryOccupied(state: GameState): number {
 /** Homestead-wide protection floor from built deterrents (capped), scaled by their
  *  integrity. Passive and offline-safe, but it WEARS — a neglected floor sags
  *  toward zero, so it must be repaired to keep its full value. */
-export function defenseFloor(state: GameState): number {
+export function defenseFloor(state: GameState, type: DefenseType = 'net'): number {
   const P = BALANCE.PREDATORS;
-  const raw = state.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT * state.deterrentIntegrity;
-  return Math.min(P.DEFENSE_FLOOR_CAP, raw);
+  const count = type === 'cloth' ? state.hardwareCloth : state.deterrents;
+  const integrity = type === 'cloth' ? state.hardwareClothIntegrity : state.deterrentIntegrity;
+  return Math.min(P.DEFENSE_FLOOR_CAP, count * P.DEFENSE_FLOOR_PER_DETERRENT * integrity);
 }
 
 /** Mutable per-zone state (the static shape lives in ZONE_DEFS). */
@@ -618,6 +628,9 @@ export function initialState(now: number): GameState {
     predators: initialPredators(),
     deterrents: 0,
     deterrentIntegrity: 1,
+    hardwareCloth: 0,
+    hardwareClothIntegrity: 1,
+    predatorsSeen: [],
     secureCoops: 0,
     infirmaries: 0,
     predatorsIntroduced: false,

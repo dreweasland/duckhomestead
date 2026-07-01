@@ -30,6 +30,8 @@ import {
   repairDeterrents,
   setSecured,
   admitToInfirmary,
+  buildHardwareCloth,
+  repairHardwareCloth,
 } from '../src/game/actions';
 import { runOfflineCatchUp, deserialize, serialize } from '../src/game/save';
 import { fullSetup, stockAll, setHens, run } from './helpers';
@@ -144,8 +146,69 @@ describe('predator config is generic (owl is data, not hardcoded)', () => {
     expect(PREDATOR_DEFS[0].windowEverySec).toBe(P.OWL.windowEverySec);
   });
 
-  it('ships exactly one predator this phase (more are later config)', () => {
-    expect(PREDATOR_DEFS).toHaveLength(1);
+  it('the raccoon is a second data-driven predator on its own defense line', () => {
+    const rac = PREDATOR_DEFS.find((d) => d.id === 'raccoon')!;
+    expect(rac.defense).toBe('cloth'); // stopped by hardware cloth, not nets
+    expect(PREDATOR_DEFS.find((d) => d.id === 'owl')!.defense).toBe('net');
+    expect(rac.introRank).toBeGreaterThan(BALANCE.PREDATORS.INTRO_RANK); // debuts later
+  });
+});
+
+describe('per-predator defense: nets stop the owl, hardware cloth stops the raccoon', () => {
+  const owl = PREDATOR_DEFS.find((d) => d.id === 'owl')!;
+  const rac = PREDATOR_DEFS.find((d) => d.id === 'raccoon')!;
+
+  it('a defense line only lowers ITS predator, not the other', () => {
+    const s = flock(4);
+    s.deterrents = 3; // nets only
+    s.hardwareCloth = 0;
+    expect(attackChance(s, owl, false)).toBeLessThan(owl.baseAttackChance); // nets cut the owl
+    expect(attackChance(s, rac, false)).toBeCloseTo(rac.baseAttackChance, 6); // ...not the raccoon
+
+    s.deterrents = 0;
+    s.hardwareCloth = 3; // cloth only
+    expect(attackChance(s, rac, false)).toBeLessThan(rac.baseAttackChance); // cloth cuts the raccoon
+    expect(attackChance(s, owl, false)).toBeCloseTo(owl.baseAttackChance, 6); // ...not the owl
+  });
+
+  it('build/repair hardware cloth raises then restores the ground floor (its own pool)', () => {
+    const s = flock(4);
+    s.resources.eggs = 1e6;
+    expect(buildHardwareCloth(s).ok).toBe(true);
+    expect(s.hardwareCloth).toBe(1);
+    expect(defenseFloor(s, 'cloth')).toBeGreaterThan(0);
+    expect(defenseFloor(s, 'net')).toBe(0); // nets untouched — separate pool
+    s.hardwareClothIntegrity = 0.4; // worn by a raid
+    const before = s.resources.eggs;
+    expect(repairHardwareCloth(s).ok).toBe(true);
+    expect(s.hardwareClothIntegrity).toBe(1);
+    expect(s.resources.eggs).toBeLessThan(before); // repair costs eggs
+  });
+});
+
+describe('the raccoon debuts at its rank (never a bolt from the blue)', () => {
+  const RANK = BALANCE.PREDATORS.RACCOON_INTRO_RANK;
+
+  it('stays dormant below its intro rank', () => {
+    const s = flock(6);
+    s.rank = RANK - 1;
+    runPredators(s, 1, { mode: 'online', rng: never });
+    expect(s.predatorsSeen ?? []).not.toContain('raccoon');
+  });
+
+  it('debuts online at its rank with its own introduced beat', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    runPredators(s, 1, { mode: 'online', rng: never });
+    expect(s.predatorsSeen).toContain('raccoon');
+    expect(events(s).some((e) => e.kind === 'introduced' && e.predatorId === 'raccoon')).toBe(true);
+  });
+
+  it('does NOT debut offline — a returning player who ranked past it is not ambushed', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    runPredators(s, 1, { mode: 'offline', rng: never });
+    expect(s.predatorsSeen ?? []).not.toContain('raccoon');
   });
 });
 

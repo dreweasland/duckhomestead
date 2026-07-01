@@ -53,9 +53,12 @@ describe('save round-trip', () => {
     // predators
     s.deterrents = 2;
     s.deterrentIntegrity = 0.6;
+    s.hardwareCloth = 2;
+    s.hardwareClothIntegrity = 0.5;
     s.secureCoops = 1;
     s.infirmaries = 3;
     s.predatorsIntroduced = true;
+    s.predatorsSeen = ['owl', 'raccoon'];
     // prestige
     s.legacyTier = 3;
     s.legacyCurrency = 40;
@@ -80,6 +83,9 @@ describe('save round-trip', () => {
     expect(r.statWeightPreset).toBe('idle');
     expect(r.deterrents).toBe(2);
     expect(r.deterrentIntegrity).toBe(0.6);
+    expect(r.hardwareCloth).toBe(2);
+    expect(r.hardwareClothIntegrity).toBe(0.5);
+    expect(r.predatorsSeen).toEqual(['owl', 'raccoon']);
     expect(r.secureCoops).toBe(1);
     expect(r.infirmaries).toBe(3);
     expect(r.ducks[1]).toMatchObject({ severity: 'serious', recovering: true, recoveryElapsed: 4 });

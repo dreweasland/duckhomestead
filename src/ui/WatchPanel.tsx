@@ -65,6 +65,20 @@ export function WatchPanel({
   const integrityColor = integrity >= 0.66 ? '#8fe388' : integrity >= 0.33 ? '#e8c45a' : '#e8835a';
   const canRepair = state.deterrents > 0 && integrity < 1 && eggs >= repairCost;
 
+  // Hardware cloth (ground defense vs the raccoon) — shown once the raccoon debuts.
+  const raccoonHere = (state.predatorsSeen ?? []).includes('raccoon');
+  const clothCost = P.HARDWARE_CLOTH_COST_EGGS;
+  const clothFloorPct = Math.round(defenseFloor(state, 'cloth') * 100);
+  const clothMaxed = state.hardwareCloth * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP;
+  const clothIntegrity = state.hardwareClothIntegrity;
+  const clothIntegrityPct = Math.round(clothIntegrity * 100);
+  const clothRepairCost = Math.max(
+    1,
+    Math.round(state.hardwareCloth * P.DETERRENT_REPAIR_COST_PER_NET * (1 - clothIntegrity)),
+  );
+  const clothColor = clothIntegrity >= 0.66 ? '#8fe388' : clothIntegrity >= 0.33 ? '#e8c45a' : '#e8835a';
+  const canRepairCloth = state.hardwareCloth > 0 && clothIntegrity < 1 && eggs >= clothRepairCost;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
@@ -110,10 +124,17 @@ export function WatchPanel({
 
         <div className="mb-3 grid grid-cols-1 gap-1.5">
           <StatRow
-            label="Protection floor"
+            label="Aerial floor (owl)"
             value={`${floorPct}%`}
             hint={`cap ${capPct}% · ${state.deterrents} nets @ ${integrityPct}%`}
           />
+          {raccoonHere && (
+            <StatRow
+              label="Ground floor (raccoon)"
+              value={`${clothFloorPct}%`}
+              hint={`cap ${capPct}% · ${state.hardwareCloth} cloth @ ${clothIntegrityPct}%`}
+            />
+          )}
           <StatRow label="Secured breeders" value={`${securedCount} / ${slots}`} hint="excluded from attacks" />
           <StatRow label="Wounded" value={`${wounded.length}`} hint={wounded.length ? 'treat before they escalate' : 'none'} />
         </div>
@@ -154,6 +175,39 @@ export function WatchPanel({
           </div>
         )}
 
+        {/* Hardware cloth integrity + repair — the raccoon's upkeep loop */}
+        {state.hardwareCloth > 0 && (
+          <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+                Hardware cloth integrity
+              </span>
+              <span className="text-xs font-bold tabular-nums" style={{ color: clothColor }}>
+                {clothIntegrityPct}%
+              </span>
+            </div>
+            <div className="mb-2 h-2 overflow-hidden rounded-full bg-[#3a2e22]">
+              <div
+                className="h-full rounded-full transition-[width]"
+                style={{ width: `${clothIntegrityPct}%`, background: clothColor }}
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (engine.repairHardwareCloth().ok) playPlace();
+              }}
+              disabled={!canRepairCloth}
+              className={`w-full rounded-md px-3 py-2 text-xs font-bold transition ${
+                canRepairCloth
+                  ? 'bg-[#2e3a26] text-[#bfe8a8] hover:bg-[#36422c]'
+                  : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+              }`}
+            >
+              {clothIntegrity >= 1 ? 'Cloth pristine' : `Repair cloth · ${clothRepairCost} eggs`}
+            </button>
+          </div>
+        )}
+
         {/* Build defenses */}
         <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">
           <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
@@ -184,6 +238,32 @@ export function WatchPanel({
                 <EggIcon size={12} /> {deterrentCost}
               </span>
             </button>
+            {raccoonHere && (
+              <button
+                onClick={() => {
+                  if (engine.buildHardwareCloth().ok) playPlace();
+                }}
+                disabled={eggs < clothCost || clothMaxed}
+                className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-xs transition ${
+                  eggs >= clothCost && !clothMaxed
+                    ? 'bg-[#2e3a26] text-[#bfe8a8] hover:bg-[#36422c]'
+                    : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+                }`}
+              >
+                <NetIcon size={18} />
+                <span className="flex-1">
+                  <span className="font-bold">Hardware Cloth</span>
+                  <span className="block text-[10px] opacity-80">
+                    {clothMaxed
+                      ? `ground floor maxed at ${capPct}%`
+                      : `+${Math.round(P.DEFENSE_FLOOR_PER_DETERRENT * 100)}% GROUND floor vs the raccoon (nets don’t help here)`}
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1 font-bold text-[#ffe9a8]">
+                  <EggIcon size={12} /> {clothCost}
+                </span>
+              </button>
+            )}
             <button
               onClick={() => {
                 if (engine.buildSecureCoop().ok) playPlace();

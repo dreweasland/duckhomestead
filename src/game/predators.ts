@@ -101,7 +101,7 @@ export function incoming(ps: PredatorState, def: PredatorDef): boolean {
  */
 export function attackChance(state: GameState, def: PredatorDef, present: boolean): number {
   const presence = present ? P.PRESENCE_FACTOR : 0;
-  return def.baseAttackChance * (1 - defenseFloor(state)) * (1 - presence);
+  return def.baseAttackChance * (1 - defenseFloor(state, def.defense)) * (1 - presence);
 }
 
 /** The most urgent predator state for the UI telegraph: an open window outranks
@@ -182,11 +182,21 @@ function emit(state: GameState, e: PredatorEvent): void {
   (state.pendingPredatorEvents ??= []).push(e);
 }
 
+/** A fresh window schedule for a predator (first window a full interval away). */
+function freshSchedule(def: PredatorDef): PredatorState {
+  return { timeToNextWindow: def.windowEverySec, windowRemaining: 0, windowElapsed: 0, attacksFired: 0 };
+}
+
 /** Weather the deterrent floor (no-op without deterrents). Clamped at 0; only the
  *  Repair action brings it back up. */
-function wearDeterrents(state: GameState, amount: number): void {
-  if (state.deterrents <= 0) return;
-  state.deterrentIntegrity = Math.max(0, state.deterrentIntegrity - amount);
+function wearDefense(state: GameState, type: PredatorDef['defense'], amount: number): void {
+  if (type === 'cloth') {
+    if (state.hardwareCloth <= 0) return;
+    state.hardwareClothIntegrity = Math.max(0, state.hardwareClothIntegrity - amount);
+  } else {
+    if (state.deterrents <= 0) return;
+    state.deterrentIntegrity = Math.max(0, state.deterrentIntegrity - amount);
+  }
 }
 
 /** Land a hit that got past the floor onto a specific (already-chosen) target:
@@ -220,7 +230,7 @@ function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, r
   if (rng() >= success) return; // attack missed (defenses/presence held)
 
   // A breach — the attack got past the floor — tears the netting extra.
-  wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
+  wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
 
   const target = pickTarget(state, rng);
   if (!target) return; // nothing exposed (all secured / none eligible) — no effect
@@ -305,7 +315,7 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
   if (opts.activeDefense) {
     // ACTIVE: the player is here, so the built floor + presence are off — an
     // un-scared committed dive lands. The scare was the only defense.
-    wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
+    wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
     landHit(state, def, opts, target, rng);
     return;
   }
@@ -313,7 +323,7 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
   // GUARD (online idle): the built floor + passive presence get a roll to hold.
   const success = attackChance(state, def, true);
   if (rng() >= success) return; // missed — defenses/presence held
-  wearDeterrents(state, P.DETERRENT_WEAR_PER_HIT);
+  wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
   landHit(state, def, opts, target, rng);
 }
 
@@ -438,7 +448,7 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     ps.windowElapsed = 0;
     ps.attacksFired = 0;
     ps.windowAttacks = rollWindowAttacks(def, rng); // hidden 1..3 — no "2 and done"
-    wearDeterrents(state, P.DETERRENT_WEAR_PER_WINDOW); // the night weathers the nets
+    wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_WINDOW); // the night weathers the nets
     emit(state, { kind: 'open', predatorId: def.id });
   }
 }
@@ -514,28 +524,36 @@ export function runPredators(state: GameState, dt: number, opts: PredatorOpts): 
   const rng = opts.rng ?? Math.random;
 
   if (predatorsActive(state)) {
-    // First-contact grace: predators may ONLY debut while the player is present
-    // (online). If they would first activate during an absence (offline catch-up
-    // — e.g. a returning player's first 4c load), hold them entirely so nobody
-    // is exposed before they ever saw the threat. Introduction resets the
-    // schedule so the first window is a full, telegraphed interval away.
+    // First-contact grace: the base predator(s) may ONLY debut while the player is
+    // present (online). If they would first activate during an absence (offline
+    // catch-up), hold them entirely so nobody is exposed before they ever saw the
+    // threat. Introduction resets every schedule so the first window is a full,
+    // telegraphed interval away.
     if (!state.predatorsIntroduced) {
       if (opts.mode === 'offline') {
         escalateWounds(state, dt, opts);
         return;
       }
       state.predatorsIntroduced = true;
-      for (const def of PREDATOR_DEFS) {
-        state.predators[def.id] = {
-          timeToNextWindow: def.windowEverySec,
-          windowRemaining: 0,
-          windowElapsed: 0,
-          attacksFired: 0,
-        };
-      }
-      emit(state, { kind: 'introduced' });
+      for (const def of PREDATOR_DEFS) state.predators[def.id] = freshSchedule(def);
+      emit(state, { kind: 'introduced', predatorId: PREDATOR_DEFS[0].id });
     }
-    for (const def of PREDATOR_DEFS) advancePredator(state, def, opts, dt, rng);
+    for (const def of PREDATOR_DEFS) {
+      if (state.rank < def.introRank) continue; // not yet at this predator's rank
+      // Later predators (e.g. the raccoon) debut lazily as their rank is reached —
+      // online only (the same grace), announced, and never mid-window on arrival.
+      if (def.introRank > P.INTRO_RANK) {
+        const seen = (state.predatorsSeen ??= []);
+        if (!seen.includes(def.id)) {
+          if (opts.mode === 'offline') continue;
+          seen.push(def.id);
+          state.predators[def.id] = freshSchedule(def);
+          emit(state, { kind: 'introduced', predatorId: def.id });
+          continue; // no attack the tick it arrives
+        }
+      }
+      advancePredator(state, def, opts, dt, rng);
+    }
   }
   // Wounds always age/escalate — even if predators went dormant, an existing
   // wound still needs treating or it's lost. (Attributable: it was visible.)
