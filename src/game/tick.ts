@@ -26,12 +26,13 @@ export interface TickOptions {
   predatorLossBudget?: { remaining: number };
 }
 
-/** Effective output of a station per cycle for a given resource (level + rack yield). */
-function stationOutput(state: GameState, station: Station, resource: Resource): number {
+/** Effective output of a station per cycle for a given resource (level × the
+ *  homestead-wide throughput scalar). `throughput` = rack yield × legacy output
+ *  boost, precomputed once per tick by the caller (it's constant within a step, so
+ *  recomputing the O(rack) yieldMult per cycle/output was pure waste). */
+function stationOutput(station: Station, resource: Resource, throughput: number): number {
   const base = STATION_DEFS[station.type].outputs[resource] ?? 0;
-  // Phase 4e: the legacy `output` boost is a uniform top-level scalar on all
-  // station output, alongside level + rack yield. Throughput only.
-  return base * UPGRADE_OUTPUT(station.level) * yieldMult(state) * outputBoostMult(state);
+  return base * UPGRADE_OUTPUT(station.level) * throughput;
 }
 
 
@@ -50,7 +51,7 @@ function haul(state: GameState, station: Station): void {
  * Returns true if a cycle ran. Inputs are scaled by level the same as outputs
  * so throughput stays balanced across the chain.
  */
-function runCycle(state: GameState, station: Station): boolean {
+function runCycle(state: GameState, station: Station, throughput: number): boolean {
   const def = STATION_DEFS[station.type];
   const mult = UPGRADE_OUTPUT(station.level);
 
@@ -65,7 +66,7 @@ function runCycle(state: GameState, station: Station): boolean {
   }
   // Deposit outputs into the station buffer.
   for (const key of Object.keys(def.outputs) as Resource[]) {
-    station.buffer[key] = (station.buffer[key] ?? 0) + stationOutput(state, station, key);
+    station.buffer[key] = (station.buffer[key] ?? 0) + stationOutput(station, key, throughput);
   }
   return true;
 }
@@ -87,6 +88,9 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // Rack speed modules + the legacy stationSpeed boost are homestead-wide — hoist
   // them out of the loop (cycleMult is O(rack)) instead of recomputing per station.
   const cycleScale = cycleMult(state) / speedBoostMult(state);
+  // Homestead-wide output scalar (rack yield × legacy output boost) — constant this
+  // step, so compute the O(rack) part once instead of per cycle/output in runCycle.
+  const throughput = yieldMult(state) * outputBoostMult(state);
   for (const station of state.stations) {
     // Tend cooldown ticks down in real seconds regardless of rate.
     if (station.tendCooldownRemaining > 0) {
@@ -105,7 +109,7 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     // progress at one cycle so the station fires the instant inputs arrive.
     let guard = 100000; // runaway guard for very long offline steps
     while (station.cycleProgress >= cycleSeconds && guard-- > 0) {
-      if (runCycle(state, station)) {
+      if (runCycle(state, station, throughput)) {
         station.cycleProgress -= cycleSeconds;
         if (willHaul) haul(state, station);
       } else {

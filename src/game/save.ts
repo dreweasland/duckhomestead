@@ -218,6 +218,13 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
   // Secured ducks never count and never die. Reset any leftover transient events
   // so the toll we summarize is purely from this catch-up.
   state.pendingPredatorEvents = [];
+  // Only afflictions that BEGIN during this catch-up belong in the away toll — a duck
+  // already wounded/limping when you left was reported live (a banner), so counting
+  // its still-present wound here would double-report it as "the owl, in the night."
+  // Losses are event-based (net-new by construction); snapshot wounds/debuffs so those
+  // counts are net-new too.
+  const preWounded = new Set(state.ducks.filter((d) => d.wounded).map((d) => d.id));
+  const preDebuffed = new Set(state.ducks.filter((d) => d.debuffed).map((d) => d.id));
   const unsecured = state.ducks.filter((d) => !d.secured).length;
   const predatorLossBudget = {
     remaining: Math.floor(unsecured * BALANCE.PREDATORS.MAX_OFFLINE_LOSS_FRACTION),
@@ -251,7 +258,7 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     (e) => e.kind === 'snatched' || (e.kind === 'escalated' && e.source !== 'overcrowd'),
   ).length;
   const overcrowdLost = events.filter(isOvercrowd).length;
-  const woundedDucks = state.ducks.filter((d) => d.wounded);
+  const woundedDucks = state.ducks.filter((d) => d.wounded && !preWounded.has(d.id));
   const predatorWounded = woundedDucks.filter((d) => d.woundSource !== 'overcrowd').length;
   const overcrowdWounded = woundedDucks.filter((d) => d.woundSource === 'overcrowd').length;
   state.pendingPredatorEvents = [];
@@ -266,7 +273,7 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     predatorLost > 0 || predatorWounded > 0 ? { wounded: predatorWounded, lost: predatorLost } : undefined;
   const overcrowd =
     overcrowdLost > 0 || overcrowdWounded > 0 ? { injured: overcrowdWounded, lost: overcrowdLost } : undefined;
-  const debuffedCount = state.ducks.filter((d) => d.debuffed).length;
+  const debuffedCount = state.ducks.filter((d) => d.debuffed && !preDebuffed.has(d.id)).length;
   const debuffed = debuffedCount > 0 ? debuffedCount : undefined;
 
   state.lastSeen = now;
