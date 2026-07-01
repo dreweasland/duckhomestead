@@ -59,7 +59,7 @@ export function StatusPills({ state }: { state: GameState }) {
           title={
             armed
               ? 'Guard mode — your nets/cloth are on duty (dives roll against your floor, no scaring needed). Safe to idle or step away.'
-              : `Active play — the floor is suppressed, so you scare dives yourself. Idle ${mmss} more and your defenses arm automatically.`
+              : 'Active play — the floor is suppressed, so you scare dives yourself. Idle until the countdown ends and your defenses arm automatically.'
           }
           className={`inline-flex cursor-help items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ring-1 transition ${
             armed ? 'bg-[#1f3326] text-[#bfe8a8] ring-[#3a5a3a]' : 'bg-[#3a2e16] text-[#ffe9a8] ring-[#e2b94f]'
