@@ -18,12 +18,16 @@ import {
   adultDrakes,
   adultLayers,
   breedingEstablished,
+  deterrentCost,
+  hardwareClothCost,
   infirmaryCapacity,
+  infirmaryCost,
   infirmaryOccupied,
   INGREDIENTS,
   isBlockedTile,
   rackSockets,
   secureCapacity,
+  secureCoopCost,
   seedFlock,
   stationAt,
   zoneUnlocked,
@@ -625,7 +629,7 @@ export function doseNiacin(state: GameState): ActionResult<DoseResult> {
  * is capped (DEFENSE_FLOOR_CAP) so built defenses alone can't be 100%.
  */
 export function buildDeterrent(state: GameState): ActionResult<{ deterrents: number }> {
-  const cost = BALANCE.PREDATORS.DETERRENT_COST_EGGS;
+  const cost = deterrentCost(state);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;
   // A fresh, pristine net raises the average integrity of the (possibly worn) set.
@@ -657,7 +661,7 @@ export function repairDeterrents(state: GameState): ActionResult<{ cost: number 
 /** Build one length of hardware cloth — the GROUND defense (vs the raccoon). Its own
  *  pool + integrity, parallel to nets. */
 export function buildHardwareCloth(state: GameState): ActionResult<{ hardwareCloth: number }> {
-  const cost = BALANCE.PREDATORS.HARDWARE_CLOTH_COST_EGGS;
+  const cost = hardwareClothCost(state);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;
   state.hardwareClothIntegrity =
@@ -687,7 +691,7 @@ export function repairHardwareCloth(state: GameState): ActionResult<{ cost: numb
  * for protecting irreplaceable breeders.
  */
 export function buildSecureCoop(state: GameState): ActionResult<{ secureCoops: number }> {
-  const cost = BALANCE.PREDATORS.SECURE_COOP_COST_EGGS;
+  const cost = secureCoopCost(state);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;
   state.secureCoops += 1;
@@ -711,7 +715,7 @@ export function setSecured(state: GameState, duckId: string, secured: boolean): 
 
 /** Build one Infirmary — adds INFIRMARY.SLOTS_PER recovery slots. Costs eggs. */
 export function buildInfirmary(state: GameState): ActionResult<{ infirmaries: number }> {
-  const cost = BALANCE.PREDATORS.INFIRMARY.COST_EGGS;
+  const cost = infirmaryCost(state);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;
   state.infirmaries += 1;

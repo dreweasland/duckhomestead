@@ -3,6 +3,7 @@ import { BALANCE, PREDATOR_DEFS, predatorDef } from '../src/config/balance';
 import {
   initialState,
   defenseFloor,
+  deterrentCost,
   secureCapacity,
   type Duck,
   type GameState,
@@ -169,6 +170,28 @@ describe('per-predator defense: nets stop the owl, hardware cloth stops the racc
     s.hardwareCloth = 3; // cloth only
     expect(attackChance(s, rac, false)).toBeLessThan(rac.baseAttackChance); // cloth cuts the raccoon
     expect(attackChance(s, owl, false)).toBeCloseTo(owl.baseAttackChance, 6); // ...not the owl
+  });
+
+  it('build-defense cost escalates with each of a kind already built', () => {
+    const s = flock(4);
+    s.resources.eggs = 1e7;
+    const c1 = deterrentCost(s);
+    buildDeterrent(s);
+    const c2 = deterrentCost(s);
+    expect(c2).toBe(Math.round(c1 * BALANCE.PREDATORS.DEFENSE_COST_GROWTH)); // × growth each
+    expect(c2).toBeGreaterThan(c1);
+  });
+
+  it('secure coops give +4 slots for the first, +2 for each additional (diminishing)', () => {
+    const s = flock(4);
+    s.resources.eggs = 1e7;
+    expect(secureCapacity(s)).toBe(0);
+    buildSecureCoop(s);
+    expect(secureCapacity(s)).toBe(BALANCE.PREDATORS.SECURE_SLOTS_PER_COOP); // 4
+    buildSecureCoop(s);
+    expect(secureCapacity(s)).toBe(
+      BALANCE.PREDATORS.SECURE_SLOTS_PER_COOP + BALANCE.PREDATORS.SECURE_SLOTS_ADDITIONAL, // 6
+    );
   });
 
   it('build/repair hardware cloth raises then restores the ground floor (its own pool)', () => {
