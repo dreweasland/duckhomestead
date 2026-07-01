@@ -413,11 +413,11 @@ function Breeding({
               >
                 <span className="w-2 shrink-0 text-[#7a6a4a]">{isOpen ? '▾' : '▸'}</span>
                 <ColorSwatch color={phenotype(dr.genotype)} size={11} />
-                <PhenoBands genome={dr.genome} width={16} />
+                {!dr.genomeKnown && <PhenoBands genome={dr.genome} width={16} />}
                 <GenomeTiles duck={dr} target={target} size={12} />
                 <span className="text-[#5a4d3a]">·</span>
                 <ColorSwatch color={phenotype(he.genotype)} size={11} />
-                <PhenoBands genome={he.genome} width={16} />
+                {!he.genomeKnown && <PhenoBands genome={he.genome} width={16} />}
                 <GenomeTiles duck={he} target={target} size={12} />
               </button>
               <button
@@ -457,7 +457,7 @@ function Breeding({
             {duck ? (
               <>
                 <ColorSwatch color={phenotype(duck.genotype)} size={11} />
-                <PhenoBands genome={duck.genome} width={16} />
+                {!duck.genomeKnown && <PhenoBands genome={duck.genome} width={16} />}
                 <GenomeTiles duck={duck} target={target} size={11} />
                 <button
                   onClick={clear}
@@ -884,7 +884,7 @@ export function FlockPanel({
                         </span>
                       )}
                       <span className="ml-auto flex items-center gap-1.5">
-                        <PhenoBands genome={d.genome} />
+                        {!d.genomeKnown && <PhenoBands genome={d.genome} />}
                         <GenomeTiles duck={d} target={target} size={13} />
                         <span
                           className="tabular-nums text-[#ffe9a8]"
