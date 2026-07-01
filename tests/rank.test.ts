@@ -42,10 +42,10 @@ describe('gainXP', () => {
     s.xp = 0;
     s.inventory = [];
     let need = 0;
-    for (let n = 1; n <= 6; n++) need += xpForLevel(n); // 1 → 7, crossing grants at 3 and 7
+    for (let n = 1; n <= 7; n++) need += xpForLevel(n); // 1 → 8, crossing grants at 3 and 8
     const r = gainXP(s, need);
-    expect(s.rank).toBe(7);
-    expect(r.grantedModules.map((m) => m.rarity)).toEqual([GRANTS[3], GRANTS[7]]);
+    expect(s.rank).toBe(8);
+    expect(r.grantedModules.map((m) => m.rarity)).toEqual([GRANTS[3], GRANTS[8]]);
     expect(s.inventory).toHaveLength(2);
   });
 });

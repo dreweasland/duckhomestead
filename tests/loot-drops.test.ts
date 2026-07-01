@@ -21,11 +21,11 @@ describe('milestone grants (online only, via gainXP)', () => {
   it('grants escalate across multiple milestone ranks', () => {
     const s = build({ coop: 1 });
     let need = 0;
-    for (let r = 1; r < 7; r++) need += xpForLevel(r);
-    gainXP(s, need + 1); // reach rank 7 -> grants at 3 and 7
+    for (let r = 1; r < 8; r++) need += xpForLevel(r);
+    gainXP(s, need + 1); // reach rank 8 -> grants at 3 and 8
     const rarities = s.inventory.map((m) => m.rarity);
     expect(rarities).toContain(BALANCE.LOOT.MILESTONE_GRANTS[3]);
-    expect(rarities).toContain(BALANCE.LOOT.MILESTONE_GRANTS[7]);
+    expect(rarities).toContain(BALANCE.LOOT.MILESTONE_GRANTS[8]);
   });
 });
 

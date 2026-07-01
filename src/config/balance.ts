@@ -247,7 +247,7 @@ export const BALANCE = {
      *  modest — it's a wellness feature (no income) and is re-paid each prestige. */
     POND_UNLOCK: { rankRequired: 12, eggCost: 1500 },
     /** Stage 2 — Waterworks (circulation). Arrives later, as fouling bites. */
-    WORKS_UNLOCK: { rankRequired: 18, eggCost: 3000 },
+    WORKS_UNLOCK: { rankRequired: 17, eggCost: 3000 },
     /** The shared water canvas (pond shape). Both tabs edit these coordinates. */
     CANVAS: { width: 7, height: 5 },
     /** Always-on baseline provision (the yard's puddle) so a small flock with no
@@ -423,10 +423,11 @@ export const BALANCE = {
 
     /** Predators stay dormant until the player has a flock AND reaches this rank,
      *  so the risk layer never ambushes a brand-new homestead mid-onboarding. */
-    INTRO_RANK: 3,
+    INTRO_RANK: 4,
     /** Rank the raccoon (the second, ground predator) debuts — later than the owl,
-     *  so a second threat + defense line arrives as the homestead grows. */
-    RACCOON_INTRO_RANK: 8,
+     *  so a second threat + defense line arrives as the homestead grows. (Kept off
+     *  rank 8 so it doesn't share a rank with the guaranteed-rare loot grant.) */
+    RACCOON_INTRO_RANK: 9,
 
     /** Offline mercy rail: a single catch-up can permanently lose AT MOST this
      *  fraction of the (non-secured) flock — past it, escalating wounds are held
@@ -513,7 +514,7 @@ export const BALANCE = {
     TEND_DROP_CHANCE: 0.04,
     DROP_RARITY_WEIGHTS: { common: 60, uncommon: 25, rare: 11, epic: 6, legendary: 1.5 } as Record<string, number>,
     /** Guaranteed module of a fixed rarity at these ranks. */
-    MILESTONE_GRANTS: { 3: 'uncommon', 7: 'rare', 12: 'epic', 18: 'legendary' } as Record<number, string>,
+    MILESTONE_GRANTS: { 3: 'uncommon', 8: 'rare', 13: 'epic', 18: 'legendary' } as Record<number, string>,
     /** Salvage yields dust by rarity; reroll spends dust. */
     SALVAGE_DUST: { common: 1, uncommon: 3, rare: 8, epic: 20, legendary: 50 } as Record<string, number>,
     REROLL_DUST_COST: 10,
