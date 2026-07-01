@@ -315,7 +315,10 @@ function Breeding({
   const B = BALANCE.BREEDING;
   const target = state.genomeTarget;
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
-  const byId = (id: string) => state.ducks.find((d) => d.id === id);
+  // Index by id once: the breeding-pairs list calls byId twice per pair, so a linear
+  // `.find` made that O(pairs × ducks) per render (~15Hz while open, ducks up to 216).
+  const duckById = new Map(state.ducks.map((d) => [d.id, d]));
+  const byId = (id: string) => duckById.get(id);
 
   // Pair cards collapse by default (just identity + clutch timer) so multiple pairs
   // stay compact; tap one to reveal its colour odds + crossbreed preview.
@@ -606,6 +609,10 @@ export function FlockPanel({
       }
       return sortStat[sortKey](b) - sortStat[sortKey](a);
     });
+  // Index paired ducks once (O(pairs)) — both the per-row "is this duck in a pair"
+  // check and the bulk-release filter run over the shown list (up to 216), so a
+  // linear `.some` per duck made those O(shown × pairs) per render (~15Hz while open).
+  const pairedIds = new Set(state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
   // Faceted counts: each filter row's badges reflect the OTHER active filter (and
   // the color tab), so the badge on the selected option always equals the number
   // of rows shown.
@@ -759,12 +766,10 @@ export function FlockPanel({
                 eligible (an unread "?" can't be judged). Protects secured (prize)
                 + paired (in-use) birds — use the per-row release for those. */}
             {shown.length > 0 && (() => {
-              const isPaired = (id: string) =>
-                state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
               const eligible = shown.filter(
                 (d) =>
                   !d.secured &&
-                  !isPaired(d.id) &&
+                  !pairedIds.has(d.id) &&
                   d.genomeKnown &&
                   targetMatch(d.genome, target) < cullQuality,
               );
@@ -832,7 +837,7 @@ export function FlockPanel({
               <div className="flex flex-col gap-1">
                 {shown.map((d) => {
                   const canSecure = d.secured || slotsUsed < slotsTotal;
-                  const isPaired = state.breedingPairs.some((p) => p.drakeId === d.id || p.henId === d.id);
+                  const isPaired = pairedIds.has(d.id);
                   const picked = d.id === mateDrakeId || d.id === mateHenId;
                   const canPick = d.stage === 'adult' && !d.wounded && !isPaired;
                   return (

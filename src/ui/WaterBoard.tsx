@@ -263,8 +263,13 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
     }
   }, [mode]);
   const view = pondView(state);
-  const featAt = (x: number, y: number) => view.features.find((f) => f.x === x && f.y === y);
-  const flowAt = (x: number, y: number) => view.flow.find((f) => f.x === x && f.y === y);
+  // Index features/flow by cell once per render (O(F+L)) so the W×H grid's per-cell
+  // lookups below are O(1) — was O(cells × features) via `.find`, re-running ~15Hz
+  // while the board is open and growing with pond size.
+  const featByKey = new Map(view.features.map((f) => [cellKey(f.x, f.y), f]));
+  const flowByKey = new Map(view.flow.map((f) => [cellKey(f.x, f.y), f]));
+  const featAt = (x: number, y: number) => featByKey.get(cellKey(x, y));
+  const flowAt = (x: number, y: number) => flowByKey.get(cellKey(x, y));
 
   const provision = waterProvision(state);
   const requirement = flockRequirement(state);
@@ -322,7 +327,7 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
   };
 
   // The selected feature (layout mode only); cleared if it no longer exists.
-  const selected = !isFlow && selKey ? view.features.find((f) => cellKey(f.x, f.y) === selKey) ?? null : null;
+  const selected = !isFlow && selKey ? featByKey.get(selKey) ?? null : null;
   const upgradeCost = selected ? pondFeatureUpgradeCost(state, selected.x, selected.y) : 0;
 
   return (
