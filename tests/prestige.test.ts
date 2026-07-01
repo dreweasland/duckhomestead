@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { runBreeding } from '../src/game/breeding';
 import { BALANCE } from '../src/config/balance';
 import {
   initialState,
@@ -313,6 +314,34 @@ describe('Phase 6a: the gate target is tier-authoritative and ROTATES', () => {
   });
 });
 
+describe('Phase 6a: the god-clone DING judges the TIER target, not tracking', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a hatch matching the tier target DINGs even when tracking points elsewhere', () => {
+    // rng 0.4: never mutates (0.4 > MUTATION_CHANCE) and every contested L-vs-D
+    // slot resolves to L (0.4·(3+1) < 3 picks the L parent; ≥ 1 rejects the D one),
+    // so complementary LDLDLD × DLDLDL half-clones deterministically ASSEMBLE an
+    // all-L god clone — neither parent is one, so the first-clone DING must fire.
+    vi.spyOn(Math, 'random').mockReturnValue(0.4);
+    const s = build({ coop: 1 });
+    const half = (id: string, sex: 'drake' | 'hen', evenSlots: boolean): Duck => ({
+      id,
+      genotype: ['Bl', 'bl'] as Genotype,
+      genome: Array.from({ length: 6 }, (_, i): Gene => (i % 2 === (evenSlots ? 0 : 1) ? 'L' : 'D')),
+      genomeKnown: true,
+      sex,
+      stage: 'adult',
+      ageTicks: 0,
+    });
+    s.ducks = [half('dr', 'drake', true), half('he', 'hen', false)];
+    s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
+    s.genomeTarget = ['H', 'H', 'H', 'H', 'H', 'H'] as Gene[]; // tracking points elsewhere
+    runBreeding(s, BALANCE.BREEDING.CLUTCH_INTERVAL_S + BALANCE.BREEDING.INCUBATE_S + 1);
+    expect(s.ducks.length).toBeGreaterThan(2); // something hatched
+    expect(s.pendingGodClone ?? 0).toBeGreaterThan(0); // tier-0 target (all-L) → DING
+  });
+});
+
 describe('Phase 6a: the push-vs-reset currency curve', () => {
   it('overshoot is SUPERLINEAR in size — pushing past the gate out-earns resetting', () => {
     const champ = championRun();
@@ -431,6 +460,19 @@ describe('back-compat: legacy Hall entries migrate from older fields', () => {
     expect(r.legacyHall[0].meanQuality).toBe(0); // no genome data to derive — defaults, doesn't crash
     expect(typeof r.legacyHall[0].meanQuality).toBe('number');
     expect(r.legacyHall[0].flockSize).toBe(30);
+  });
+
+  it('a pre-6a save (no renown/husbandry keys) loads with the new boosts at level 0', () => {
+    const legacy = JSON.stringify({
+      version: 1,
+      resources: { eggs: 1 },
+      stations: [],
+      purchasedBoosts: { output: 2 },
+    });
+    const r = deserialize(legacy, 0);
+    expect(boostMult(r, 'renown')).toBe(1);
+    expect(boostMult(r, 'husbandry')).toBe(1);
+    expect(boostMult(r, 'output')).toBeCloseTo(1 + 2 * BALANCE.PRESTIGE.BOOSTS.output.perLevel, 6);
   });
 });
 
