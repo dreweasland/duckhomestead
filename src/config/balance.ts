@@ -467,6 +467,34 @@ export const BALANCE = {
       attacksPerWindow: 2,
       attackCountWeights: [0.3, 0.45, 0.25],
     },
+
+    /**
+     * Phase 6c: THE SIEGE — a named boss window past the rank ramp's peak,
+     * gated to legacy tier 2+ (the endgame risk curve for a converged homestead).
+     * An EVENT, not a chore: rare, long-telegraphed, and (see runPredators/
+     * advancePredator) its schedule is FROZEN during offline catch-up — a siege
+     * is something you attend, never something that mauls you in your sleep. A
+     * flawless defense (every committed dive scared, nothing landed) pays a
+     * guaranteed jackpot; see PredatorDef.jackpot + runPredators (Step 2).
+     */
+    SIEGE: {
+      MIN_LEGACY_TIER: 2,
+      INTRO_RANK: 25, // debuts where the rank ramp tops out (RANK_DIFF_TO)
+      windowEverySec: 1800, // a rare event (~30 min online), not a chore
+      windowDurationSec: 75,
+      warningLeadSec: 60, // a long, unmissable telegraph
+      baseAttackChance: 0.55,
+      attackCountWeights: [0, 0, 0.3, 0.4, 0.3], // 3–5 dives per siege
+      WINDUP_SCALE: 0.45, // of STRIKE_WINDUP_SEC — faster than the ramp's floor
+      CLICK_WEIGHTS: [0.1, 0.35, 0.55], // most dives need 2–3 clicks (feint-heavy)
+      JACKPOT: {
+        dust: 60,
+        moduleRarity: 'epic',
+        flawlessStreakRarity: 'legendary',
+        streakForLegendary: 3,
+      } as { dust: number; moduleRarity: string; flawlessStreakRarity: string; streakForLegendary: number },
+      // streak: consecutive flawless sieges THIS RUN; resets on a landed hit or prestige.
+    },
   },
 
   // ── Phase 3: loot / modules (throughput boosts ONLY) ────────────────
@@ -943,6 +971,31 @@ export interface PredatorDef {
   /** Rank at which this predator starts hunting (debuts online, telegraphed). Lets
    *  new threats arrive as the homestead grows rather than all at once. */
   introRank: number;
+  /** Phase 6c (siege). When set, this predator ALSO never schedules/resolves
+   *  below this legacy tier, AND its window schedule is frozen during offline
+   *  catch-up (an already-open window fizzles instead of resolving unattended) —
+   *  see runPredators/advancePredator. Absent → the ordinary always-on, offline-
+   *  simulated rank-ramp predator (owl/raccoon). No predator id is ever checked
+   *  in core logic; this field alone marks a def as an EVENT predator. */
+  minLegacyTier?: number;
+  /** Phase 6c (siege). Fixed dive wind-up as a fraction of STRIKE_WINDUP_SEC,
+   *  OVERRIDING the rank-ramp interpolation in strikeWindupSec — a siege stays
+   *  harsh regardless of rank. Absent → the ordinary rank-difficulty ramp. */
+  windupScale?: number;
+  /** Phase 6c (siege). Fixed [1-click, 2-click, 3-click, ...] weighting,
+   *  OVERRIDING the rank-ramp interpolation in pickClicksRequired. Absent → the
+   *  ordinary easy→hard rank-difficulty ramp. */
+  clickWeights?: readonly number[];
+  /** Phase 6c (siege). A flawless-defense (every committed dive scared off,
+   *  nothing landed) jackpot grant — dust + a guaranteed module, with a rarity
+   *  bump after a same-run flawless streak. Presence marks the def as
+   *  jackpot-eligible; see runPredators (Step 2). */
+  jackpot?: {
+    dust: number;
+    moduleRarity: string;
+    flawlessStreakRarity: string;
+    streakForLegendary: number;
+  };
 }
 
 export const PREDATOR_DEFS: PredatorDef[] = [
@@ -959,6 +1012,22 @@ export const PREDATOR_DEFS: PredatorDef[] = [
     ...BALANCE.PREDATORS.RACCOON,
     defense: 'cloth',
     introRank: BALANCE.PREDATORS.RACCOON_INTRO_RANK,
+  },
+  {
+    id: 'greatHorned',
+    name: 'The Great Horned',
+    windowEverySec: BALANCE.PREDATORS.SIEGE.windowEverySec,
+    windowDurationSec: BALANCE.PREDATORS.SIEGE.windowDurationSec,
+    warningLeadSec: BALANCE.PREDATORS.SIEGE.warningLeadSec,
+    baseAttackChance: BALANCE.PREDATORS.SIEGE.baseAttackChance,
+    attacksPerWindow: 4, // fallback/mean; attackCountWeights governs the real roll
+    attackCountWeights: BALANCE.PREDATORS.SIEGE.attackCountWeights,
+    defense: 'net', // aerial, so nets floor it (offline is a non-issue — see constraint 2)
+    introRank: BALANCE.PREDATORS.SIEGE.INTRO_RANK,
+    minLegacyTier: BALANCE.PREDATORS.SIEGE.MIN_LEGACY_TIER,
+    windupScale: BALANCE.PREDATORS.SIEGE.WINDUP_SCALE,
+    clickWeights: BALANCE.PREDATORS.SIEGE.CLICK_WEIGHTS,
+    jackpot: BALANCE.PREDATORS.SIEGE.JACKPOT,
   },
 ];
 

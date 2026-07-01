@@ -235,6 +235,102 @@ describe('the raccoon debuts at its rank (never a bolt from the blue)', () => {
   });
 });
 
+describe('the siege (The Great Horned) — tier-gated, offline-frozen EVENT (Phase 6c)', () => {
+  const SIEGE = PREDATOR_DEFS.find((d) => d.id === 'greatHorned')!;
+  const RANK = SIEGE.introRank;
+  const TIER = SIEGE.minLegacyTier!;
+
+  it('is data-driven: minLegacyTier + the SIEGE balance numbers, no id in core logic', () => {
+    expect(SIEGE.minLegacyTier).toBe(BALANCE.PREDATORS.SIEGE.MIN_LEGACY_TIER);
+    expect(SIEGE.introRank).toBe(BALANCE.PREDATORS.SIEGE.INTRO_RANK);
+    expect(SIEGE.windupScale).toBe(BALANCE.PREDATORS.SIEGE.WINDUP_SCALE);
+    expect(SIEGE.jackpot?.dust).toBe(BALANCE.PREDATORS.SIEGE.JACKPOT.dust);
+  });
+
+  it('never schedules below tier 2, even past its intro rank', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    s.legacyTier = TIER - 1;
+    runPredators(s, 1, { mode: 'online', rng: never });
+    expect(s.predatorsSeen ?? []).not.toContain('greatHorned');
+  });
+
+  it('never schedules below its intro rank, even at tier 2+', () => {
+    const s = flock(6);
+    s.rank = RANK - 1;
+    s.legacyTier = TIER;
+    runPredators(s, 1, { mode: 'online', rng: never });
+    expect(s.predatorsSeen ?? []).not.toContain('greatHorned');
+  });
+
+  it('debuts online once both the rank AND tier gates are met', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    s.legacyTier = TIER;
+    runPredators(s, 1, { mode: 'online', rng: never });
+    expect(s.predatorsSeen).toContain('greatHorned');
+    expect(events(s).some((e) => e.kind === 'introduced' && e.predatorId === 'greatHorned')).toBe(true);
+  });
+
+  it('does not debut offline, same as any other predator\'s first-contact grace', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    s.legacyTier = TIER;
+    runPredators(s, 1, { mode: 'offline', rng: never });
+    expect(s.predatorsSeen ?? []).not.toContain('greatHorned');
+  });
+
+  it("the schedule's clock is FROZEN offline — timeToNextWindow does not advance", () => {
+    const s = flock(6);
+    s.rank = RANK;
+    s.legacyTier = TIER;
+    s.predatorsSeen = ['greatHorned'];
+    s.predators.greatHorned = { timeToNextWindow: 500, windowRemaining: 0, windowElapsed: 0, attacksFired: 0 };
+    runPredators(s, 3600, { mode: 'offline', rng: never }); // a whole offline hour
+    expect(s.predators.greatHorned.timeToNextWindow).toBe(500); // untouched
+  });
+
+  it('an OPEN window fizzles on offline catch-up: cleared, rescheduled fresh, no jackpot', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    s.legacyTier = TIER;
+    s.predatorsSeen = ['greatHorned'];
+    s.predators.greatHorned = {
+      timeToNextWindow: 0,
+      windowRemaining: 40,
+      windowElapsed: 35,
+      attacksFired: 2,
+    };
+    runPredators(s, 60, { mode: 'offline', rng: never });
+    const ps = s.predators.greatHorned;
+    expect(ps.windowRemaining).toBe(0); // window cleared, not resolved
+    expect(ps.timeToNextWindow).toBe(SIEGE.windowEverySec); // rescheduled a full interval out
+    expect(ps.attacksFired).toBe(0);
+    expect(events(s).some((e) => e.kind === 'siegeFoiled')).toBe(false); // no jackpot
+  });
+
+  it('a full offline catch-up (save.ts) never opens/resolves/expires a siege window', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    s.legacyTier = TIER;
+    s.predatorsIntroduced = true;
+    s.predatorsSeen = ['greatHorned'];
+    s.predators.greatHorned = { timeToNextWindow: 10, windowRemaining: 0, windowElapsed: 0, attacksFired: 0 };
+    s.lastSeen = 0;
+    runOfflineCatchUp(s, HOUR); // 1h away — would cross several windows if it ran
+    expect(s.predators.greatHorned.timeToNextWindow).toBe(10); // frozen the whole catch-up
+  });
+
+  it('normal predators (owl/raccoon) are unaffected by the siege gating/freeze', () => {
+    const s = flock(6);
+    s.rank = P.INTRO_RANK;
+    s.legacyTier = 0; // well below the siege's gate
+    openWindow(s);
+    runPredators(s, 3600, { mode: 'offline', rng: always }); // owl still simulates offline
+    expect(s.predators.owl.windowRemaining).not.toBe(OWL.windowDurationSec); // it advanced/resolved
+  });
+});
+
 describe('brutality dial defaults OFF', () => {
   it('ALLOW_INSTANT_SNATCH is false', () => {
     expect(P.ALLOW_INSTANT_SNATCH).toBe(false);

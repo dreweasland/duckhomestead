@@ -402,6 +402,16 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     attacksFired: 0,
   });
 
+  // Siege predators (minLegacyTier set) are an EVENT, never simulated offline:
+  // the schedule is FROZEN (doesn't advance) while away, and an already-open
+  // window FIZZLES (rescheduled fresh, no jackpot) rather than resolving
+  // unattended. A siege is something you attend, never something that mauls
+  // you in your sleep. Normal predators (no minLegacyTier) are untouched.
+  if (def.minLegacyTier != null && opts.mode === 'offline') {
+    if (windowOpen(ps)) state.predators[def.id] = freshSchedule(def);
+    return;
+  }
+
   // Telegraphed strikes are an online affair. Offline catch-up resolves attacks
   // immediately (no player to react), so clear any stale dive a crash left mid-air.
   if (opts.mode === 'offline') {
@@ -543,6 +553,9 @@ export function runPredators(state: GameState, dt: number, opts: PredatorOpts): 
     }
     for (const def of PREDATOR_DEFS) {
       if (state.rank < def.introRank) continue; // not yet at this predator's rank
+      // Siege predators (Phase 6c) additionally never schedule/resolve below
+      // their legacy-tier gate — a tier-0/1 run never sees the def at all.
+      if (def.minLegacyTier != null && state.legacyTier < def.minLegacyTier) continue;
       // Later predators (e.g. the raccoon) debut lazily as their rank is reached —
       // online only (the same grace), announced, and never mid-window on arrival.
       if (def.introRank > P.INTRO_RANK) {
