@@ -21,6 +21,22 @@ describe('axisFactor — the per-axis output throttle curve', () => {
   });
 });
 
+describe('a recovering hen: lays nothing, eats extra feed', () => {
+  it('drops flock egg rate and raises feed demand vs the same flock healthy', () => {
+    const healthy = setHens(stockAll(fullSetup()), 2);
+    run(healthy, 30);
+    const rateHealthy = healthy.nutrition!.eggRate;
+    const demandHealthy = healthy.nutrition!.feedDemand;
+
+    const s = setHens(stockAll(fullSetup()), 2);
+    s.ducks[0].wounded = true;
+    s.ducks[0].recovering = true; // in an infirmary slot
+    run(s, 30);
+    expect(s.nutrition!.eggRate).toBeLessThan(rateHealthy); // one hen laying 0
+    expect(s.nutrition!.feedDemand).toBeGreaterThan(demandHealthy); // eats FEED_MULT×
+  });
+});
+
 describe('niacin is a debuff driver, NOT an output throttle', () => {
   it('eggMultRaw is exactly the energy×protein×calcium product — niacin is excluded', () => {
     // E/P/Ca fed from their producers, but the niacin source (brewer's yeast) is gone.

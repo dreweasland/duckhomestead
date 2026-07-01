@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
-import { COLORS, coopCapacity, flockRatio, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
+import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, HealIcon, ShieldIcon, WoundIcon } from './icons';
@@ -546,7 +546,7 @@ export function FlockPanel({
   const cap = coopCapacity(state);
   const slotsTotal = secureCapacity(state);
   const slotsUsed = state.ducks.filter((d) => d.secured).length;
-  const treatCost = BALANCE.PREDATORS.TREAT_COST_EGGS;
+  const infFree = infirmaryCapacity(state) - infirmaryOccupied(state);
 
   // Tab the flock by color. Counts per color drive the tab badges; open on All so
   // the whole flock is in view up front (matching the sex/stage filters, which
@@ -872,13 +872,18 @@ export function FlockPanel({
                       {d.wounded && (
                         <span
                           className="inline-flex items-center"
-                          title={`Wounded — ${Math.ceil(
-                            Math.max(
-                              0,
-                              BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(state) -
-                                (d.woundElapsed ?? 0),
-                            ),
-                          )}s to escalate. Treat to save.`}
+                          style={{ color: d.recovering ? '#8fe388' : undefined }}
+                          title={
+                            d.recovering
+                              ? 'Recovering in the infirmary'
+                              : `Wounded — ${Math.ceil(
+                                  Math.max(
+                                    0,
+                                    BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(state) -
+                                      (d.woundElapsed ?? 0),
+                                  ),
+                                )}s to escalate. Admit to the infirmary to save.`
+                          }
                         >
                           <WoundIcon size={11} />
                         </span>
@@ -893,18 +898,22 @@ export function FlockPanel({
                           {qualityLabel(d, target)}
                         </span>
                       </span>
-                      {d.wounded && (
+                      {d.wounded && !d.recovering && (
                         <button
                           onClick={() => {
-                            if (engine.treat(d.id).ok) playTend();
+                            if (engine.admit(d.id).ok) playTend();
                           }}
-                          disabled={state.resources.eggs < treatCost}
+                          disabled={infFree <= 0}
                           className={`inline-flex items-center rounded px-1 py-0.5 ${
-                            state.resources.eggs >= treatCost
+                            infFree > 0
                               ? 'text-[#8fe388] hover:bg-[#33271c]'
                               : 'cursor-not-allowed text-[#5a4d3a]'
                           }`}
-                          title={`Treat (${treatCost} eggs) — heal this wound before it’s permanent`}
+                          title={
+                            infFree > 0
+                              ? 'Admit to a recovery slot — heals over time'
+                              : 'Infirmary full — build another (in The Watch) or wait'
+                          }
                         >
                           <HealIcon size={12} />
                         </button>

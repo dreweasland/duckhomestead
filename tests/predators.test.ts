@@ -6,6 +6,7 @@ import {
   secureCapacity,
   type Duck,
   type GameState,
+  type Gene,
   type Genotype,
 } from '../src/game/state';
 import {
@@ -16,6 +17,7 @@ import {
   windowOpen,
   activeStrike,
   currentThreat,
+  rollWoundSeverity,
   scareOff,
   rankDifficulty,
   strikeWindupSec,
@@ -26,7 +28,7 @@ import {
   buildSecureCoop,
   repairDeterrents,
   setSecured,
-  treatDuck,
+  admitToInfirmary,
 } from '../src/game/actions';
 import { runOfflineCatchUp, deserialize, serialize } from '../src/game/save';
 import { fullSetup, stockAll, setHens, run } from './helpers';
@@ -431,8 +433,8 @@ describe('the interactive owl — telegraphed strikes you can scare off (online)
   });
 });
 
-describe('wound → escalation → treat (the checkpoint)', () => {
-  it('an untended wound escalates to a permanent loss after the recovery window', () => {
+describe('wound → escalation → admit to infirmary (the checkpoint)', () => {
+  it('an untended, un-admitted wound escalates to a permanent loss after the window', () => {
     const s = flock(3);
     s.ducks[0].wounded = true;
     s.ducks[0].woundElapsed = 0;
@@ -445,44 +447,69 @@ describe('wound → escalation → treat (the checkpoint)', () => {
     expect(events(s).some((e) => e.kind === 'escalated')).toBe(true);
   });
 
-  it('treating a wound before the timer saves the duck', () => {
+  it('admitting before the timer saves the duck — for free (no egg cost), holding a slot', () => {
     const s = flock(3);
+    s.infirmaries = 1; // 1 infirmary = SLOTS_PER recovery slots
     s.resources.eggs = 1000;
     s.ducks[0].wounded = true;
+    s.ducks[0].severity = 'minor';
     s.ducks[0].woundElapsed = P.WOUND_ESCALATE_SEC - 10;
-    expect(treatDuck(s, 'd0').ok).toBe(true);
-    expect(s.ducks[0].wounded).toBe(false);
+    expect(admitToInfirmary(s, 'd0').ok).toBe(true);
+    expect(s.ducks[0].recovering).toBe(true); // in a slot, no longer escalating
+    expect(s.resources.eggs).toBe(1000); // admission is free
     s.predators.owl.timeToNextWindow = 1e9;
-    runPredators(s, 100, { mode: 'online', rng: never });
-    expect(s.ducks.find((d) => d.id === 'd0')).toBeDefined(); // treated -> safe
-    expect(s.resources.eggs).toBe(1000 - P.TREAT_COST_EGGS);
+    runPredators(s, 100, { mode: 'online', rng: never }); // past the old deadline
+    expect(s.ducks.find((d) => d.id === 'd0')).toBeDefined(); // admitted → safe
   });
 
-  // The success path is above; these pin the guard branches + exact effects.
+  it('a recovering duck heals and rejoins the flock after RECOVERY_SEC (water-scaled)', () => {
+    const s = flock(3);
+    s.infirmaries = 1;
+    s.ducks[0].wounded = true;
+    s.ducks[0].severity = 'minor';
+    s.predators.owl.timeToNextWindow = 1e9;
+    admitToInfirmary(s, 'd0');
+    const recSec = P.INFIRMARY.RECOVERY_SEC.minor / waterWoundMult(s);
+    runPredators(s, recSec + 1, { mode: 'online', rng: never });
+    const d0 = s.ducks.find((d) => d.id === 'd0')!;
+    expect(d0.wounded).toBe(false); // fully healed
+    expect(d0.recovering).toBe(false); // slot freed
+    expect(d0.severity).toBeUndefined();
+  });
+
   it('rejects a missing duck and a healthy (unwounded) duck', () => {
     const s = flock(4);
-    expect(treatDuck(s, 'nope').ok).toBe(false); // no such duck
-    expect(treatDuck(s, 'd0').ok).toBe(false); // d0 exists but isn't wounded
+    s.infirmaries = 1;
+    expect(admitToInfirmary(s, 'nope').ok).toBe(false); // no such duck
+    expect(admitToInfirmary(s, 'd0').ok).toBe(false); // d0 exists but isn't wounded
   });
 
-  it('needs the eggs: a broke player cannot treat — the duck stays wounded, eggs untouched', () => {
-    const s = flock(4);
-    s.ducks[0].wounded = true;
-    s.ducks[0].woundElapsed = 5;
-    s.resources.eggs = P.TREAT_COST_EGGS - 1;
-    const r = treatDuck(s, 'd0');
-    expect(r.ok).toBe(false);
-    expect(s.ducks[0].wounded).toBe(true); // still hurt
-    expect(s.resources.eggs).toBe(P.TREAT_COST_EGGS - 1); // not charged on a failed treat
+  it('rollWoundSeverity: a defenses-down (caught) hit skews harsher; Hardy shrugs milder', () => {
+    const flatD: Gene[] = ['D', 'D', 'D', 'D', 'D', 'D'];
+    const fullH: Gene[] = ['H', 'H', 'H', 'H', 'H', 'H'];
+    const critRate = (caught: boolean, genome: Gene[]) => {
+      let crit = 0;
+      for (let i = 0; i < 3000; i++) if (rollWoundSeverity(caught, genome, Math.random) === 'critical') crit++;
+      return crit / 3000;
+    };
+    expect(critRate(true, flatD)).toBeGreaterThan(critRate(false, flatD)); // caught → worse
+    expect(critRate(true, fullH)).toBeLessThan(critRate(true, flatD)); // Hardy → milder
   });
 
-  it('on success resets the escalation timer to 0 (a full heal, not a partial one)', () => {
-    const s = flock(4);
-    s.resources.eggs = 1000;
-    s.ducks[0].wounded = true;
-    s.ducks[0].woundElapsed = 42;
-    expect(treatDuck(s, 'd0').ok).toBe(true);
-    expect(s.ducks[0].woundElapsed).toBe(0);
+  it('is gated by SLOTS: with the infirmary full, a wound can’t be admitted (triage)', () => {
+    const s = flock(6);
+    s.infirmaries = 1; // SLOTS_PER slots
+    const cap = P.INFIRMARY.SLOTS_PER;
+    // Fill every slot.
+    for (let i = 0; i < cap; i++) {
+      s.ducks[i].wounded = true;
+      expect(admitToInfirmary(s, s.ducks[i].id).ok).toBe(true);
+    }
+    // One more wound has nowhere to go.
+    s.ducks[cap].wounded = true;
+    const r = admitToInfirmary(s, s.ducks[cap].id);
+    expect(r.ok).toBe(false); // infirmary full
+    expect(s.ducks[cap].recovering).toBeFalsy(); // stays wounded, still escalating
   });
 });
 

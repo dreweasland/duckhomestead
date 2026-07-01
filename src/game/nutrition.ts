@@ -53,6 +53,12 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
     state.nutrition = undefined;
     return;
   }
+  // Recovering hens eat extra (INFIRMARY.FEED_MULT) while healing, so demand +
+  // requirement scale off a weighted "layer-feed-equivalent" count, not the raw head
+  // count. (They also lay nothing — handled in layNutritionTail.)
+  const recoverFeed = BALANCE.PREDATORS.INFIRMARY.FEED_MULT;
+  let feedWeight = 0;
+  for (const d of layers) feedWeight += d.recovering ? recoverFeed : 1;
   const hasMill = mills.length > 0;
   const coopCycle = BALANCE.COOP.cycleSeconds;
   const step = dt * rateMult;
@@ -66,7 +72,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const wantRate: Record<string, number> = {};
   let totalWant = 0;
   for (const ing of INGREDIENTS) {
-    wantRate[ing] = ((state.ration[ing] ?? 0) * layerCount) / coopCycle;
+    wantRate[ing] = ((state.ration[ing] ?? 0) * feedWeight) / coopCycle;
     totalWant += wantRate[ing];
   }
   const feedScale = hasMill ? (totalWant > 0 ? Math.min(1, capacity / totalWant) : 1) : 0;
@@ -90,7 +96,7 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const prior = state.nutrition?.satisfaction;
   const alpha = N.SMOOTH_TAU_S > 0 ? Math.min(1, step / N.SMOOTH_TAU_S) : 1;
   for (const axis of AXES) {
-    requirement[axis] = (N.REQUIREMENT[axis] * layerCount) / coopCycle;
+    requirement[axis] = (N.REQUIREMENT[axis] * feedWeight) / coopCycle;
     const instant = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
     satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
   }
@@ -174,7 +180,8 @@ function layNutritionTail(
   let flockRate = 0; // eggs per second from the whole laying flock
   for (const hen of layers) {
     const debuff = hen.debuffed ? N.DEBUFF_COOP_OUTPUT_MULT : 1;
-    const wound = hen.wounded ? BALANCE.PREDATORS.WOUND_OUTPUT_MULT : 1;
+    // Recovering in the infirmary → lays nothing; wounded-but-not-admitted → half.
+    const wound = hen.recovering ? 0 : hen.wounded ? BALANCE.PREDATORS.WOUND_OUTPUT_MULT : 1;
     flockRate += (BALANCE.COOP.eggPerCycle / coopCycle) * layMult(hen.genome) * debuff * wound;
   }
   const eggModuleMult = eggOutputMult(state); // rack eggOutput modules buff the flock

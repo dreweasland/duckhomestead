@@ -367,10 +367,9 @@ export const BALANCE = {
      *  the duck is never treated. The save is the active Treat action. */
     WOUND_ESCALATE_SEC: 240,
     /** A wounded duck's egg output while injured (flows through the per-duck
-     *  output chain alongside vigor/nutrition/modules). It also can't breed. */
+     *  output chain alongside vigor/nutrition/modules). It also can't breed. A
+     *  RECOVERING duck (admitted to the infirmary) lays nothing instead. */
     WOUND_OUTPUT_MULT: 0.5,
-    /** Eggs spent to Treat (heal) one wounded duck. */
-    TREAT_COST_EGGS: 30,
 
     /** Eggs to build one deterrent (raises the floor). */
     DETERRENT_COST_EGGS: 150,
@@ -390,6 +389,29 @@ export const BALANCE = {
      *  duck marked secured (up to the slot total) is excluded from targeting. */
     SECURE_COOP_COST_EGGS: 400,
     SECURE_SLOTS_PER_COOP: 4,
+
+    /**
+     * The Infirmary. Wounds are no longer instantly cured for eggs — a wounded duck
+     * must be ADMITTED to a limited recovery slot, where it heals over time (severity
+     * + water scaled), holds the slot, eats extra feed, and lays nothing. A wound not
+     * admitted before WOUND_ESCALATE_SEC still escalates to a loss — the save is now
+     * capacity + attention, not 30 eggs. Build more infirmaries to weather a bad
+     * night; offline the infirmary auto-admits up to capacity.
+     */
+    INFIRMARY: {
+      COST_EGGS: 250, // eggs to build one infirmary
+      SLOTS_PER: 2, // recovery slots each infirmary adds
+      /** Recovery time (seconds) by injury severity, before the water multiplier
+       *  (recovery = RECOVERY_SEC / waterWoundMult — good water heals faster). */
+      RECOVERY_SEC: { minor: 90, serious: 300, critical: 600 } as Record<string, number>,
+      /** A recovering duck eats this multiple of the layer ration and lays nothing. */
+      FEED_MULT: 1.5,
+      /** Severity roll weights [minor, serious, critical]. A GUARD-mode/defended hit
+       *  uses the base set; an ACTIVE (defenses-down) landed hit rolls the worse set.
+       *  Hardy (H genes) shifts a roll one step milder. */
+      SEVERITY_WEIGHTS: [0.6, 0.3, 0.1],
+      SEVERITY_WEIGHTS_CAUGHT: [0.3, 0.4, 0.3],
+    },
 
     /** Targeting weights by stage (juveniles count as adults). Secured ducks are
      *  excluded entirely; ducklings are the most exposed. */

@@ -112,4 +112,31 @@ describe('offline catch-up × nutrition', () => {
     runOfflineCatchUp(s, 0);
     expect(s.ducks.some((d) => d.debuffed)).toBe(false);
   });
+
+  it('offline: the infirmary auto-admits a wounded duck and heals it (no loss)', () => {
+    const s = stockAll(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, oysterSource: 1, mill: 1, coop: 1 }));
+    setHens(s, 3);
+    s.infirmaries = 1; // recovery slots; predators not introduced → no NEW attacks
+    s.ducks[0].wounded = true;
+    s.ducks[0].severity = 'minor';
+    s.ducks[0].woundElapsed = 0;
+    s.lastSeen = -1 * HOUR; // >> the 90s minor recovery, well past the 240s deadline
+    runOfflineCatchUp(s, 0);
+    const d0 = s.ducks.find((d) => d.id === 'h0');
+    expect(d0).toBeDefined(); // survived — auto-admitted, not escalated
+    expect(d0!.wounded).toBe(false); // fully recovered while away
+  });
+
+  it('offline: WITHOUT an infirmary, an untended wound still escalates to a loss', () => {
+    const s = stockAll(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, oysterSource: 1, mill: 1, coop: 1 }));
+    setHens(s, 12); // mercy-rail budget = floor(12 × 0.25) = 3 permits this loss
+    s.infirmaries = 0; // no slots → no admission → the wound ages out
+    s.ducks[0].wounded = true;
+    s.ducks[0].severity = 'minor';
+    s.ducks[0].woundElapsed = 0;
+    s.lastSeen = -1 * HOUR; // past the 240s escalation deadline
+    const away = runOfflineCatchUp(s, 0);
+    expect(s.ducks.find((d) => d.id === 'h0')).toBeUndefined(); // lost — the death path survives
+    expect(away.predator?.lost ?? 0).toBeGreaterThan(0);
+  });
 });

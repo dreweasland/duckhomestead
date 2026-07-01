@@ -2,12 +2,14 @@ import { BALANCE, PREDATOR_DEFS } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { currentThreat } from '../game/predators';
 import { waterWoundMult } from '../game/water';
-import { defenseFloor, secureCapacity, type GameState } from '../game/state';
+import { defenseFloor, infirmaryCapacity, infirmaryOccupied, secureCapacity, type GameState } from '../game/state';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, EggIcon, HealIcon, NetIcon, OwlIcon, ShieldIcon } from './icons';
 import { useEscapeKey } from './useEscapeKey';
 
 const P = BALANCE.PREDATORS;
+const sevColor = (s?: string): string =>
+  s === 'critical' ? '#e8835a' : s === 'serious' ? '#e8c45a' : '#8fbf6a';
 
 function StatRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -42,7 +44,13 @@ export function WatchPanel({
 
   const deterrentCost = P.DETERRENT_COST_EGGS;
   const secureCost = P.SECURE_COOP_COST_EGGS;
-  const treatCost = P.TREAT_COST_EGGS;
+  // Infirmary: recovery slots for wounded ducks (admit = the save; slots are scarce).
+  const infCost = P.INFIRMARY.COST_EGGS;
+  const infCap = infirmaryCapacity(state);
+  const infUsed = infirmaryOccupied(state);
+  const infFree = infCap - infUsed;
+  const recovering = wounded.filter((d) => d.recovering);
+  const waiting = wounded.filter((d) => !d.recovering);
   // Maxed keys off PRISTINE capacity (so wear doesn't re-invite building more nets —
   // you repair instead).
   const floorMaxed = state.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP;
@@ -198,17 +206,57 @@ export function WatchPanel({
                 <EggIcon size={12} /> {secureCost}
               </span>
             </button>
+            <button
+              onClick={() => {
+                if (engine.buildInfirmary().ok) playPlace();
+              }}
+              disabled={eggs < infCost}
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-xs transition ${
+                eggs >= infCost
+                  ? 'bg-[#3a2636] text-[#e8b8d8] hover:bg-[#46304a]'
+                  : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+              }`}
+            >
+              <HealIcon size={18} />
+              <span className="flex-1">
+                <span className="font-bold">Infirmary {infCap > 0 && `(${infUsed}/${infCap} slots)`}</span>
+                <span className="block text-[10px] opacity-80">
+                  +{P.INFIRMARY.SLOTS_PER} recovery slots — admit wounded ducks to heal them over time
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1 font-bold text-[#ffe9a8]">
+                <EggIcon size={12} /> {infCost}
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* Wounded triage */}
+        {/* Wounded triage: recovering (in a slot) + waiting (admit before they escalate) */}
         {wounded.length > 0 && (
           <div className="rounded-md bg-[#2a1818] px-3 py-2.5 ring-1 ring-[#5a2a2a]">
             <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#e8a3a3]">
-              <HealIcon size={13} /> Wounded — treat before they’re lost
+              <HealIcon size={13} /> Wounded
+              {infCap > 0 && <span className="ml-auto text-[#c9a0c0]">{infUsed}/{infCap} slots</span>}
             </div>
             <div className="flex flex-col gap-1.5">
-              {wounded.map((d) => {
+              {recovering.map((d) => {
+                const recSec = P.INFIRMARY.RECOVERY_SEC[d.severity ?? 'serious'] / waterWoundMult(state);
+                const left = Math.max(0, recSec - (d.recoveryElapsed ?? 0));
+                const frac = recSec > 0 ? Math.min(1, (d.recoveryElapsed ?? 0) / recSec) : 1;
+                return (
+                  <div key={d.id} className="rounded bg-[#171009] px-2.5 py-1.5">
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="text-[#c9b88f]">{d.sex}</span>
+                      <span className="text-[10px]" style={{ color: sevColor(d.severity) }}>{d.severity ?? 'serious'}</span>
+                      <span className="ml-auto tabular-nums text-[#8fe388]">recovering · {Math.ceil(left)}s</span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#1f2a1c]">
+                      <div className="h-full rounded-full bg-[#8fe388]" style={{ width: `${frac * 100}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+              {waiting.map((d) => {
                 // Phase 4d: the effective escalation window stretches/tightens with water access.
                 const escalateAt = P.WOUND_ESCALATE_SEC * waterWoundMult(state);
                 const left = Math.max(0, escalateAt - (d.woundElapsed ?? 0));
@@ -217,21 +265,21 @@ export function WatchPanel({
                   <div key={d.id} className="rounded bg-[#171009] px-2.5 py-1.5">
                     <div className="flex items-center gap-2 text-[11px]">
                       <span className="text-[#c9b88f]">{d.sex}</span>
-                      <span className="text-[#7a6a4a]">{d.stage}</span>
+                      <span className="text-[10px]" style={{ color: sevColor(d.severity) }}>{d.severity ?? 'serious'}</span>
                       <span className="ml-auto tabular-nums text-[#e8a3a3]">{Math.ceil(left)}s to lose</span>
                       <button
                         onClick={() => {
-                          if (engine.treat(d.id).ok) playTend();
+                          if (engine.admit(d.id).ok) playTend();
                         }}
-                        disabled={eggs < treatCost}
+                        disabled={infFree <= 0}
                         className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                          eggs >= treatCost
+                          infFree > 0
                             ? 'bg-[#2e6b3a] text-[#dfffd6] hover:bg-[#367a44]'
                             : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
                         }`}
-                        title={`Heal this duck (${treatCost} eggs)`}
+                        title={infFree > 0 ? 'Admit to a recovery slot (heals over time)' : 'Infirmary full — build another or wait'}
                       >
-                        Treat {treatCost}
+                        {infFree > 0 ? 'Admit' : 'Full'}
                       </button>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#3a1c1c]">
@@ -244,6 +292,11 @@ export function WatchPanel({
                 );
               })}
             </div>
+            {infCap === 0 && waiting.length > 0 && (
+              <div className="mt-1.5 text-[10px] text-[#e8a35a]">
+                Build an Infirmary above to admit and heal wounded ducks.
+              </div>
+            )}
           </div>
         )}
 
@@ -251,9 +304,10 @@ export function WatchPanel({
           Built deterrents are your <span className="text-[#a8d0e8]">guard</span> armor — they protect
           while you’re away or idle. But while you’re <span className="text-[#ff9a9a]">actively
           playing</span>, the owl knows it: the floor drops and a dive you don’t <span className="text-[#bfe8a8]">scare</span>
-          {' '}lands an injury (the owl also dives faster and feints more as your rank climbs). Securing
-          a breeder takes it off the menu entirely, and a wound only turns permanent if left untended —
-          so every loss is one you could have prevented.
+          {' '}lands an injury. A wound halves the duck’s laying and turns permanent unless you
+          <span className="text-[#8fe388]"> admit it to an Infirmary</span> in time — where it recovers
+          over time (faster with good water), holding a scarce slot and eating extra feed. Securing a
+          breeder takes it off the menu entirely, so every loss is one you could have prevented.
         </div>
       </div>
     </div>
