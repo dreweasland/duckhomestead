@@ -294,6 +294,23 @@ describe('deterrent integrity — the defense upkeep loop', () => {
     expect(P.DETERRENT_WEAR_PER_HIT).toBeGreaterThan(P.DETERRENT_WEAR_PER_WINDOW);
   });
 
+  it('active play does NOT wear the floor — nets erode only while on duty', () => {
+    const s = flock(4);
+    s.deterrents = 2;
+    s.deterrentIntegrity = 1;
+    // An in-flight dive that resolves THIS tick, in active mode (floor suppressed).
+    s.predators.owl = {
+      timeToNextWindow: 1e9, // no new window opens (isolate the hit)
+      windowRemaining: 30,
+      windowElapsed: 10,
+      attacksFired: 1,
+      strike: { targetId: 'd0', windupRemaining: 0.001, windupTotal: 5, id: 1, spot: 0, clicksRequired: 1, clicksLanded: 0 },
+    };
+    runPredators(s, 1, { mode: 'online', rng: always, activeDefense: true });
+    expect(s.ducks.some((d) => d.wounded)).toBe(true); // the un-scared dive landed
+    expect(s.deterrentIntegrity).toBe(1); // ...but the floor wasn't engaged, so no wear
+  });
+
   it('Repair restores integrity to pristine for a wear-prorated cost', () => {
     const s = flock(4);
     s.resources.eggs = 1000;

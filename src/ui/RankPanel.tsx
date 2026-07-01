@@ -41,7 +41,13 @@ function buildUnlocks(): Unlock[] {
   out.push({
     rank: BALANCE.PREDATORS.INTRO_RANK,
     title: 'Predators begin',
-    desc: 'The owl starts hunting in telegraphed windows. Build deterrents, secure prize breeders, and treat wounds before they escalate.',
+    desc: 'The owl starts hunting in telegraphed windows. Build deterrents (nets), secure prize breeders, and admit wounded ducks to an infirmary before they escalate.',
+    kind: 'predator',
+  });
+  out.push({
+    rank: BALANCE.PREDATORS.RACCOON_INTRO_RANK,
+    title: 'The Raccoon',
+    desc: 'A ground raider joins the owl, on its own windows. Nets won’t stop it — build HARDWARE CLOTH. Its threat and defense line are separate.',
     kind: 'predator',
   });
   for (const m of MILESTONES) {

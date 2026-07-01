@@ -313,9 +313,10 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
   if (!target) return; // slipped away (secured/treated/gone) — the dive misses
 
   if (opts.activeDefense) {
-    // ACTIVE: the player is here, so the built floor + presence are off — an
-    // un-scared committed dive lands. The scare was the only defense.
-    wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
+    // ACTIVE: the player is here, so the built floor + presence are OFF — an un-scared
+    // committed dive lands (the scare was the only defense). The floor didn't engage,
+    // so it doesn't wear: your nets/cloth only erode while they're actually doing the
+    // job (idle/offline). Actively scaring keeps them pristine.
     landHit(state, def, opts, target, rng);
     return;
   }
@@ -448,7 +449,9 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     ps.windowElapsed = 0;
     ps.attacksFired = 0;
     ps.windowAttacks = rollWindowAttacks(def, rng); // hidden 1..3 — no "2 and done"
-    wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_WINDOW); // the night weathers the nets
+    // The window weathers the floor only when the floor is on duty (idle/offline). An
+    // actively-scaring player isn't relying on it, so it doesn't erode.
+    if (!opts.activeDefense) wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_WINDOW);
     emit(state, { kind: 'open', predatorId: def.id });
   }
 }
