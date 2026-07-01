@@ -17,7 +17,7 @@ import { currentThreat, predatorsActive } from './game/predators';
 import { championGoal } from './game/prestige';
 import { LegacyPanel } from './ui/LegacyPanel';
 import { defenseFloor, flockRatio, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
-import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
+import { DuckIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon, ShieldIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
@@ -573,6 +573,34 @@ export default function App() {
                   </span>
                   <span className="tabular-nums">{label}</span>
                 </button>
+              );
+            })()}
+          {/* Live guard-state readout: while you're actively playing the floor is
+              suppressed (scare dives yourself); after idling ACTIVE_WINDOW_S your built
+              defenses arm automatically — so you know when it's safe to step away. */}
+          {predActive &&
+            (() => {
+              const armed = state.activeRemaining <= 0;
+              const secs = Math.max(0, Math.ceil(state.activeRemaining));
+              const mmss = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+              return (
+                <div
+                  title={
+                    armed
+                      ? 'Guard mode — your nets/cloth are on duty (dives roll against your floor, no scaring needed). Safe to idle or step away.'
+                      : `Active play — the floor is suppressed, so you scare dives yourself. Idle ${mmss} more and your defenses arm automatically.`
+                  }
+                  className={`flex cursor-help items-center justify-between rounded-md px-3 py-1.5 text-xs font-bold ${
+                    armed
+                      ? 'bg-[#1f3326] text-[#bfe8a8] ring-1 ring-[#3a5a3a]'
+                      : 'bg-[#3a2e16] text-[#ffe9a8] ring-1 ring-[#e2b94f]'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ShieldIcon size={13} /> {armed ? 'Defenses armed' : 'Defenses down'}
+                  </span>
+                  <span className="tabular-nums">{armed ? 'on guard' : `arms in ${mmss}`}</span>
+                </div>
               );
             })()}
           {!state.autoHaulUnlocked && state.stations.length > 0 && (
