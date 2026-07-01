@@ -554,12 +554,12 @@ describe('offline catch-up = exposure (built floor only, but never a wipe)', () 
     expect(s.xp).toBe(10);
   });
 
-  it('reports niacin-debuffed (limping) ducks in the away summary', () => {
+  it('away toll ignores a debuff that predates the trip (net-new only)', () => {
     const s = setHens(stockAll(fullSetup()), 2); // fed flock → no NEW debuffs accrue
     s.rank = 5;
-    s.ducks[0].debuffed = true; // already limping when they left
+    s.ducks[0].debuffed = true; // already limping when they left — reported live then
     s.lastSeen = -1 * HOUR;
     const away = runOfflineCatchUp(s, 0);
-    expect(away.debuffed).toBe(1); // surfaced in the summary, not silent
+    expect(away.debuffed).toBeUndefined(); // not re-reported as a "while away" toll
   });
 });

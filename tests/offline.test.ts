@@ -62,8 +62,25 @@ describe('offline catch-up × nutrition', () => {
     const s = build({ plot: 1, mill: 1, coop: 1 });
     s.resources.corn = 1e6;
     s.lastSeen = -8 * HOUR;
-    runOfflineCatchUp(s, 0);
+    const away = runOfflineCatchUp(s, 0);
     expect(s.ducks.some((d) => d.debuffed)).toBe(true);
+    expect(away.debuffed ?? 0).toBeGreaterThan(0); // and the away toll surfaces the NEW limp
+  });
+
+  it('away toll counts only NET-NEW afflictions, not pre-existing wounds/debuffs', () => {
+    // Leaving already afflicted (each reported live at the time) and taking no fresh
+    // hits offline must yield a clean toll — no double-report as "the owl, in the night."
+    const s = stockAll(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, oysterSource: 1, mill: 1, coop: 1 }));
+    setHens(s, 2);
+    s.ducks[0].wounded = true;
+    s.ducks[0].woundSource = 'predator';
+    s.ducks[1].debuffed = true;
+    s.lastSeen = -60 * 1000; // 60s: well-fed (no new debuff), < 240s escalate (wound survives)
+    const away = runOfflineCatchUp(s, 0);
+    expect(s.ducks[0].wounded).toBe(true); // still wounded — but it predates the trip
+    expect(away.predator).toBeUndefined();
+    expect(away.overcrowd).toBeUndefined();
+    expect(away.debuffed).toBeUndefined();
   });
 
   it('but a well-conditioned flock resists the debuff offline', () => {

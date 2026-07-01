@@ -300,8 +300,11 @@ export function pondView(state: GameState): PondView {
     covered: worksUnlocked && isCovered(live, f.x, f.y),
   }));
   return {
-    layoutBase: pondLayoutBase(state),
-    circulationHealth: circulationHealth(state),
+    // Reuse the provisions map already built above — pondLayoutBase/circulationHealth
+    // otherwise each recompute featureProvisions via their default param, so this ran
+    // O(features) three times per pondView (called every render while the board's open).
+    layoutBase: pondLayoutBase(state, provs),
+    circulationHealth: circulationHealth(state, provs),
     features,
     flow: state.pond.flow,
     liveKeys,
