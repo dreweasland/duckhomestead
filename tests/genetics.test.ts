@@ -5,8 +5,11 @@ import {
   axisTier,
   breedGenome,
   breedGenotype,
+  colorOdds,
+  geneProfile,
   goodGeneCount,
   inheritAllele,
+  isGodClone,
   layMult,
   maturationMult,
   recordColor,
@@ -66,6 +69,65 @@ describe('Mendelian inheritance', () => {
   it('a specific allele pass is reproducible from the rng', () => {
     // first parent passes allele[0]=Bl (rng<.5), second passes allele[1]=bl (rng>=.5)
     expect(breedGenotype(['Bl', 'bl'], ['Bl', 'bl'], seq([0.1, 0.9]))).toEqual(['Bl', 'bl']);
+  });
+});
+
+describe('colorOdds — analytic crossbreed preview (must mirror breedGenotype above)', () => {
+  const black: Genotype = ['bl', 'bl'];
+  const blue: Genotype = ['Bl', 'bl'];
+  const splash: Genotype = ['Bl', 'Bl'];
+  const total = (o: Record<Color, number>) => o.black + o.blue + o.splash;
+
+  it('black × black → certain black', () => {
+    expect(colorOdds(black, black)).toEqual({ black: 1, blue: 0, splash: 0 });
+  });
+
+  it('splash × splash → certain splash', () => {
+    const o = colorOdds(splash, splash);
+    expect(o.splash).toBeCloseTo(1, 6);
+    expect(o.black + o.blue).toBeCloseTo(0, 6);
+  });
+
+  it('black × splash → certain blue (one bl + one Bl, every time)', () => {
+    const o = colorOdds(black, splash);
+    expect(o.blue).toBeCloseTo(1, 6);
+    expect(o.black + o.splash).toBeCloseTo(0, 6);
+  });
+
+  it('blue × blue → the 1:2:1 the Monte-Carlo cross above converges to', () => {
+    const o = colorOdds(blue, blue);
+    expect(o.black).toBeCloseTo(0.25, 6);
+    expect(o.blue).toBeCloseTo(0.5, 6);
+    expect(o.splash).toBeCloseTo(0.25, 6);
+  });
+
+  it('blue × black → half black, half blue, never splash', () => {
+    const o = colorOdds(blue, black);
+    expect(o.black).toBeCloseTo(0.5, 6);
+    expect(o.blue).toBeCloseTo(0.5, 6);
+    expect(o.splash).toBeCloseTo(0, 6);
+  });
+
+  it('every parent combination is a proper distribution (sums to 1, no negatives)', () => {
+    for (const a of [black, blue, splash]) {
+      for (const b of [black, blue, splash]) {
+        const o = colorOdds(a, b);
+        expect(total(o)).toBeCloseTo(1, 6);
+        expect(Math.min(o.black, o.blue, o.splash)).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+});
+
+describe('isGodClone + geneProfile', () => {
+  const target = g('LLVHDL');
+  it('isGodClone is true only for an exact, same-length match to the target', () => {
+    expect(isGodClone(g('LLVHDL'), target)).toBe(true);
+    expect(isGodClone(g('LLVHDD'), target)).toBe(false); // one slot off
+    expect(isGodClone(g('LLVHD'), target)).toBe(false); // too short — never a clone
+  });
+  it('geneProfile tallies each gene in the genome', () => {
+    expect(geneProfile(g('LLVHDD'))).toEqual({ L: 2, V: 1, H: 1, D: 2 });
   });
 });
 
