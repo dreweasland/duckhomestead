@@ -15,6 +15,7 @@ import {
   incoming,
   windowOpen,
   activeStrike,
+  currentThreat,
   scareOff,
   rankDifficulty,
   strikeWindupSec,
@@ -68,6 +69,48 @@ const events = (s: GameState) => s.pendingPredatorEvents ?? [];
 afterEach(() => {
   // Restore the brutality dial in case a test flipped it.
   (BALANCE.PREDATORS as { ALLOW_INSTANT_SNATCH: boolean }).ALLOW_INSTANT_SNATCH = false;
+});
+
+describe('currentThreat — the UI telegraph selector', () => {
+  const owl = PREDATOR_DEFS[0]; // warningLeadSec / windowDurationSec drive the buckets
+  const setOwl = (s: GameState, ps: Partial<GameState['predators'][string]>): void => {
+    s.predators.owl = { timeToNextWindow: owl.windowEverySec, windowRemaining: 0, windowElapsed: 0, attacksFired: 0, ...ps };
+  };
+
+  it('is null when predators are dormant (no flock, or below the intro rank)', () => {
+    const noFlock = flock(0);
+    setOwl(noFlock, { windowRemaining: 30 });
+    expect(currentThreat(noFlock)).toBeNull(); // no ducks → dormant
+
+    const early = flock(4);
+    early.rank = P.INTRO_RANK - 1;
+    setOwl(early, { windowRemaining: 30 });
+    expect(currentThreat(early)).toBeNull(); // pre-intro rank → dormant
+  });
+
+  it('is null when all is calm (window closed and the next one is beyond the warning lead)', () => {
+    const s = flock(4);
+    setOwl(s, { timeToNextWindow: owl.warningLeadSec + 100 });
+    expect(currentThreat(s)).toBeNull();
+  });
+
+  it('reports an INCOMING window once inside the warning lead, with seconds-to-open', () => {
+    const s = flock(4);
+    setOwl(s, { timeToNextWindow: owl.warningLeadSec - 5 });
+    const t = currentThreat(s);
+    expect(t?.phase).toBe('incoming');
+    expect(t?.seconds).toBe(owl.warningLeadSec - 5);
+    expect(t?.def.id).toBe('owl');
+  });
+
+  it('reports an OPEN window with the seconds remaining (open beats an imminent next window)', () => {
+    const s = flock(4);
+    // Window open now AND the counter to the next one is tiny — open must win.
+    setOwl(s, { windowRemaining: 30, windowElapsed: 30, timeToNextWindow: 1, attacksFired: 1 });
+    const t = currentThreat(s);
+    expect(t?.phase).toBe('open');
+    expect(t?.seconds).toBe(30);
+  });
 });
 
 describe('predator config is generic (owl is data, not hardcoded)', () => {

@@ -2,9 +2,41 @@ import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { initialState } from '../src/game/state';
 import { doseNiacin } from '../src/game/actions';
+import { axisFactor } from '../src/game/nutrition';
 import { build, fullSetup, stockAll, run, setHens } from './helpers';
 
 const N = BALANCE.NUTRITION;
+
+describe('axisFactor — the per-axis output throttle curve', () => {
+  it('floors at a starved axis, reaches 1.0 at full, and interpolates linearly', () => {
+    expect(axisFactor(0)).toBeCloseTo(N.THROTTLE_FLOOR, 10); // starved ≠ zero output
+    expect(axisFactor(1)).toBeCloseTo(1, 10); // fully fed → full output
+    expect(axisFactor(0.5)).toBeCloseTo(N.THROTTLE_FLOOR + (1 - N.THROTTLE_FLOOR) * 0.5, 10);
+  });
+
+  it('is monotonic and clamps outside [0,1] (no runaway bonus, never below the floor)', () => {
+    expect(axisFactor(0.75)).toBeGreaterThan(axisFactor(0.25));
+    expect(axisFactor(2)).toBeCloseTo(1, 10); // over-fed gives no extra
+    expect(axisFactor(-1)).toBeCloseTo(N.THROTTLE_FLOOR, 10); // never below the floor
+  });
+});
+
+describe('niacin is a debuff driver, NOT an output throttle', () => {
+  it('eggMultRaw is exactly the energy×protein×calcium product — niacin is excluded', () => {
+    // E/P/Ca fed from their producers, but the niacin source (brewer's yeast) is gone.
+    const s = stockAll(build({ plot: 1, peaPatch: 1, mealwormFarm: 1, oysterSource: 1, mill: 1, coop: 1 }));
+    setHens(s, 1);
+    s.resources.brewersYeast = 0;
+    run(s, 1); // one tick — before the condition battery or debuff timer moves
+    const sat = s.nutrition!.satisfaction;
+    expect(sat.niacin).toBeLessThan(1); // setup is non-vacuous: niacin IS short
+    expect(Math.min(sat.energy, sat.protein, sat.calcium)).toBeGreaterThanOrEqual(1); // others fed
+    // The raw multiplier is the E/P/Ca product only — the niacin shortfall never appears.
+    const expected = axisFactor(sat.energy) * axisFactor(sat.protein) * axisFactor(sat.calcium);
+    expect(s.nutrition!.eggMultRaw).toBeCloseTo(expected, 10);
+    expect(s.nutrition!.eggMultRaw).toBeCloseTo(1, 6); // full output despite a starved niacin axis
+  });
+});
 
 describe('satisfaction + throttle', () => {
   it('a stocked, balanced ration satisfies every axis and lays at full rate', () => {
