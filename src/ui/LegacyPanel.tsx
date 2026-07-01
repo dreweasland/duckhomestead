@@ -57,6 +57,8 @@ const BOOST_META: Record<BoostId, { label: string; blurb: string }> = {
   stationSpeed: { label: 'Station Speed', blurb: 'faster producer cycles' },
   eggValue: { label: 'Egg Value', blurb: 'more eggs laid' },
   waterProvision: { label: 'Water Capacity', blurb: 'water a bigger flock (past the pond cap)' },
+  renown: { label: 'Renown', blurb: 'more XP per tend/dose — re-climb the ranks faster' },
+  husbandry: { label: 'Husbandry', blurb: 'faster clutches + maturation — regrow the flock faster' },
 };
 
 const fmtDate = (ms: number) => {

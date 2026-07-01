@@ -19,8 +19,15 @@ import { COLORS, initialState, type ChampionSnapshot, type GameState } from './s
 const P = BALANCE.PRESTIGE;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-export type BoostId = 'output' | 'stationSpeed' | 'eggValue' | 'waterProvision';
-export const BOOST_IDS: BoostId[] = ['output', 'stationSpeed', 'eggValue', 'waterProvision'];
+export type BoostId = 'output' | 'stationSpeed' | 'eggValue' | 'waterProvision' | 'renown' | 'husbandry';
+export const BOOST_IDS: BoostId[] = [
+  'output',
+  'stationSpeed',
+  'eggValue',
+  'waterProvision',
+  'renown',
+  'husbandry',
+];
 
 // ── The champion goal: three concrete requirements ───────────────────
 /** Live average flock GENOME QUALITY = mean slots matching the god-clone target
@@ -95,18 +102,31 @@ export function championReadiness(state: GameState): number {
   return championGoal(state).readiness;
 }
 
-/** Legacy currency this run would grant — scales with how far the flock overshoots
- *  BOTH the size target and the vigor gate (all requirements must be met first),
- *  so a championship flock out-earns a merely-bigger one. */
-export function prestigeCurrency(state: GameState): number {
+/**
+ * The grant IF the run were prestiged with `size` ducks at the current quality —
+ * powers both the real grant and the UI's push-vs-reset projection ("prestige
+ * now: +X · at N ducks: +Y"). The base scales with tier (TIER_CURRENCY_GROWTH,
+ * tracking the rising size target) and the size exponent is SUPERLINEAR, so
+ * pushing past the gate genuinely out-earns an immediate reset for a while.
+ * Returns 0 unless the champion goal is currently met.
+ */
+export function currencyAtSize(state: GameState, size: number): number {
   if (!canPrestige(state)) return 0;
-  const sizeOver = state.ducks.length / sizeTarget(state); // ≥ 1 (size met)
+  const sizeOver = size / sizeTarget(state); // ≥ 1 (size met)
   const qualityOver = meanQuality(state) / qualityGate(state); // ≥ 1 (quality met)
   return Math.round(
     P.CURRENCY_AT_THRESHOLD *
+      Math.pow(P.TIER_CURRENCY_GROWTH, state.legacyTier) *
       Math.pow(sizeOver, P.CURRENCY_OVERSHOOT_EXP) *
       Math.pow(qualityOver, P.CURRENCY_QUALITY_EXP),
   );
+}
+
+/** Legacy currency this run would grant — scales with how far the flock overshoots
+ *  BOTH the size target and the quality gate (all requirements must be met first),
+ *  so a championship flock out-earns a merely-bigger one. */
+export function prestigeCurrency(state: GameState): number {
+  return currencyAtSize(state, state.ducks.length);
 }
 
 // ── Boosts (global scalars) ──────────────────────────────────────────
@@ -131,6 +151,11 @@ export const outputBoostMult = (state: GameState): number => boostMult(state, 'o
 export const speedBoostMult = (state: GameState): number => boostMult(state, 'stationSpeed');
 export const eggValueBoostMult = (state: GameState): number => boostMult(state, 'eggValue');
 export const waterProvisionBoostMult = (state: GameState): number => boostMult(state, 'waterProvision');
+/** Renown scales XP from ACTIVE actions (tend/dose) — the online-only XP law holds. */
+export const renownBoostMult = (state: GameState): number => boostMult(state, 'renown');
+/** Husbandry scales breeding + maturation SPEED (a rate scalar, so it applies
+ *  offline too, like output) — never clutch size, rations, or genome odds. */
+export const husbandryBoostMult = (state: GameState): number => boostMult(state, 'husbandry');
 
 // ── The reset ────────────────────────────────────────────────────────
 /** A memorial snapshot of the flock about to be wiped. */

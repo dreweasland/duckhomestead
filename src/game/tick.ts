@@ -3,7 +3,7 @@ import type { Resource } from './state';
 import type { GameState, Station } from './state';
 import { UPGRADE_OUTPUT, stationOutputMult } from './actions';
 import { cycleMult, yieldMult } from './loot';
-import { outputBoostMult, speedBoostMult } from './prestige';
+import { husbandryBoostMult, outputBoostMult, speedBoostMult } from './prestige';
 import { runNutrition, runDucklingNutrition, runDrakeNutrition } from './nutrition';
 import { runBreeding, runOvercrowding } from './breeding';
 import { runPredators } from './predators';
@@ -137,7 +137,10 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   const breedRate = runDrakeNutrition(state, dt, rateMult);
 
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
-  runBreeding(state, dt * rateMult, matureRate, breedRate);
+  // Husbandry (legacy boost) is a pure SPEED scalar on both rates — it never
+  // touches the rations that produced them, clutch size, or genome odds.
+  const husbandry = husbandryBoostMult(state);
+  runBreeding(state, dt * rateMult, matureRate * husbandry, breedRate * husbandry);
   // Flock ratio health: an over-drake flock injures its own (online & offline).
   runOvercrowding(state, dt * rateMult);
 

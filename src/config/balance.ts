@@ -666,15 +666,22 @@ export const BALANCE = {
      *  (≈100, 150, 225, 337, …). */
     SIZE_BASE: 100,
     SIZE_GROWTH: 1.5,
-    /** Legacy currency = CURRENCY_AT_THRESHOLD scaled by BOTH overshoots:
-     *  (size/target)^OVERSHOOT_EXP × (meanQuality/gate)^QUALITY_EXP — so a
-     *  championship flock out-earns a merely-bigger one (both ratios are ≥ 1
-     *  once the requirements are met). */
-    CURRENCY_AT_THRESHOLD: 10,
-    CURRENCY_OVERSHOOT_EXP: 0.8,
+    /** Legacy currency = CURRENCY_AT_THRESHOLD · TIER_CURRENCY_GROWTH^tier scaled
+     *  by BOTH overshoots: (size/target)^OVERSHOOT_EXP × (meanQuality/gate)^QUALITY_EXP.
+     *  Phase 6a: the base is a POWER SURGE (the first reset must feel like ~1.5×,
+     *  not a rounding error), the tier growth tracks SIZE_GROWTH (each reset buys a
+     *  similar number of escalating-cost boost levels), and the size exponent is
+     *  SUPERLINEAR — pushing past the gate out-earns resetting up to ~1.5–2× the
+     *  size target, so push-vs-reset is a live decision (the endgame of a run). */
+    CURRENCY_AT_THRESHOLD: 50,
+    TIER_CURRENCY_GROWTH: 1.5,
+    CURRENCY_OVERSHOOT_EXP: 1.3,
     CURRENCY_QUALITY_EXP: 1.5,
     /** Stackable global-scalar boosts. perLevel = fractional bump per level;
-     *  cost for level L = round(baseCost · costGrowth^L). */
+     *  cost for level L = round(baseCost · costGrowth^L). Renown/Husbandry (6a)
+     *  hit the two clocks that actually pace a re-run — rank XP and the breeding
+     *  timers — delivering the "retrace the arc far faster" promise. Pacing
+     *  scalars ONLY: never a requirement, ration, clutch size, or genome odds. */
     BOOSTS: {
       output: { perLevel: 0.05, baseCost: 5, costGrowth: 1.5 }, // +5% station output / level
       stationSpeed: { perLevel: 0.05, baseCost: 5, costGrowth: 1.5 }, // +5% cycle speed / level
@@ -683,6 +690,8 @@ export const BALANCE = {
       // watered). This scales total water provision so a huge end-game flock can
       // still be kept watered — the meta lever past the layout ceiling.
       waterProvision: { perLevel: 0.1, baseCost: 6, costGrowth: 1.5 }, // +10% water provision / level
+      renown: { perLevel: 0.1, baseCost: 5, costGrowth: 1.5 }, // +10% tend/dose XP / level (online-only XP law holds)
+      husbandry: { perLevel: 0.1, baseCost: 6, costGrowth: 1.5 }, // +10% breeding & maturation speed / level
     } as Record<string, { perLevel: number; baseCost: number; costGrowth: number }>,
   },
 

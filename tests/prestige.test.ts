@@ -15,6 +15,7 @@ import {
   sizeTarget,
   qualityGate,
   canPrestige,
+  currencyAtSize,
   prestigeCurrency,
   prestigeReset,
   championSnapshot,
@@ -22,8 +23,9 @@ import {
   buyBoost,
   boostMult,
 } from '../src/game/prestige';
+import { tend } from '../src/game/actions';
 import { deserialize } from '../src/game/save';
-import { build, fullSetup, stockAll, setHens, run } from './helpers';
+import { build, fullSetup, stockAll, setHens, run, FLAT_GENOME } from './helpers';
 
 const NOW = 1_700_000_000_000;
 /**
@@ -240,6 +242,91 @@ describe('champion goal: three concrete requirements', () => {
     };
     expect(championGoal(mk(0)).quality.met).toBe(true);
     expect(championGoal(mk(1)).quality.met).toBe(false);
+  });
+});
+
+describe('Phase 6a: the push-vs-reset currency curve', () => {
+  it('overshoot is SUPERLINEAR in size — pushing past the gate out-earns resetting', () => {
+    const champ = championRun();
+    const target = sizeTarget(champ);
+    const atGate = currencyAtSize(champ, target);
+    const atDouble = currencyAtSize(champ, target * 2);
+    // Superlinear: doubling the flock more than doubles the grant (2^EXP, EXP > 1).
+    expect(BALANCE.PRESTIGE.CURRENCY_OVERSHOOT_EXP).toBeGreaterThan(1);
+    expect(atDouble / atGate).toBeCloseTo(Math.pow(2, BALANCE.PRESTIGE.CURRENCY_OVERSHOOT_EXP), 1);
+    expect(atDouble).toBeGreaterThan(atGate * 2);
+  });
+
+  it('prestigeCurrency IS currencyAtSize at the live flock size (the projection never lies)', () => {
+    const champ = championRun();
+    expect(prestigeCurrency(champ)).toBe(currencyAtSize(champ, champ.ducks.length));
+  });
+
+  it('the projection is 0 until the champion goal is met (no phantom payouts)', () => {
+    const s = initialState(0);
+    s.ducks = [duck('a', 6)];
+    expect(currencyAtSize(s, 500)).toBe(0);
+  });
+});
+
+describe('Phase 6a: Renown scales active-action XP (the re-run rank clock)', () => {
+  it('a tend grants TEND_XP × the renown multiplier', () => {
+    const plain = build({ plot: 1 });
+    const boosted = build({ plot: 1 });
+    boosted.purchasedBoosts = { renown: 5 }; // +50%
+    const rp = tend(plain, plain.stations[0].id);
+    const rb = tend(boosted, boosted.stations[0].id);
+    if (!rp.ok || !rb.ok) throw new Error('tend failed');
+    expect(rp.value.xp.xpGained).toBe(BALANCE.TEND_XP);
+    expect(rb.value.xp.xpGained).toBe(Math.round(BALANCE.TEND_XP * 1.5));
+  });
+});
+
+describe('Phase 6a: Husbandry scales the breeding clocks (never the puzzle)', () => {
+  /** A stocked full setup with one adult pairable flock + one duckling. */
+  const withDuckling = (): GameState => {
+    const s = setHens(stockAll(fullSetup()), 1);
+    s.ducks.push({
+      id: 'dk1',
+      genotype: ['Bl', 'bl'],
+      genome: [...FLAT_GENOME],
+      genomeKnown: true,
+      sex: 'hen',
+      stage: 'duckling',
+      ageTicks: 0,
+    });
+    return s;
+  };
+
+  it('ducklings mature proportionally faster under a husbandry boost', () => {
+    const plain = withDuckling();
+    const boosted = withDuckling();
+    boosted.purchasedBoosts = { husbandry: 5 }; // +50%
+    run(plain, 60);
+    run(boosted, 60);
+    const age = (s: GameState) => s.ducks.find((d) => d.id === 'dk1')!.ageTicks;
+    expect(age(plain)).toBeGreaterThan(0);
+    expect(age(boosted) / age(plain)).toBeCloseTo(1.5, 1);
+  });
+
+  it('pairs accrue clutch progress proportionally faster — and the RATION SIDE is untouched', () => {
+    const mk = (): GameState => {
+      const s = stockAll(fullSetup());
+      s.ducks = [
+        { id: 'dr', genotype: ['Bl', 'bl'], genome: [...FLAT_GENOME], genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 },
+        { id: 'he', genotype: ['Bl', 'bl'], genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 },
+      ];
+      s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
+      return s;
+    };
+    const plain = mk();
+    const boosted = mk();
+    boosted.purchasedBoosts = { husbandry: 5 };
+    run(plain, 60);
+    run(boosted, 60);
+    expect(boosted.breedingPairs[0].clutchProgress / plain.breedingPairs[0].clutchProgress).toBeCloseTo(1.5, 1);
+    // Guardrail: husbandry never touches the duckling/drake REQUIREMENT profiles.
+    expect(BALANCE.BREEDING.DUCKLING_REQUIREMENT).toEqual({ energy: 1, protein: 3, niacin: 2, calcium: 0 });
   });
 });
 

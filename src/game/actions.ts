@@ -11,7 +11,7 @@ import {
   tendPowerMult,
   yieldMult,
 } from './loot';
-import { outputBoostMult, speedBoostMult } from './prestige';
+import { outputBoostMult, renownBoostMult, speedBoostMult } from './prestige';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import type { Gene, GameState, Ingredient, Module, Rarity, Resource, Station } from './state';
 import {
@@ -618,7 +618,8 @@ export function doseNiacin(state: GameState): ActionResult<DoseResult> {
   state.resources.brewersYeast -= cost;
   duck.debuffed = false;
   state.doseCooldownRemaining = BALANCE.NUTRITION.DOSE_COOLDOWN_S;
-  const xp = gainXP(state, BALANCE.NUTRITION.DOSE_XP);
+  // Renown (legacy boost) scales active-action XP — online-only law holds.
+  const xp = gainXP(state, Math.round(BALANCE.NUTRITION.DOSE_XP * renownBoostMult(state)));
   return done({ xp });
 }
 
@@ -793,6 +794,7 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   }
 
   station.tendCooldownRemaining = BALANCE.TEND_COOLDOWN_S * tendCooldownMult(state);
-  const xp = gainXP(state, BALANCE.TEND_XP);
+  // Renown (legacy boost) scales active-action XP — online-only law holds.
+  const xp = gainXP(state, Math.round(BALANCE.TEND_XP * renownBoostMult(state)));
   return done({ station, burst, xp });
 }
