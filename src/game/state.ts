@@ -413,6 +413,11 @@ export interface GameState {
   /** Memorial snapshots of each champion flock that earned a prestige (display only). */
   legacyHall: ChampionSnapshot[];
 
+  // ── Phase 6b: The Grange (contracts board, unlocks at legacy tier 1) ──
+  /** The rotating offer board + at most one active contract. Wiped by prestige
+   *  (composed fresh in initialState()) exactly like every other run field. */
+  contracts: ContractsState;
+
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
 }
@@ -489,6 +494,74 @@ export type PredatorEvent =
   | { kind: 'wound'; predatorId: string; duckId: string }
   | { kind: 'snatched'; predatorId: string; duckId: string }
   | { kind: 'escalated'; duckId: string; source?: 'predator' | 'overcrowd' };
+
+// ── Phase 6b: THE GRANGE (contracts board) ───────────────────────────
+/** The three contract shapes — a discriminated union so a new type later is a
+ *  new generator, not new architecture. See game/contracts.ts. */
+export type ContractType = 'delivery' | 'hatch' | 'defense';
+
+/** Dust (the bulk) + a small legacy-shard trickle; a module only at the top
+ *  difficulty notch. NEVER eggs/resources/XP — the online-only law's payout side. */
+export interface ContractReward {
+  dust: number;
+  shards: number;
+  moduleRarity?: Rarity;
+}
+
+interface ContractCommon {
+  id: string;
+  /** Difficulty notch this contract rolled (0..NOTCH_WEIGHTS.length-1) — sets
+   *  its reward band and, per type, its quota/slot-count/scare-count. */
+  notch: number;
+  reward: ContractReward;
+  /** True once the active contract's goal has been met — awaiting Claim. */
+  completed: boolean;
+}
+
+/** The egg sink: divert laid eggs (at the two lay points) toward a quota,
+ *  snapshotted from the live eggRate, under an online time limit. */
+export interface DeliveryContract extends ContractCommon {
+  type: 'delivery';
+  quota: number;
+  delivered: number;
+  /** Seconds left once ACCEPTED (0 while still just an offer). */
+  limitRemaining: number;
+}
+
+/** Breeding stock to spec: an optional color + an optional positional gene
+ *  pattern (length GENOME.SLOTS; null = unspecified/"don't care" slot). Genes
+ *  only ever draw from {L,V,H} — never D — so a spec is always achievable. */
+export interface HatchContract extends ContractCommon {
+  type: 'hatch';
+  color?: Color;
+  genePattern: (Gene | null)[];
+}
+
+/** Prove the watch: foil `scareTarget` committed dives (the 'scared' event)
+ *  without a landed injury ('wound'/'snatched' resets progress to 0). */
+export interface DefenseContract extends ContractCommon {
+  type: 'defense';
+  scareTarget: number;
+  scareProgress: number;
+}
+
+export type Contract = DeliveryContract | HatchContract | DefenseContract;
+
+/** The board: a few open offers + at most ONE active contract (choosing which
+ *  offer to run is the decision). Wiped by prestige (part of initialState()). */
+export interface ContractsState {
+  offers: Contract[];
+  active: Contract | null;
+  /** Monotonic id counter for contracts. */
+  nextContractId: number;
+  /** Seconds until every offer fully refreshes (a manual reroll is separate,
+   *  costs dust, and doesn't reset this timer). */
+  refreshRemaining: number;
+}
+
+export function initialContracts(): ContractsState {
+  return { offers: [], active: null, nextContractId: 1, refreshRemaining: BALANCE.CONTRACTS.OFFER_REFRESH_S };
+}
 
 /** Fresh per-predator state from the defs: first window is a full interval out. */
 export function initialPredators(): Record<string, PredatorState> {
@@ -657,6 +730,7 @@ export function initialState(now: number): GameState {
     legacyCurrency: 0,
     purchasedBoosts: {},
     legacyHall: [],
+    contracts: initialContracts(),
     lastSeen: now,
   };
 }

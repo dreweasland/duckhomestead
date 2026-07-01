@@ -711,6 +711,54 @@ export const BALANCE = {
     } as Record<string, { perLevel: number; baseCost: number; costGrowth: number }>,
   },
 
+  // ── Phase 6b: THE GRANGE (contracts board, unlocks at legacy tier 1) ─
+  // A rotating offer board: ONE active contract at a time diverts laid eggs /
+  // breeds to spec / defends a window, paying dust + a trickle of legacy
+  // shards (+ a guaranteed module at the top notch). ALL contract clocks and
+  // progress are ONLINE-ONLY (see game/contracts.ts) — offline catch-up never
+  // advances a deadline, diverts an egg, or counts a hatch/scare. Contracts
+  // NEVER touch the sim: they only observe existing lay/hatch/predator events
+  // and divert already-produced eggs. Rewards are dust/shards/modules ONLY —
+  // never eggs, resources, or XP.
+  CONTRACTS: {
+    UNLOCK_TIER: 1,
+    OFFER_SLOTS: 3,
+    OFFER_REFRESH_S: 600,
+    REROLL_DUST: 5,
+    /** Relative weights for the offer's TYPE roll. */
+    TYPE_WEIGHTS: { delivery: 1, hatch: 1, defense: 1 } as Record<string, number>,
+    /** Relative weights for the offer's difficulty NOTCH roll (easy-leaning). */
+    NOTCH_WEIGHTS: [50, 35, 15],
+    /** Per-notch reward band: dust (the bulk) + a small legacy-shard trickle.
+     *  Only the top notch guarantees a module (fixed rarity, via loot.ts
+     *  grantModule) — matches rank-milestone grants. All provisional pending
+     *  playtest; watch-item: if shard farming ever beats prestiging, cut the
+     *  shard bands here, not the dust. */
+    REWARD_BY_NOTCH: [
+      { dust: [10, 15], shards: [2, 3] },
+      { dust: [18, 28], shards: [3, 5] },
+      { dust: [35, 50], shards: [6, 9], moduleRarity: 'rare' },
+    ] as { dust: [number, number]; shards: [number, number]; moduleRarity?: string }[],
+    DELIVERY: {
+      QUOTA_MINUTES: 10,
+      MIN_QUOTA: 300,
+      LIMIT_MIN: 15,
+      /** Notch scales the snapshotted quota (self-balancing to live eggRate). */
+      QUOTA_MULT_BY_NOTCH: [0.7, 1, 1.4],
+    },
+    HATCH: {
+      /** Hard ceiling on specified slots — never all 6, always breedable-toward. */
+      SPEC_MAX_SLOTS: 4,
+      /** Specified-slot COUNT by notch (unspecified slots are "don't care"). */
+      SLOTS_BY_NOTCH: [2, 3, 4],
+      /** Chance a spec also requires a specific color, on top of the pattern. */
+      COLOR_CHANCE: 0.4,
+    },
+    DEFENSE: {
+      SCARE_COUNT_BY_NOTCH: [2, 3, 5],
+    },
+  },
+
   // ── Simulation ──────────────────────────────────────────────────────
   /** Fixed-timestep rate for the sim loop. Render is decoupled (rAF). */
   TICKS_PER_SECOND: 10,

@@ -35,6 +35,14 @@ import {
   type XpResult,
 } from './actions';
 import { playstylePreset, zoneDef } from '../config/balance';
+import {
+  acceptContract,
+  abandonContract,
+  claimContract,
+  onPredatorEvent as onContractPredatorEvent,
+  rerollOffers,
+  type ClaimResult,
+} from './contracts';
 import { goodGeneCount } from './genetics';
 import { flockRatio } from './state';
 import { scareOff, type ScareResult } from './predators';
@@ -114,6 +122,9 @@ export class GameEngine {
   private dexListeners = new Set<(e: DexEvent) => void>();
   private predatorListeners = new Set<(e: PredatorEvent) => void>();
   private autosalvageListeners = new Set<(dust: number) => void>();
+  /** Fires when a Grange contract is claimed — a quiet rhythm beat (reward
+   *  amounts), not a celebratory DING like a milestone. */
+  private contractClaimListeners = new Set<(e: ClaimResult) => void>();
 
   private rafId = 0;
   private lastTime = 0;
@@ -163,6 +174,11 @@ export class GameEngine {
     this.autosalvageListeners.add(fn);
     return () => this.autosalvageListeners.delete(fn);
   }
+  /** Fires when a Grange contract is claimed. */
+  onContractClaim(fn: (e: ClaimResult) => void): () => void {
+    this.contractClaimListeners.add(fn);
+    return () => this.contractClaimListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
@@ -183,6 +199,9 @@ export class GameEngine {
   }
   private emitAutosalvage(dust: number) {
     for (const fn of this.autosalvageListeners) fn(dust);
+  }
+  private emitContractClaim(e: ClaimResult) {
+    for (const fn of this.contractClaimListeners) fn(e);
   }
   /** Fire DINGs for any first-of-color hatches accrued during ticks. */
   private drainDex() {
@@ -214,11 +233,17 @@ export class GameEngine {
   /** Surface predator events (telegraph / attack / loss) accrued during ticks.
    *  First contact (the 'introduced' beat) is promoted to a milestone DING so the
    *  player gets a clear, can't-miss "predators now hunt here" moment — always
-   *  while present, never as a silent surprise. */
+   *  while present, never as a silent surprise. This is also the online-only
+   *  choke point the Grange's defense contract listens through: 'scared' only
+   *  ever originates from an out-of-band scare() click (never from inside a
+   *  tick step), and this drain runs only from the engine's live loop / scare()
+   *  — never during offline catch-up — so feeding it here keeps the online-only
+   *  law intact without threading events through tick.ts. */
   private drainPredatorEvents() {
     const pending = this.state.pendingPredatorEvents;
     if (!pending || pending.length === 0) return;
     for (const e of pending) {
+      onContractPredatorEvent(this.state, e);
       if (e.kind === 'introduced') {
         const raccoon = e.predatorId === 'raccoon';
         this.emitDing({
@@ -662,6 +687,33 @@ export class GameEngine {
     const lvl = buyBoostAction(this.state, id);
     this.notify();
     return lvl;
+  }
+
+  // ── The Grange (Phase 6b: contracts board) ─────────────────────────
+  /** Accept an offer as the one active contract (fails if one is already running). */
+  acceptContract(contractId: string): ActionResult<unknown> {
+    const r = acceptContract(this.state, contractId);
+    this.notify();
+    return r;
+  }
+  /** Abandon the active contract — the slot just frees up, no penalty. */
+  abandonContract(): ActionResult<unknown> {
+    const r = abandonContract(this.state);
+    this.notify();
+    return r;
+  }
+  /** Reroll the whole offer board for dust. */
+  rerollContractOffers(): ActionResult<unknown> {
+    const r = rerollOffers(this.state);
+    this.notify();
+    return r;
+  }
+  /** Claim the completed active contract's reward (dust/shards/module). */
+  claimContract(): ActionResult<unknown> {
+    const r = claimContract(this.state);
+    if (r.ok) this.emitContractClaim(r.value);
+    this.notify();
+    return r;
   }
 
   /** Dismiss the "While you were away" summary. */

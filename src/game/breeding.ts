@@ -1,4 +1,5 @@
 import { BALANCE } from '../config/balance';
+import { onHatch } from './contracts';
 import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
 import { targetForTier } from './prestige';
 import { rollWoundSeverity } from './predators';
@@ -52,9 +53,18 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
  * parents); ducklings mature duckling -> juvenile -> adult. Runs online & offline
  * (offline at the reduced step). `matureRate` lets Step 5's duckling ration slow
  * maturation; it's 1 until then. New colors are pushed to state.pendingDex.
- * Never grants XP. Hatching is gated by housing capacity.
+ * Never grants XP. Hatching is gated by housing capacity. `online` gates the
+ * Grange's hatch-spec hook (Phase 6b) — defaults true so existing direct
+ * callers (tests, offline-agnostic call sites) keep counting as before;
+ * tick.ts passes the real mode so offline hatches never count toward a contract.
  */
-export function runBreeding(state: GameState, step: number, matureRate = 1, breedRate = 1): void {
+export function runBreeding(
+  state: GameState,
+  step: number,
+  matureRate = 1,
+  breedRate = 1,
+  online = true,
+): void {
   const capacity = coopCapacity(state);
   // The god-clone DING is judged against the TIER's champion target (the same one
   // the prestige gate reads), not the player's tracking target.
@@ -114,6 +124,9 @@ export function runBreeding(state: GameState, step: number, matureRate = 1, bree
       if (!hadGodClone && isGodClone(genome, godTarget)) {
         state.pendingGodClone = (state.pendingGodClone ?? 0) + 1;
       }
+      // The Grange (Phase 6b): only an ONLINE hatch may complete a hatch-spec
+      // contract — offline catch-up hatches never count (the online-only law).
+      if (online) onHatch(state, duckling);
     }
   }
 

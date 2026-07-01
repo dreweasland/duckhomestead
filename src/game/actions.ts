@@ -1,4 +1,5 @@
 import { BALANCE, STATION_DEFS, zoneDef, type StationType } from '../config/balance';
+import { onEggsLaid } from './contracts';
 import {
   activeStatWeights,
   cycleMult,
@@ -788,7 +789,11 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
       state.resources[key] -= (def.inputs[key] ?? 0) * mult;
     }
     for (const key of Object.keys(def.outputs) as Resource[]) {
-      const out = (def.outputs[key] ?? 0) * mult * nutritionMult * tendPower;
+      let out = (def.outputs[key] ?? 0) * mult * nutritionMult * tendPower;
+      // The Grange (Phase 6b): tend() is always online, so an active delivery
+      // contract diverts eggs here too (the coop's other lay point) — the
+      // remainder is what actually lands in the buffer/burst feedback.
+      if (key === 'eggs') out -= onEggsLaid(state, out);
       station.buffer[key] = (station.buffer[key] ?? 0) + out;
       burst[key] = (burst[key] ?? 0) + out;
     }

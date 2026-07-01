@@ -145,6 +145,15 @@ export function deserialize(raw: string, now: number): GameState {
         colors: c.colors ?? [],
         timestamp: c.timestamp ?? 0,
       })),
+      // Phase 6b: The Grange. Pre-6b saves have no `contracts` block at all —
+      // merge onto the fresh default so a partial/missing shape still loads
+      // with a valid (empty) board; a fresh refresh timer re-fills it shortly.
+      contracts: {
+        offers: parsed.contracts?.offers ?? base.contracts.offers,
+        active: parsed.contracts?.active ?? base.contracts.active,
+        nextContractId: parsed.contracts?.nextContractId ?? base.contracts.nextContractId,
+        refreshRemaining: parsed.contracts?.refreshRemaining ?? base.contracts.refreshRemaining,
+      },
       // Pre-4c saves (and any not-yet-introduced save) keep the first-contact
       // grace: predators won't resolve their first window until the player is
       // back online to see them. So a returning player is never first-exposed

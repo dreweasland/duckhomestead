@@ -8,6 +8,7 @@ import { runNutrition, runDucklingNutrition, runDrakeNutrition } from './nutriti
 import { runBreeding, runOvercrowding } from './breeding';
 import { runPredators } from './predators';
 import { runCirculation } from './pond';
+import { runContracts } from './contracts';
 
 export type SimMode = 'online' | 'offline';
 
@@ -127,7 +128,10 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
 
   // The nutrition grid: feed the flock from storage per the active ration and
   // lay eggs throttled by per-axis satisfaction (buffered by flock condition).
-  runNutrition(state, dt, rateMult, willHaul);
+  // `online` gates the Grange's egg-diversion hook (Phase 6b) — the online-only
+  // law: offline catch-up never diverts a laid egg to a contract.
+  const online = opts.mode === 'online';
+  runNutrition(state, dt, rateMult, willHaul, online);
 
   // Duckling grow-out ration consumes the leftover ingredients (layers eat first)
   // and gates maturation speed.
@@ -139,8 +143,10 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
   // Husbandry (legacy boost) is a pure SPEED scalar on both rates — it never
   // touches the rations that produced them, clutch size, or genome odds.
+  // `online` also gates the Grange's hatch-spec hook — offline hatches never
+  // count toward a contract.
   const husbandry = husbandryBoostMult(state);
-  runBreeding(state, dt * rateMult, matureRate * husbandry, breedRate * husbandry);
+  runBreeding(state, dt * rateMult, matureRate * husbandry, breedRate * husbandry, online);
   // Flock ratio health: an over-drake flock injures its own (online & offline).
   runOvercrowding(state, dt * rateMult);
 
@@ -165,4 +171,14 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     lossBudget: opts.predatorLossBudget,
     activeDefense,
   });
+
+  // The Grange (Phase 6b): offer board upkeep (refill/refresh) + the active
+  // delivery contract's deadline. Online-only, top to bottom — offline catch-up
+  // never advances a contract clock. NOTE: the defense contract's scare-count
+  // hook (onPredatorEvent) is NOT wired here — 'scared' only ever originates
+  // from an out-of-band player scare (GameEngine.scare()), never from inside a
+  // tick(), so it's fed from GameEngine.drainPredatorEvents() instead (the
+  // actual online-only choke point every predator event passes through en
+  // route to the UI; offline catch-up never calls it). See game/contracts.ts.
+  if (online) runContracts(state, dt);
 }
