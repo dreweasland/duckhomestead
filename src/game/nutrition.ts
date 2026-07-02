@@ -148,7 +148,19 @@ export function runNutrition(
       : 0,
   );
   // Condition buffers: full condition masks the penalty; empty applies it fully.
-  const eggMult = eggMultRaw + (1 - eggMultRaw) * cond;
+  const masked = eggMultRaw + (1 - eggMultRaw) * cond;
+  // CONDITION REWORK (see BALANCE.NUTRITION.STRESS): a rattled flock — condition
+  // knocked down by harm events — lays at a direct, gentle penalty even on a
+  // green ration. The throttle FADES IN only as nutrition approaches green
+  // (FED_BLEND on eggMultRaw), so it acts exactly where the mask above is inert
+  // and can never stack onto a feed shortfall the mask already handles. Floored:
+  // a throttle, never a wall. Winter hens are insulated (their pool reads winter
+  // satisfaction only — stress is a home-flock phenomenon).
+  const S = N.STRESS;
+  const stressRaw = S.THROTTLE_FLOOR + (1 - S.THROTTLE_FLOOR) * clamp01(cond / S.THROTTLE_BELOW);
+  const fedWeight = clamp01((eggMultRaw - S.FED_BLEND[0]) / (S.FED_BLEND[1] - S.FED_BLEND[0]));
+  const stressMult = 1 - fedWeight * (1 - stressRaw);
+  const eggMult = masked * stressMult;
 
   state.nutrition = {
     satisfaction,
@@ -156,6 +168,7 @@ export function runNutrition(
     requirement,
     eggMultRaw,
     eggMult,
+    stressMult,
     feedScale,
     hasMill,
     eggRate: 0,

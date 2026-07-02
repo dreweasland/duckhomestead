@@ -3,7 +3,7 @@ import { onHatch } from './contracts';
 import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
 import { targetForTier } from './prestige';
 import { rollWoundSeverity } from './predators';
-import { breedingEstablished, coopCapacity, flockRatio, phenotype, type Duck, type GameState } from './state';
+import { breedingEstablished, coopCapacity, drainCondition, flockRatio, phenotype, type Duck, type GameState } from './state';
 
 const B = BALANCE.BREEDING;
 
@@ -45,6 +45,7 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
     victim.woundSource = 'overcrowd';
     victim.woundElapsed = 0;
     victim.severity = rollWoundSeverity(false, victim.genome, rng); // harassment, not a strike
+    drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.crowdInjury); // self-inflicted stress
     (state.pendingPredatorEvents ??= []).push({ kind: 'crowdInjury', duckId: victim.id });
   }
 }

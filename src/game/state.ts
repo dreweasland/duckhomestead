@@ -117,8 +117,12 @@ export interface NutritionState {
   requirement: Record<Axis, number>;
   /** Raw egg multiplier from the egg axes (energy·protein·calcium), pre-condition. */
   eggMultRaw: number;
-  /** Egg multiplier actually applied (raw, buffered by flock condition). */
+  /** Egg multiplier actually applied (raw, buffered by flock condition, then
+   *  shaved by the stress throttle when the flock is rattled). */
   eggMult: number;
+  /** The stress throttle actually applied this tick (1 = calm/fed; < 1 = a
+   *  rattled flock laying slower on a green ration). For the "rattled" UI read. */
+  stressMult: number;
   /** Mill-capacity scaling on feed throughput (1 = enough mills). */
   feedScale: number;
   hasMill: boolean;
@@ -238,6 +242,15 @@ export interface BreedingPair {
   clutchProgress: number;
   /** Incubation progress (seconds) per fertilized egg currently incubating. */
   incubating: number[];
+}
+
+/** Condition-stress drain (playtest rework): harm events knock a chunk off the
+ *  flock-condition battery — see BALANCE.NUTRITION.STRESS. Every call site is a
+ *  VISIBLE event (wound / overcrowd injury / permanent loss), so a low battery
+ *  is always attributable. Lives here (zero-dep) so predators/breeding can call
+ *  it without touching nutrition's import graph. */
+export function drainCondition(state: GameState, amount: number): void {
+  state.condition = Math.max(0, state.condition - amount);
 }
 
 /** Phenotype from genotype: blue-allele count -> color. */
