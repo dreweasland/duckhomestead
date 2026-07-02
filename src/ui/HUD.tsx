@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { isMuted, setMuted } from '../audio/sfx';
 import type { GameState, Resource } from '../game/state';
 import { rankProgress, xpForLevel } from '../game/rank';
@@ -6,6 +6,7 @@ import { fmt } from './format';
 import { DuckIcon, MuteIcon, RESOURCE_ICON, SpeakerIcon } from './icons';
 import { RankPanel } from './RankPanel';
 import { ResourceFlowPanel } from './ResourceFlowPanel';
+import { useEasedCounter } from './useEasedCounter';
 
 // Eggs (currency) + the five nutrition ingredients. `pellets` is a retired
 // Phase 1 field and is intentionally not shown.
@@ -24,6 +25,14 @@ export function HUD({ state }: { state: GameState }) {
   const [muted, setMutedState] = useState(isMuted());
   const [ranksOpen, setRanksOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
+  const { display: eggDisplay, flashKey } = useEasedCounter(state.resources.eggs);
+  const [eggFlash, setEggFlash] = useState(false);
+  useEffect(() => {
+    if (flashKey === 0) return;
+    setEggFlash(true);
+    const t = window.setTimeout(() => setEggFlash(false), 600);
+    return () => clearTimeout(t);
+  }, [flashKey]);
   // Forage (foraged energy feed) only appears once a forage zone is in play;
   // the winter lines (6d) likewise only once any stock exists — pre-Winterstead
   // the HUD stays five-ingredient clean.
@@ -68,11 +77,13 @@ export function HUD({ state }: { state: GameState }) {
               onClick={() => setFlowOpen(true)}
               className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition hover:ring-1 hover:ring-[#7a6a4a] ${
                 r.key === 'eggs' ? 'bg-[#3a2e22] ring-1 ring-[#5a4a32]' : 'bg-[#2a2018]'
-              }`}
+              } ${r.key === 'eggs' && eggFlash ? 'egg-jump-flash' : ''}`}
               title={`${r.label} — see resource flow`}
             >
               <Icon size={15} title={r.label} />
-              <span className="text-sm font-bold tabular-nums">{fmt(state.resources[r.key])}</span>
+              <span className="text-sm font-bold tabular-nums">
+                {fmt(r.key === 'eggs' ? eggDisplay : state.resources[r.key])}
+              </span>
             </button>
           );
         })}

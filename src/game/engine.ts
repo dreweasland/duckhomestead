@@ -89,6 +89,16 @@ export interface DingEvent {
 export interface TendEvent {
   stationId: string;
   xp: number;
+  /** The station's tend burst, for a resource-amount pop alongside the XP one. */
+  burst?: Partial<Record<Resource, number>>;
+}
+
+/** Emitted when a station's buffer is collected/hauled into storage — the
+ *  canvas pops a "+N" at the tile. `stationId` is omitted for a Collect-All
+ *  sweep (the amounts are already aggregated across every station). */
+export interface CollectEvent {
+  stationId?: string;
+  resources: Partial<Record<Resource, number>>;
 }
 
 /** Emitted when a module enters the inventory — the loot moment. */
@@ -119,6 +129,7 @@ export class GameEngine {
   private listeners = new Set<Listener>();
   private dingListeners = new Set<(e: DingEvent) => void>();
   private tendListeners = new Set<(e: TendEvent) => void>();
+  private collectListeners = new Set<(e: CollectEvent) => void>();
   private lootListeners = new Set<(e: LootEvent) => void>();
   private dexListeners = new Set<(e: DexEvent) => void>();
   private predatorListeners = new Set<(e: PredatorEvent) => void>();
@@ -160,6 +171,10 @@ export class GameEngine {
     this.tendListeners.add(fn);
     return () => this.tendListeners.delete(fn);
   }
+  onCollect(fn: (e: CollectEvent) => void): () => void {
+    this.collectListeners.add(fn);
+    return () => this.collectListeners.delete(fn);
+  }
   onLoot(fn: (e: LootEvent) => void): () => void {
     this.lootListeners.add(fn);
     return () => this.lootListeners.delete(fn);
@@ -196,6 +211,9 @@ export class GameEngine {
   }
   private emitTend(e: TendEvent) {
     for (const fn of this.tendListeners) fn(e);
+  }
+  private emitCollect(e: CollectEvent) {
+    for (const fn of this.collectListeners) fn(e);
   }
   private emitLoot(e: LootEvent) {
     for (const fn of this.lootListeners) fn(e);
@@ -393,12 +411,27 @@ export class GameEngine {
 
   collect(stationId: string): ActionResult<unknown> {
     const r = collectStation(this.state, stationId);
+    if (r.ok) {
+      const resources = r.value as Partial<Record<Resource, number>>;
+      if (Object.values(resources).some((v) => (v ?? 0) > 0)) this.emitCollect({ stationId, resources });
+    }
     this.notify();
     return r;
   }
 
   collectEverything() {
+    // Snapshot per-station buffers before collectAll clears them, so the
+    // canvas can pop a single aggregate total for the sweep (never one pop
+    // per station — see GameCanvas's per-frame pop batching).
+    const totals: Partial<Record<Resource, number>> = {};
+    for (const s of this.state.stations) {
+      for (const key of Object.keys(s.buffer) as Resource[]) {
+        const amt = s.buffer[key] ?? 0;
+        if (amt > 0) totals[key] = (totals[key] ?? 0) + amt;
+      }
+    }
     collectAll(this.state);
+    if (Object.keys(totals).length > 0) this.emitCollect({ resources: totals });
     this.notify();
   }
 
@@ -416,7 +449,7 @@ export class GameEngine {
   tend(stationId: string): ActionResult<unknown> {
     const r = tend(this.state, stationId);
     if (r.ok) {
-      this.emitTend({ stationId, xp: r.value.xp.xpGained });
+      this.emitTend({ stationId, xp: r.value.xp.xpGained, burst: r.value.burst });
       this.fireXp(r.value.xp);
       // Active-only loot drop — the chance gate + roll live in loot.ts. Passive
       // and offline production never call this. A keeper fires the loot banner; a
@@ -446,7 +479,7 @@ export class GameEngine {
       if (!r.ok) continue;
       tended++;
       xpGained += r.value.xp.xpGained;
-      this.emitTend({ stationId: s.id, xp: r.value.xp.xpGained });
+      this.emitTend({ stationId: s.id, xp: r.value.xp.xpGained, burst: r.value.burst });
       this.fireXp(r.value.xp);
       const drop = tryTendDrop(this.state);
       if (drop?.outcome === 'keep') this.emitLoot({ module: drop.module, source: 'drop' });

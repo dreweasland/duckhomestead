@@ -348,27 +348,126 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           overlay.circle(cx + 4 * scale, cy + h, r).fill(0x2a2018);
         };
 
-        // Floating "+XP" feedback at a tended tile, so the reward reads on the
-        // board (no need to look at the panel). Fired by engine tend events.
-        const floatStyle = new TextStyle({
+        // Floating "+N" feedback at a tended/collected tile, so the reward reads
+        // on the board (no need to look at the panel). A lone tend/collect pops
+        // right at its station; several firing in the same frame (a Tend-All or
+        // Collect-All sweep) collapse into ONE aggregate pop near the board
+        // center instead of one overlapping pop per station.
+        const XP_STYLE = new TextStyle({
           fontSize: 13,
           fontWeight: 'bold',
           fill: 0x8fe388,
           stroke: { color: 0x143010, width: 3 },
           fontFamily: 'monospace',
         });
-        interface Float { txt: Text; age: number }
+        const XP_SUFFIX_STYLE = new TextStyle({
+          fontSize: 11,
+          fontWeight: 'bold',
+          fill: 0x8fe388,
+          stroke: { color: 0x143010, width: 2 },
+          fontFamily: 'monospace',
+        });
+        const RES_STYLE = new TextStyle({
+          fontSize: 13,
+          fontWeight: 'bold',
+          fill: 0xffe9a8,
+          stroke: { color: 0x2a2018, width: 3 },
+          fontFamily: 'monospace',
+        });
+
+        // A drawn (not emoji) resource glyph: a small egg for eggs, a tinted
+        // pip for anything else.
+        const makeResIcon = (resource: Resource): Graphics => {
+          const g = new Graphics();
+          if (resource === 'eggs') {
+            g.ellipse(0, 0, 3.2, 4.2).fill(0xf5ecd8);
+            g.ellipse(-1, -1.3, 1, 1.3).fill({ color: 0xffffff, alpha: 0.5 });
+          } else {
+            g.roundRect(-3.5, -3.5, 7, 7, 1.5).fill(RES_COLOR[resource] ?? 0xffe9a8);
+          }
+          return g;
+        };
+        const fmtPop = (n: number): string => {
+          const r = Math.round(n);
+          return Math.abs(r) >= 1000 ? `${(r / 1000).toFixed(1)}k` : `${r}`;
+        };
+        // The single resource a pop leads with — eggs if any landed (the
+        // player's core currency), else whichever amount is largest.
+        const primaryResource = (
+          map: Partial<Record<Resource, number>> | undefined,
+        ): [Resource | undefined, number] => {
+          if (!map) return [undefined, 0];
+          if ((map.eggs ?? 0) > 0) return ['eggs', map.eggs ?? 0];
+          let best: Resource | undefined;
+          let bestAmt = 0;
+          for (const key of Object.keys(map) as Resource[]) {
+            const amt = map[key] ?? 0;
+            if (amt > bestAmt) {
+              best = key;
+              bestAmt = amt;
+            }
+          }
+          return [best, bestAmt];
+        };
+
+        interface Float { obj: Container; age: number; life: number }
         const floats: Float[] = [];
+        const spawnPop = (
+          x: number,
+          y: number,
+          resource: Resource | undefined,
+          amount: number,
+          xp: number | undefined,
+          life = 0.9,
+        ) => {
+          const showRes = resource !== undefined && Math.round(amount) > 0;
+          const showXp = !!xp && xp > 0;
+          if (!showRes && !showXp) return;
+          const segs: { node: Container; w: number; icon: boolean }[] = [];
+          if (showRes) {
+            segs.push({ node: makeResIcon(resource!), w: 9, icon: true });
+            const t = new Text({ text: `+${fmtPop(amount)}`, style: RES_STYLE });
+            t.anchor.set(0, 0.5);
+            segs.push({ node: t, w: t.width + 6, icon: false });
+          }
+          if (showXp) {
+            const t = new Text({ text: `+${Math.round(xp!)} XP`, style: showRes ? XP_SUFFIX_STYLE : XP_STYLE });
+            t.anchor.set(0, 0.5);
+            segs.push({ node: t, w: t.width, icon: false });
+          }
+          const total = segs.reduce((a, s) => a + s.w, 0);
+          const c = new Container();
+          let cx = -total / 2;
+          for (const seg of segs) {
+            seg.node.position.x = seg.icon ? cx + 4.5 : cx;
+            c.addChild(seg.node);
+            cx += seg.w;
+          }
+          c.position.set(x, y);
+          floatLayer.addChild(c);
+          floats.push({ obj: c, age: 0, life });
+        };
+
+        interface PendingPop {
+          stationId?: string;
+          xp?: number;
+          resources?: Partial<Record<Resource, number>>;
+        }
+        let pending: PendingPop[] = [];
         const unsubTend = engine.onTend((e) => {
           const s = engine.state.stations.find((st) => st.id === e.stationId);
-          if (!s || s.zoneId !== zoneId) return; // only float on the visible zone
-          const txt = new Text({ text: `+${e.xp} XP`, style: floatStyle });
-          txt.anchor.set(0.5, 1);
-          txt.position.set(OX + s.x * TILE + TILE / 2, OY + s.y * TILE + 6);
-          floatLayer.addChild(txt);
-          floats.push({ txt, age: 0 });
+          if (!s || s.zoneId !== zoneId) return; // only pop on the visible zone
+          pending.push({ stationId: e.stationId, xp: e.xp, resources: e.burst });
         });
         cleanups.push(() => unsubTend());
+        const unsubCollect = engine.onCollect((e) => {
+          if (e.stationId) {
+            const s = engine.state.stations.find((st) => st.id === e.stationId);
+            if (!s || s.zoneId !== zoneId) return; // only pop on the visible zone
+          } // no stationId ⇒ a Collect-All sweep; show regardless of zone
+          pending.push({ stationId: e.stationId, resources: e.resources });
+        });
+        cleanups.push(() => unsubCollect());
 
         // Ambient ducks: cosmetic only (not game state). A small flock that
         // grows with the number of coops in THIS zone and free-roams the grass.
@@ -599,17 +698,41 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
             }
           }
 
-          // Advance floating +XP labels: rise and fade, then remove.
+          // Drain this frame's queued tend/collect pops: a lone event pops at
+          // its station tile; several arriving in one frame (a Tend-All /
+          // Collect-All sweep) collapse into ONE aggregate pop at the board
+          // center instead of one per station.
+          if (pending.length === 1 && pending[0].stationId) {
+            const p = pending[0];
+            const s = zoneStations.find((st) => st.id === p.stationId);
+            if (s) {
+              const [resource, amount] = primaryResource(p.resources);
+              spawnPop(OX + s.x * TILE + TILE / 2, OY + s.y * TILE + 6, resource, amount, p.xp);
+            }
+          } else if (pending.length > 0) {
+            let xp = 0;
+            const totals: Partial<Record<Resource, number>> = {};
+            for (const p of pending) {
+              xp += p.xp ?? 0;
+              for (const key of Object.keys(p.resources ?? {}) as Resource[]) {
+                totals[key] = (totals[key] ?? 0) + (p.resources?.[key] ?? 0);
+              }
+            }
+            const [resource, amount] = primaryResource(totals);
+            spawnPop(OX + (GRID.width * TILE) / 2, OY + (GRID.height * TILE) / 2, resource, amount, xp, 1.1);
+          }
+          pending = [];
+
+          // Advance floating pops: rise and fade, then remove.
           {
             const dt = app.ticker.deltaMS / 1000;
-            const LIFE = 0.9;
             for (let i = floats.length - 1; i >= 0; i--) {
               const f = floats[i];
               f.age += dt;
-              f.txt.y -= 24 * dt;
-              f.txt.alpha = Math.max(0, 1 - f.age / LIFE);
-              if (f.age >= LIFE) {
-                f.txt.destroy();
+              f.obj.y -= 24 * dt;
+              f.obj.alpha = Math.max(0, 1 - f.age / f.life);
+              if (f.age >= f.life) {
+                f.obj.destroy({ children: true });
                 floats.splice(i, 1);
               }
             }

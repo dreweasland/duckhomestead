@@ -88,6 +88,21 @@ body {
   animation: screen-flash 0.8s ease-out both;
 }
 
+/* Egg-total pill: a brief warm pulse on a big lump-sum jump (contract claim,
+   siege jackpot) — never on ordinary passive accrual. */
+@keyframes egg-jump-flash {
+  0% {
+    box-shadow: 0 0 10px 3px rgba(255, 214, 140, 0.85);
+  }
+  100% {
+    box-shadow: 0 0 10px 3px rgba(255, 214, 140, 0);
+  }
+}
+
+.egg-jump-flash {
+  animation: egg-jump-flash 0.6s ease-out both;
+}
+
 /* Auto-salvage toast: a quick fade in/out over its ~1.5s lifetime. */
 @keyframes salvage-toast {
   0% {
