@@ -882,6 +882,18 @@ export class GameEngine {
     this.notify();
   }
 
+  /** Swap in an imported save (already validated + deserialized by the
+   *  caller via save.ts's deserialize — see BackupControls) and persist it.
+   *  Mirrors reset()'s bookkeeping so a restored save starts clean. */
+  importState(state: GameState) {
+    this.state = state;
+    this.away = null;
+    this.conditionWasLow = false;
+    this.lastConditionReboundAt = 0;
+    this.saveNow();
+    this.notify();
+  }
+
   // ── Dev/testing helpers (used only by the dev-mode panel) ──────────
   devAddResource(res: Resource, n: number) {
     this.state.resources[res] += n;

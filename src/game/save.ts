@@ -58,6 +58,19 @@ export function serialize(state: GameState): string {
   return JSON.stringify(state);
 }
 
+/**
+ * A light shape-sniff for imported files (Phase 5 juice) — checks for a
+ * couple of fields every real save has always had, so a completely unrelated
+ * JSON file is rejected with a readable message BEFORE deserialize's tolerant
+ * defaulting quietly turns it into a fresh game. NOT a parallel parser: it
+ * reads nothing deserialize doesn't already read, it just gates the call.
+ */
+export function looksLikeSave(parsed: unknown): parsed is Partial<GameState> {
+  if (typeof parsed !== 'object' || parsed === null) return false;
+  const p = parsed as Record<string, unknown>;
+  return typeof p.rank === 'number' && Array.isArray(p.ducks) && typeof p.resources === 'object' && p.resources !== null;
+}
+
 /** Parse a saved state, tolerating older/partial shapes by merging defaults. */
 export function deserialize(raw: string, now: number): GameState {
   const base = initialState(now);

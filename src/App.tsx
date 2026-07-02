@@ -26,6 +26,7 @@ import { StatusPills } from './ui/StatusPills';
 import { useGame } from './game/useGame';
 import { GameCanvas, MAX_BOARD_WIDTH } from './render/GameCanvas';
 import { AwayModal } from './ui/AwayModal';
+import { BackupControls } from './ui/BackupPanel';
 import { BuildBar } from './ui/BuildBar';
 import { DevPanel } from './ui/DevPanel';
 import { DexBanner } from './ui/DexBanner';
@@ -758,8 +759,9 @@ export default function App() {
           </div>
         )}
 
-        {/* Dev tools + reset sit at the very bottom, under the build palette. */}
+        {/* Dev tools + backup/reset sit at the very bottom, under the build palette. */}
         {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
+        <BackupControls engine={engine} />
         <button
           onClick={() => {
             if (window.confirm('Wipe this homestead and start over?')) {
