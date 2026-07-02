@@ -486,7 +486,13 @@ export const BALANCE = {
     /** The owl — first predator instance. Aerial, dusk/night windows. Foxes/hawks
      *  are later config: add an entry to PREDATOR_DEFS, no core changes. */
     OWL: {
-      windowEverySec: 300, // a risk window opens this often (real seconds)
+      // Playtest retune (2026-07-02): at 300/360 the two schedules put a window
+      // on screen ~40% of online time with a must-scare dive every ~80s (ACTIVE
+      // mode suppresses the floor, so nearly every dive demands a reaction).
+      // 450/540 → ~25% open-window time, a dive every ~2.4 min — a beat, not a
+      // barrage. Free side effect: ~35% fewer offline windows, softening
+      // overnight deterrent wear in the same direction as the balance review.
+      windowEverySec: 450, // a risk window opens this often (real seconds)
       windowDurationSec: 60, // how long the window stays open
       warningLeadSec: 20, // telegraph: warn this long BEFORE the window opens
       baseAttackChance: 0.45, // per attack attempt, before defenses/presence
@@ -498,7 +504,7 @@ export const BALANCE = {
     /** The RACCOON: a ground raider. Rarer, longer windows than the owl, stopped by
      *  hardware cloth (not nets). Debuts at RACCOON_INTRO_RANK. */
     RACCOON: {
-      windowEverySec: 360, // prowls a bit less often than the owl
+      windowEverySec: 540, // prowls a bit less often than the owl (see the OWL retune note)
       windowDurationSec: 90, // but lingers longer once it's in
       warningLeadSec: 20,
       baseAttackChance: 0.4,
