@@ -1,7 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
 import { onEggsLaid } from './contracts';
-import { layMult } from './genetics';
+import { hardinessMult, layMult } from './genetics';
 import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { waterConditionMult } from './water';
 import { eggValueBoostMult } from './prestige';
@@ -321,4 +321,96 @@ export function runDrakeNutrition(state: GameState, dt: number, rateMult: number
   const breedRate = floor + (1 - floor) * clamp01(minSat);
   state.drakeNutrition = { satisfaction, requirement, breedRate, drakeCount: n };
   return breedRate;
+}
+
+/**
+ * Phase 6d: the WINTERSTEAD pool — the 4th and LAST-fed ration (tick.ts calls it
+ * after layers → ducklings → drakes, so scarcity throttles the luxury site
+ * first, never the core engine). Assigned winter hens consume the winterRation
+ * from the SAME shared storage against the cold, energy-dominant WINTER
+ * requirement, then lay PREMIUM eggs:
+ *
+ *   perHen = layMult(genome) × hardinessMult(genome)   ← where H finally pays
+ *   rate   = Σ perHen × (base/coopCycle) × nutritionMult × warmth × support
+ *              × PREMIUM_EGG_MULT × eggValueBoost
+ *
+ * into the winter coops' buffers (shared egg pool on haul). `warmth`/`support`
+ * arrive in Step 3 (heater layout + waterers) — 1 until then. Cold/hunger only
+ * ever THROTTLE (floors, never walls, no death path). Online lay is diverted to
+ * an active Grange delivery via the same onEggsLaid hook as home lay. Runs
+ * online & offline; never grants XP.
+ */
+export function runWinterNutrition(
+  state: GameState,
+  dt: number,
+  rateMult: number,
+  willHaul: boolean,
+  online: boolean,
+): void {
+  const W = BALANCE.WINTER;
+  // Head count first (O(ducks), cheap): no assigned hens ⇒ no pool at all.
+  let n = 0;
+  for (const d of state.ducks) if (d.stage === 'adult' && d.sex === 'hen' && d.site === 'winter') n++;
+  if (n === 0) {
+    state.winter = undefined;
+    return;
+  }
+  const step = dt * rateMult;
+  const coopCycle = BALANCE.COOP.cycleSeconds;
+
+  const supply = zeroAxes();
+  for (const ing of INGREDIENTS) {
+    const want = (((state.winterRation[ing] ?? 0) * n) / coopCycle) * step;
+    const consume = Math.min(want, state.resources[ing as Ingredient]);
+    if (consume > 0) state.resources[ing as Ingredient] -= consume;
+    const rate = step > 0 ? consume / step : 0;
+    const vals = N.INGREDIENT[ing as Ingredient] as Record<Axis, number>;
+    for (const axis of AXES) supply[axis] += rate * (vals[axis] ?? 0);
+  }
+
+  const requirement = zeroAxes();
+  const satisfaction = zeroAxes();
+  const prior = state.winter?.satisfaction;
+  const alpha = N.SMOOTH_TAU_S > 0 ? Math.min(1, step / N.SMOOTH_TAU_S) : 1;
+  for (const axis of AXES) {
+    requirement[axis] = (W.REQUIREMENT[axis] * n) / coopCycle;
+    const instant = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
+    satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
+  }
+
+  // Worst required axis → the nutrition throttle (floor, never a wall).
+  const minSat = Math.min(...AXES.map((a) => satisfaction[a]));
+  const eggMult = W.PENALTY_FLOOR + (1 - W.PENALTY_FLOOR) * clamp01(minSat);
+
+  // Warmth + waterer support land in Step 3 (heater layout); full until then.
+  const warmth = 1;
+  const support = 1;
+
+  // Premium lay — genome-scaled per hen (lay × HARDINESS), into winter coops.
+  const winterCoops = state.stations.filter((s) => s.type === 'winterCoop');
+  let flockMult = 0;
+  for (const d of state.ducks) {
+    if (d.stage === 'adult' && d.sex === 'hen' && d.site === 'winter') {
+      flockMult += layMult(d.genome) * hardinessMult(d.genome);
+    }
+  }
+  const basePerHen = BALANCE.COOP.eggPerCycle / coopCycle;
+  const eggRate =
+    flockMult * basePerHen * eggMult * warmth * support * W.PREMIUM_EGG_MULT * eggValueBoostMult(state);
+  const eggsThisStep = eggRate * step;
+  if (eggsThisStep > 0 && winterCoops.length > 0) {
+    const share = eggsThisStep / winterCoops.length;
+    for (const coop of winterCoops) {
+      coop.cycleProgress = (coop.cycleProgress + step) % coopCycle; // cosmetic lay bar
+      // Same lay-point diversion law as home lay: online only, remainder to buffer.
+      const diverted = online ? onEggsLaid(state, share) : 0;
+      coop.buffer.eggs = (coop.buffer.eggs ?? 0) + (share - diverted);
+      if (willHaul) {
+        state.resources.eggs += coop.buffer.eggs ?? 0;
+        coop.buffer = {};
+      }
+    }
+  }
+
+  state.winter = { satisfaction, requirement, eggMult, eggRate, henCount: n, warmth, support };
 }

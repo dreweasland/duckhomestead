@@ -29,6 +29,7 @@ import {
   rackSockets,
   secureCapacity,
   secureCoopCost,
+  winterCapacity,
   seedFlock,
   stationAt,
   zoneUnlocked,
@@ -254,6 +255,13 @@ export function removeStation(
   state.resources.eggs += refund;
   // (Modules live in the homestead rack now, not on stations — nothing to return.)
   state.stations.splice(idx, 1);
+  // Phase 6d: demolishing a winter coop can strand assigned ducks past capacity —
+  // the excess walk home on their own (auto-recall; never a loss).
+  if (station.type === 'winterCoop') {
+    const cap = winterCapacity(state);
+    const assigned = state.ducks.filter((d) => d.site === 'winter');
+    for (let i = assigned.length - 1; i >= cap && i >= 0; i--) assigned[i].site = 'home';
+  }
   return done({ refund });
 }
 
@@ -599,6 +607,38 @@ export function setGenomeTarget(state: GameState, target: Gene[]): ActionResult<
   return done(true);
 }
 
+// ── Phase 6d: Winterstead assignment (adults-only, from the ONE flock) ─
+/**
+ * Assign an adult hen to Winterstead. She leaves every HOME pool (feed, lay,
+ * predators, overcrowding, water, housing) and joins the WINTER pool — fed by
+ * the winter ration, laying premium hardiness-scaled eggs. Capacity-gated by
+ * winter coops. Wounded/recovering/paired ducks stay home (a pair breeds at
+ * home; recall is always allowed).
+ */
+export function assignToWinter(state: GameState, duckId: string): ActionResult<unknown> {
+  if (!zoneUnlocked(state, 'winterstead')) return fail('Winterstead is locked');
+  const d = state.ducks.find((x) => x.id === duckId);
+  if (!d) return fail('No such duck');
+  if (d.site === 'winter') return fail('Already at Winterstead');
+  if (d.stage !== 'adult') return fail('Adults only — winter is no place to grow up');
+  if (d.sex !== 'hen') return fail('Only laying hens winter over');
+  if (d.wounded || d.recovering) return fail('She needs to heal first');
+  if (state.breedingPairs.some((p) => p.henId === duckId)) return fail('She’s in a breeding pair');
+  const assigned = state.ducks.filter((x) => x.site === 'winter').length;
+  if (assigned >= winterCapacity(state)) return fail('Winter coops are full — build another');
+  d.site = 'winter';
+  return done(true);
+}
+
+/** Bring a winter-assigned duck home. Always allowed. */
+export function recallFromWinter(state: GameState, duckId: string): ActionResult<unknown> {
+  const d = state.ducks.find((x) => x.id === duckId);
+  if (!d) return fail('No such duck');
+  if (d.site !== 'winter') return fail('Not at Winterstead');
+  d.site = 'home';
+  return done(true);
+}
+
 // ── Gene Reader (reveals genomes passively / in bulk) ─────────────────
 /**
  * Build the gene-reader. One-time purchase: it immediately reads the WHOLE
@@ -793,13 +833,13 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   const burst: Partial<Record<Resource, number>> = {};
   // A coop's tend burst (tending the flock) is throttled by current nutrition,
   // same as the flock's passive lay. (Leg debuffs are per-duck now.) A WINTER
-  // coop's burst is throttled by the winter pool instead — 0 until Step 2 wires
-  // the winter metrics (no assigned flock ⇒ no eggs; XP still granted, like a mill).
+  // coop's burst follows the winter pool at the premium rate — and is 0 with no
+  // assigned flock (no eggs from an empty site; XP still granted, like a mill).
   const nutritionMult =
     station.type === 'coop'
       ? (state.nutrition?.eggMult ?? 1)
       : station.type === 'winterCoop'
-        ? 0
+        ? (state.winter ? state.winter.eggMult * BALANCE.WINTER.PREMIUM_EGG_MULT : 0)
         : 1;
   const tendPower = tendPowerMult(state); // rack-boosted burst size
 

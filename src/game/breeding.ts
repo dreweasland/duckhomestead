@@ -33,7 +33,9 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
   while (state.overcrowdStress >= onset) {
     state.overcrowdStress -= onset;
     // Victim: any non-secured, non-wounded adult (drakes fight, hens get over-mated).
-    const pool = state.ducks.filter((d) => d.stage === 'adult' && !d.secured && !d.wounded);
+    const pool = state.ducks.filter(
+      (d) => d.stage === 'adult' && !d.secured && !d.wounded && d.site !== 'winter',
+    );
     if (pool.length === 0) {
       state.overcrowdStress = 0;
       break;

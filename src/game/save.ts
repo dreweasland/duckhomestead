@@ -71,6 +71,8 @@ export function deserialize(raw: string, now: number): GameState {
       ration: { ...base.ration, ...(parsed.ration ?? {}) },
       ducklingRation: { ...base.ducklingRation, ...(parsed.ducklingRation ?? {}) },
       drakeRation: { ...base.drakeRation, ...(parsed.drakeRation ?? {}) },
+      // Phase 6d: the Winterstead ration — pre-6d saves start it empty (unset).
+      winterRation: { ...base.winterRation, ...(parsed.winterRation ?? {}) },
       condition: parsed.condition ?? base.condition,
       niacinShortfall: parsed.niacinShortfall ?? 0,
       overcrowdStress: parsed.overcrowdStress ?? 0,

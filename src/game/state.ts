@@ -150,6 +150,22 @@ export interface DrakeNutritionState {
   drakeCount: number;
 }
 
+/** Phase 6d: derived Winterstead snapshot (recomputed each tick; undefined when
+ *  no hens are assigned). Mirrors the other pools — the winter dashboard's read. */
+export interface WinterNutritionState {
+  satisfaction: Record<Axis, number>;
+  requirement: Record<Axis, number>;
+  /** Winter output multiplier from nutrition alone (floor..1). */
+  eggMult: number;
+  /** Live premium winter lay, eggs/sec (after warmth/support/premium). */
+  eggRate: number;
+  henCount: number;
+  /** Mean warmth factor across occupied winter coops (COLD_FLOOR..1). Step 3. */
+  warmth: number;
+  /** Heated-waterer support factor (WATERER_FLOOR..1). Step 3. */
+  support: number;
+}
+
 // ── Phase 4a: breeding & genetics ──
 /** Blue-dilution locus alleles. `Bl` = blue allele, `bl` = wild-type. */
 export type Allele = 'Bl' | 'bl';
@@ -199,6 +215,11 @@ export interface Duck {
   /** Injury severity, rolled when the wound lands — drives recovery time (worse when
    *  the hit landed with defenses down; milder for Hardy ducks). */
   severity?: WoundSeverity;
+  /** Phase 6d: where this duck lives. Absent/'home' = the main homestead;
+   *  'winter' = assigned to Winterstead — it then feeds/lays via the WINTER pool
+   *  and is ELSEWHERE for every home system (predators, overcrowding, water,
+   *  home housing). Adults-only; set by assign/recall. */
+  site?: 'home' | 'winter';
   /** In an Infirmary recovery slot: healing over time, holds a slot, eats extra feed,
    *  lays nothing, and no longer escalates. Set by Admit; cleared when recovered. */
   recovering?: boolean;
@@ -239,14 +260,38 @@ export function coopCapacity(state: GameState): number {
 }
 
 export const isAdult = (d: Duck): boolean => d.stage === 'adult';
-/** Adult hens — the laying population that drives egg output. */
+/** Phase 6d: true when a duck lives at the main homestead (not winter-assigned).
+ *  Every HOME pool/system filters on this — a winter duck is elsewhere. */
+export const atHome = (d: Duck): boolean => d.site !== 'winter';
+/** Adult hens AT HOME — the laying population that drives home egg output. */
 export const adultLayers = (state: GameState): Duck[] =>
-  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'hen');
-/** All adult ducks — what the layer ration must feed. */
-export const adultDucks = (state: GameState): Duck[] => state.ducks.filter(isAdult);
-/** Adult drakes — breeding males that eat the maintenance ration (no calcium). */
+  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'hen' && atHome(d));
+/** All adult ducks AT HOME — what the layer ration must feed. */
+export const adultDucks = (state: GameState): Duck[] =>
+  state.ducks.filter((d) => isAdult(d) && atHome(d));
+/** Adult drakes — breeding males that eat the maintenance ration (no calcium).
+ *  Drakes are never winter-assignable, but filter defensively. */
 export const adultDrakes = (state: GameState): Duck[] =>
-  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'drake');
+  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'drake' && atHome(d));
+
+// ── Phase 6d: Winterstead selectors ──────────────────────────────────
+/** Adult hens assigned to Winterstead — the WINTER pool (feed + premium lay). */
+export const winterHens = (state: GameState): Duck[] =>
+  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'hen' && d.site === 'winter');
+/** Winter housing: assigned ducks per winter coop (flat — no upgrades in v1). */
+export function winterCapacity(state: GameState): number {
+  return (
+    state.stations.filter((s) => s.type === 'winterCoop').length *
+    BALANCE.WINTER.STATIONS.winterCoop.capacity
+  );
+}
+/** Winter ducks supported by heated waterers (their water; the pond is frozen). */
+export function watererSupport(state: GameState): number {
+  return (
+    state.stations.filter((s) => s.type === 'heatedWaterer').length *
+    BALANCE.WINTER.STATIONS.heatedWaterer.supports
+  );
+}
 
 /** Flock RATIO health: adult hen/drake counts vs the ideal drake:hen ratio. Past
  *  the flock-size gate, drakes beyond `maxHealthyDrakes` are `excess` and the
@@ -269,7 +314,10 @@ export function flockRatio(state: GameState): {
   let hens = 0;
   let drakes = 0;
   for (const d of state.ducks) {
-    if (d.stage !== 'adult' || d.secured) continue;
+    // Secured ducks are in separate housing; winter-assigned ducks (6d) are at
+    // another SITE — neither is part of the free-roaming home flock. (Yes, that
+    // means wintering your hens worsens the home drake:hen ratio — honestly.)
+    if (d.stage !== 'adult' || d.secured || !atHome(d)) continue;
     if (d.sex === 'hen') hens++;
     else if (d.sex === 'drake') drakes++;
   }
@@ -317,6 +365,11 @@ export interface GameState {
   drakeRation: Record<Ingredient, number>;
   /** Derived drake-nutrition snapshot (recomputed each tick). */
   drakeNutrition?: DrakeNutritionState;
+  /** Phase 6d: the Winterstead ration (per winter hen per coop-cycle) — the 4th
+   *  pool, drawing from the SAME shared storage, and it eats LAST. */
+  winterRation: Record<Ingredient, number>;
+  /** Derived Winterstead snapshot (recomputed each tick). */
+  winter?: WinterNutritionState;
   /** Flock condition reserve (0..CONDITION_MAX) — the battery that buffers
    *  shortfalls and powers offline. */
   condition: number;
@@ -741,6 +794,7 @@ export function initialState(now: number): GameState {
     ration: zeroRation(),
     ducklingRation: zeroRation(),
     drakeRation: zeroRation(),
+    winterRation: zeroRation(),
     condition: BALANCE.NUTRITION.CONDITION_MAX,
     niacinShortfall: 0,
     overcrowdStress: 0,

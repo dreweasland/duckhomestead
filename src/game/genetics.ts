@@ -46,6 +46,18 @@ export function woundResistChance(genome: Genome): number {
   return Math.min(G.WOUND_RESIST_CAP, sumStat(genome, 'woundResist'));
 }
 
+/**
+ * Phase 6d: a duck's WINTER output multiplier from Hardy genes — where H finally
+ * pays economically ("best duck is contextual", delivered). Counts literal H
+ * genes only: Prime's wildcard applies to TARGET-matching, never to expressed
+ * stats (P carries its own modest woundResist instead). Throughput-only.
+ */
+export function hardinessMult(genome: Genome): number {
+  let h = 0;
+  for (const g of genome) if (g === 'H') h += 1;
+  return 1 + BALANCE.WINTER.HARDINESS_PER_H * h;
+}
+
 /** Per-duck water-synergy bonus (H genes get more out of the same water). */
 export function waterSynergy(genome: Genome): number {
   return sumStat(genome, 'waterSynergy');
