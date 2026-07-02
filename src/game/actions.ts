@@ -1,4 +1,4 @@
-import { BALANCE, STATION_DEFS, zoneDef, type StationType } from '../config/balance';
+import { BALANCE, EXCLUSIVE_STATIONS, STATION_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
 import { onEggsLaid } from './contracts';
 import {
   activeStatWeights,
@@ -29,6 +29,7 @@ import {
   rackSockets,
   secureCapacity,
   secureCoopCost,
+  winterCapacity,
   seedFlock,
   stationAt,
   zoneUnlocked,
@@ -48,7 +49,14 @@ export const INGREDIENT_PRODUCERS = new Set<StationType>([
   'mealwormFarm',
   'yeastVat',
   'oysterSource',
+  // Phase 6d: the two Winterstead ingredient lines scale on the same capped curve.
+  'seedStore',
+  'fodderRack',
 ]);
+
+/** Phase 6d: pure winter infrastructure — no cycles, no upgrades (v1). Housing,
+ *  warmth, and water support scale by COUNT, like defenses. */
+export const NO_UPGRADE_STATIONS = new Set<StationType>(['winterCoop', 'heater', 'heatedWaterer']);
 
 /** Output multiplier for an ingredient producer: gentler slope, capped at levelCap. */
 export function PRODUCER_OUTPUT(level: number): number {
@@ -127,7 +135,8 @@ export function outputPerCycle(
 export function resourceFlow(state: GameState, resource: Resource): { in: number; out: number } {
   let inflow = 0;
   if (resource === 'eggs') {
-    inflow = state.nutrition?.eggRate ?? 0;
+    // Home lay + (6d) the premium winter lay — one shared egg pool.
+    inflow = (state.nutrition?.eggRate ?? 0) + (state.winter?.eggRate ?? 0);
   } else {
     // Hoist the loop-invariant throughput multipliers (each O(rack)) — they were
     // recomputed per station (and again inside outputPerCycle).
@@ -158,6 +167,9 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
       const drakes = adultDrakes(state).length;
       outflow += ((state.drakeRation[ing] ?? 0) * drakes) / coopCycle;
     }
+    // Phase 6d: wintering hens draw the winter ration from the same stores.
+    const wintering = state.winter?.henCount ?? 0;
+    if (wintering > 0) outflow += ((state.winterRation[ing] ?? 0) * wintering) / coopCycle;
   }
 
   return { in: inflow, out: outflow };
@@ -201,6 +213,14 @@ export function placeStation(
   if (!zone) return fail('No such zone');
   if (!zoneUnlocked(state, zoneId)) return fail('Zone locked');
   if (zone.pondLayout || zone.waterworks) return fail('That’s a water canvas, not build space');
+  // Phase 6d: zone-station compatibility, both directions — a zone with an
+  // allowedStations list accepts ONLY those; every other zone rejects any
+  // zone-exclusive type (winter gear can't heat the yard).
+  if (zone.allowedStations) {
+    if (!zone.allowedStations.includes(type)) return fail(`Can’t build that at ${zone.name}`);
+  } else if (EXCLUSIVE_STATIONS.has(type)) {
+    return fail(`That only works at ${ZONE_DEFS.find((z) => z.allowedStations?.includes(type))?.name ?? 'its own site'}`);
+  }
   if (x < 0 || y < 0 || x >= zone.grid.width || y >= zone.grid.height) {
     return fail('Out of bounds');
   }
@@ -239,6 +259,13 @@ export function removeStation(
   state.resources.eggs += refund;
   // (Modules live in the homestead rack now, not on stations — nothing to return.)
   state.stations.splice(idx, 1);
+  // Phase 6d: demolishing a winter coop can strand assigned ducks past capacity —
+  // the excess walk home on their own (auto-recall; never a loss).
+  if (station.type === 'winterCoop') {
+    const cap = winterCapacity(state);
+    const assigned = state.ducks.filter((d) => d.site === 'winter');
+    for (let i = assigned.length - 1; i >= cap && i >= 0; i--) assigned[i].site = 'home';
+  }
   return done({ refund });
 }
 
@@ -271,6 +298,11 @@ export function unlockZone(state: GameState, zoneId: string): ActionResult<{ nam
   if (!zone) return fail('No such zone');
   if (zoneUnlocked(state, zoneId)) return fail('Already unlocked');
   if (!zone.unlock) return fail('Zone has no unlock');
+  // Phase 6d: some zones carry a legacy-tier floor (Winterstead: tier 3) —
+  // checked FIRST so the tease reads as a legacy gate, not a rank/egg problem.
+  if (zone.unlock.minLegacyTier != null && state.legacyTier < zone.unlock.minLegacyTier) {
+    return fail(`Requires Legacy Tier ${zone.unlock.minLegacyTier}`);
+  }
   if (state.rank < zone.unlock.rankRequired) return fail(`Reach Rank ${zone.unlock.rankRequired}`);
   if (state.resources.eggs < zone.unlock.eggCost) return fail(`Need ${zone.unlock.eggCost} eggs`);
   state.resources.eggs -= zone.unlock.eggCost;
@@ -282,6 +314,7 @@ export function unlockZone(state: GameState, zoneId: string): ActionResult<{ nam
 export function upgradeStation(state: GameState, stationId: string): ActionResult<Station> {
   const station = state.stations.find((s) => s.id === stationId);
   if (!station) return fail('No such station');
+  if (NO_UPGRADE_STATIONS.has(station.type)) return fail('Doesn’t upgrade — build another');
   if (producerMaxed(station)) return fail('At max level — build another producer');
   const cost = upgradeCost(station);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
@@ -543,6 +576,9 @@ export function createPair(state: GameState, drakeId: string, henId: string): Ac
   const hen = state.ducks.find((d) => d.id === henId);
   if (!drake || drake.sex !== 'drake' || drake.stage !== 'adult') return fail('Need an adult drake');
   if (!hen || hen.sex !== 'hen' || hen.stage !== 'adult') return fail('Need an adult hen');
+  // Phase 6d: breeding happens at HOME — a wintering hen must be recalled first
+  // (the mirror of assignToWinter rejecting paired hens).
+  if (drake.site === 'winter' || hen.site === 'winter') return fail('Wintering birds can’t pair — recall first');
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
   if (paired(drakeId) || paired(henId)) return fail('A bird is already paired');
   state.breedingPairs.push({
@@ -575,6 +611,38 @@ export function setGenomeTarget(state: GameState, target: Gene[]): ActionResult<
     return fail('Invalid target profile');
   }
   state.genomeTarget = [...target];
+  return done(true);
+}
+
+// ── Phase 6d: Winterstead assignment (adults-only, from the ONE flock) ─
+/**
+ * Assign an adult hen to Winterstead. She leaves every HOME pool (feed, lay,
+ * predators, overcrowding, water, housing) and joins the WINTER pool — fed by
+ * the winter ration, laying premium hardiness-scaled eggs. Capacity-gated by
+ * winter coops. Wounded/recovering/paired ducks stay home (a pair breeds at
+ * home; recall is always allowed).
+ */
+export function assignToWinter(state: GameState, duckId: string): ActionResult<unknown> {
+  if (!zoneUnlocked(state, 'winterstead')) return fail('Winterstead is locked');
+  const d = state.ducks.find((x) => x.id === duckId);
+  if (!d) return fail('No such duck');
+  if (d.site === 'winter') return fail('Already at Winterstead');
+  if (d.stage !== 'adult') return fail('Adults only — winter is no place to grow up');
+  if (d.sex !== 'hen') return fail('Only laying hens winter over');
+  if (d.wounded || d.recovering) return fail('She needs to heal first');
+  if (state.breedingPairs.some((p) => p.henId === duckId)) return fail('She’s in a breeding pair');
+  const assigned = state.ducks.filter((x) => x.site === 'winter').length;
+  if (assigned >= winterCapacity(state)) return fail('Winter coops are full — build another');
+  d.site = 'winter';
+  return done(true);
+}
+
+/** Bring a winter-assigned duck home. Always allowed. */
+export function recallFromWinter(state: GameState, duckId: string): ActionResult<unknown> {
+  const d = state.ducks.find((x) => x.id === duckId);
+  if (!d) return fail('No such duck');
+  if (d.site !== 'winter') return fail('Not at Winterstead');
+  d.site = 'home';
   return done(true);
 }
 
@@ -771,8 +839,15 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   const mult = UPGRADE_OUTPUT(station.level);
   const burst: Partial<Record<Resource, number>> = {};
   // A coop's tend burst (tending the flock) is throttled by current nutrition,
-  // same as the flock's passive lay. (Leg debuffs are per-duck now.)
-  const nutritionMult = station.type === 'coop' ? (state.nutrition?.eggMult ?? 1) : 1;
+  // same as the flock's passive lay. (Leg debuffs are per-duck now.) A WINTER
+  // coop's burst follows the winter pool at the premium rate — and is 0 with no
+  // assigned flock (no eggs from an empty site; XP still granted, like a mill).
+  const nutritionMult =
+    station.type === 'coop'
+      ? (state.nutrition?.eggMult ?? 1)
+      : station.type === 'winterCoop'
+        ? (state.winter ? state.winter.eggMult * BALANCE.WINTER.PREMIUM_EGG_MULT : 0)
+        : 1;
   const tendPower = tendPowerMult(state); // rack-boosted burst size
 
   for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {

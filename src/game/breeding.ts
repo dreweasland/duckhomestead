@@ -33,7 +33,9 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
   while (state.overcrowdStress >= onset) {
     state.overcrowdStress -= onset;
     // Victim: any non-secured, non-wounded adult (drakes fight, hens get over-mated).
-    const pool = state.ducks.filter((d) => d.stage === 'adult' && !d.secured && !d.wounded);
+    const pool = state.ducks.filter(
+      (d) => d.stage === 'adult' && !d.secured && !d.wounded && d.site !== 'winter',
+    );
     if (pool.length === 0) {
       state.overcrowdStress = 0;
       break;
@@ -66,6 +68,11 @@ export function runBreeding(
   online = true,
 ): void {
   const capacity = coopCapacity(state);
+  // Home housing houses the HOME flock: winter-assigned ducks (6d) occupy
+  // winter-coop slots at their own site (gated at assignment), so they must not
+  // block a hatch here. Track the count live as ducklings push mid-loop.
+  let homeCount = 0;
+  for (const d of state.ducks) if (d.site !== 'winter') homeCount++;
   // The god-clone DING is judged against the TIER's champion target (the same one
   // the prestige gate reads), not the player's tracking target.
   const godTarget = targetForTier(state.legacyTier);
@@ -96,7 +103,7 @@ export function runBreeding(
     for (let i = pair.incubating.length - 1; i >= 0; i--) {
       pair.incubating[i] += step;
       if (pair.incubating[i] < B.INCUBATE_S) continue;
-      if (state.ducks.length >= capacity) {
+      if (homeCount >= capacity) {
         pair.incubating[i] = B.INCUBATE_S; // egg waits for a housing slot
         continue;
       }
@@ -118,6 +125,7 @@ export function runBreeding(
         ageTicks: 0,
       };
       state.ducks.push(duckling);
+      homeCount++; // hatches live at home
       pair.incubating.splice(i, 1);
       if (recordColor(state, phenotype(genotype))) {
         (state.pendingDex ??= []).push(phenotype(genotype));

@@ -35,6 +35,7 @@ import {
   type XpResult,
 } from './actions';
 import { playstylePreset, zoneDef } from '../config/balance';
+import { assignToWinter, recallFromWinter } from './actions';
 import {
   acceptContract,
   abandonContract,
@@ -577,6 +578,23 @@ export class GameEngine {
   setDrakeRation(ingredient: Ingredient, value: number) {
     this.state.drakeRation[ingredient] = Math.max(0, value);
     this.notify();
+  }
+  /** Phase 6d: set the Winterstead ration (the 4th pool — winter eats last). */
+  setWinterRation(ingredient: Ingredient, value: number) {
+    this.state.winterRation[ingredient] = Math.max(0, value);
+    this.notify();
+  }
+  /** Phase 6d: assign an adult hen to Winterstead (the premium winter pool). */
+  assignToWinter(duckId: string): ActionResult<unknown> {
+    const r = assignToWinter(this.state, duckId);
+    this.notify();
+    return r;
+  }
+  /** Phase 6d: bring a winter-assigned duck home. */
+  recallFromWinter(duckId: string): ActionResult<unknown> {
+    const r = recallFromWinter(this.state, duckId);
+    this.notify();
+    return r;
   }
 
   // ── Phase 4c: predator defenses + wound care ───────────────────────

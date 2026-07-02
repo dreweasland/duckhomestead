@@ -4,7 +4,7 @@ import type { GameState, Station } from './state';
 import { UPGRADE_OUTPUT, stationOutputMult } from './actions';
 import { cycleMult, yieldMult } from './loot';
 import { husbandryBoostMult, outputBoostMult, speedBoostMult } from './prestige';
-import { runNutrition, runDucklingNutrition, runDrakeNutrition } from './nutrition';
+import { runNutrition, runDucklingNutrition, runDrakeNutrition, runWinterNutrition } from './nutrition';
 import { runBreeding, runOvercrowding } from './breeding';
 import { runPredators } from './predators';
 import { runCirculation } from './pond';
@@ -99,8 +99,11 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     }
 
     // Mills (formulation) and coops (nutrition-throttled laying) are handled by
-    // runNutrition below, not the generic producer path.
-    if (station.type === 'mill' || station.type === 'coop') continue;
+    // runNutrition below, not the generic producer path. Winter coops (6d) lay
+    // via the WINTER pool, and pure infrastructure (heater/waterer, cycle 0)
+    // never cycles at all — a 0s cycle would spin the loop to its guard.
+    if (station.type === 'mill' || station.type === 'coop' || station.type === 'winterCoop') continue;
+    if (STATION_DEFS[station.type].cycleSeconds <= 0) continue;
 
     // The boost divides cycle time — a global top-level rate scalar.
     const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleScale;
@@ -139,6 +142,9 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // Drake maintenance ration (once breeding's established) — another ingredient
   // drain; gates clutch (breeding) speed.
   const breedRate = runDrakeNutrition(state, dt, rateMult);
+  // Winterstead (6d) eats LAST — scarcity throttles the premium satellite first,
+  // never the core engine. Also lays the premium winter eggs.
+  runWinterNutrition(state, dt, rateMult, willHaul, online);
 
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
   // Husbandry (legacy boost) is a pure SPEED scalar on both rates — it never

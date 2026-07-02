@@ -24,9 +24,17 @@ export function HUD({ state }: { state: GameState }) {
   const [muted, setMutedState] = useState(isMuted());
   const [ranksOpen, setRanksOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
-  // Forage (foraged energy feed) only appears once a forage zone is in play.
-  const res =
-    state.resources.forage > 0 ? [...RES, { key: 'forage' as Resource, label: 'Forage' }] : RES;
+  // Forage (foraged energy feed) only appears once a forage zone is in play;
+  // the winter lines (6d) likewise only once any stock exists — pre-Winterstead
+  // the HUD stays five-ingredient clean.
+  let res = state.resources.forage > 0 ? [...RES, { key: 'forage' as Resource, label: 'Forage' }] : RES;
+  if (state.resources.sunflowerSeeds > 0 || state.resources.fodderSprouts > 0) {
+    res = [
+      ...res,
+      { key: 'sunflowerSeeds' as Resource, label: 'Sunflower Seeds' },
+      { key: 'fodderSprouts' as Resource, label: 'Fodder Sprouts' },
+    ];
+  }
 
   return (
     <div className="flex flex-col gap-3">

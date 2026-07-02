@@ -18,6 +18,9 @@ const ROWS: { key: Resource; label: string }[] = [
   { key: 'mealworms', label: 'Mealworms' },
   { key: 'brewersYeast', label: "Brewer's Yeast" },
   { key: 'oysterShell', label: 'Oyster Shell' },
+  // Phase 6d: the Winterstead lines (rows read '—' until the site produces).
+  { key: 'sunflowerSeeds', label: 'Sunflower Seeds' },
+  { key: 'fodderSprouts', label: 'Fodder Sprouts' },
 ];
 
 /** A per-minute rate as a short string ('—' for ~zero). */

@@ -17,7 +17,7 @@ import { COLORS, type Color, type GameState, type Genome } from '../game/state';
 import { playDing, playUpgrade } from '../audio/sfx';
 import { ColorSwatch, COLOR_META, GENE_META } from './FlockPanel';
 import { useEscapeKey } from './useEscapeKey';
-import { CheckIcon, CloseIcon, DuckIcon, GrangeIcon, LegacyIcon, LockIcon, PrimeIcon, SiegeOwlIcon } from './icons';
+import { CheckIcon, CloseIcon, DuckIcon, SnowflakeIcon, GrangeIcon, LegacyIcon, LockIcon, PrimeIcon, SiegeOwlIcon } from './icons';
 
 /** One champion requirement: icon, label, value, a progress bar, and met state. */
 function GoalRow({
@@ -286,6 +286,15 @@ export function LegacyPanel({
               <PrimeIcon size={14} className="opacity-40" /> The Prime gene — a wildcard chase
             </span>
             <span className="text-[#7a6a4a]">opens at Tier {BALANCE.GENOME.PRIME_MIN_TIER}</span>
+          </div>
+        )}
+        {state.legacyTier < (BALANCE.WINTER.UNLOCK.minLegacyTier ?? 0) && (
+          <div className="mb-3 flex items-center justify-between rounded-md bg-[#1f1812] px-3 py-2 text-[11px]">
+            <span className="flex items-center gap-1.5 font-bold text-[#7a6a4a]">
+              <LockIcon size={11} />
+              <SnowflakeIcon size={14} className="opacity-40" /> Winterstead — the second homestead
+            </span>
+            <span className="text-[#7a6a4a]">opens at Tier {BALANCE.WINTER.UNLOCK.minLegacyTier}</span>
           </div>
         )}
 

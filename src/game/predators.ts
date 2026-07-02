@@ -150,7 +150,9 @@ export function currentThreat(state: GameState): Threat | null {
  *  wounded. Secured ducks are excluded entirely; an already-wounded duck's
  *  danger is escalation (governed by Treat), not a second wound. */
 function eligibleTargets(state: GameState): Duck[] {
-  return state.ducks.filter((d) => !d.secured && !d.wounded);
+  // Winter-assigned ducks (6d) are at another SITE — predators hunt the main
+  // homestead only (the cold is Winterstead's antagonist, and it never kills).
+  return state.ducks.filter((d) => !d.secured && !d.wounded && d.site !== 'winter');
 }
 
 function targetWeight(d: Duck): number {

@@ -34,9 +34,13 @@ export function waterProvision(state: GameState): number {
   return pondLayoutBase(state, provs) * circulationHealth(state, provs) * waterProvisionBoostMult(state);
 }
 
-/** What the flock asks of the water (heads × per-duck requirement). */
+/** What the flock asks of the water (heads × per-duck requirement). Winter-
+ *  assigned ducks (6d) drink from heated waterers at their own site — they
+ *  neither demand pond water nor benefit from it. */
 export function flockRequirement(state: GameState): number {
-  return state.ducks.length * W.REQUIREMENT_PER_DUCK;
+  let n = 0;
+  for (const d of state.ducks) if (d.site !== 'winter') n++;
+  return n * W.REQUIREMENT_PER_DUCK;
 }
 
 /** Access ratio = provision / requirement. Infinite when there's no flock. */

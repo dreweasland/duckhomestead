@@ -3,10 +3,10 @@ import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotMatches, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
 import { targetForTier } from '../game/prestige';
-import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, type Color, type Duck, type Gene, type GameState } from '../game/state';
+import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
-import { CloseIcon, HealIcon, ShieldIcon, WoundIcon } from './icons';
+import { CloseIcon, HealIcon, ShieldIcon, SnowflakeIcon, WoundIcon } from './icons';
 import { useEscapeKey } from './useEscapeKey';
 
 export const COLOR_META: Record<Color, { label: string; swatch: string }> = {
@@ -576,6 +576,10 @@ export function FlockPanel({
   const slotsTotal = secureCapacity(state);
   const slotsUsed = state.ducks.filter((d) => d.secured).length;
   const infFree = infirmaryCapacity(state) - infirmaryOccupied(state);
+  // Phase 6d: Winterstead assignment (adult hens; capacity from winter coops).
+  const winterOpen = zoneUnlocked(state, 'winterstead');
+  const winterCap = winterCapacity(state);
+  const winterUsed = state.ducks.filter((d) => d.site === 'winter').length;
 
   // Tab the flock by color. Counts per color drive the tab badges; open on All so
   // the whole flock is in view up front (matching the sex/stage filters, which
@@ -868,7 +872,8 @@ export function FlockPanel({
                   const canSecure = d.secured || slotsUsed < slotsTotal;
                   const isPaired = pairedIds.has(d.id);
                   const picked = d.id === mateDrakeId || d.id === mateHenId;
-                  const canPick = d.stage === 'adult' && !d.wounded && !isPaired;
+                  // Wintering hens can't join a pair — breeding is home-only (6d).
+                  const canPick = d.stage === 'adult' && !d.wounded && !isPaired && d.site !== 'winter';
                   return (
                     <div
                       key={d.id}
@@ -987,6 +992,26 @@ export function FlockPanel({
                       >
                         <ShieldIcon size={12} />
                       </button>
+                      {winterOpen && d.stage === 'adult' && d.sex === 'hen' && (
+                        <button
+                          onClick={() => {
+                            if (d.site === 'winter') engine.recallFromWinter(d.id);
+                            else if (engine.assignToWinter(d.id).ok) playTend();
+                          }}
+                          className={`inline-flex items-center rounded px-1 py-0.5 ${
+                            d.site === 'winter'
+                              ? 'text-[#9fd4e8]'
+                              : 'text-[#5a6a7a] hover:bg-[#33271c] hover:text-[#9fd4e8]'
+                          }`}
+                          title={
+                            d.site === 'winter'
+                              ? 'Wintering over — laying premium eggs at Winterstead. Click to bring her home.'
+                              : `Assign to Winterstead (${winterUsed}/${winterCap} slots) — Hardy hens earn a premium out there`
+                          }
+                        >
+                          <SnowflakeIcon size={12} />
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           if (armedCull !== d.id) {

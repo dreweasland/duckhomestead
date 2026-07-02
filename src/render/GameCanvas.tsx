@@ -40,6 +40,8 @@ const RES_COLOR: Record<Resource, number> = {
   mealworms: 0xd9a07a,
   brewersYeast: 0xe8d9a0,
   oysterShell: 0xc9cdd2,
+  sunflowerSeeds: 0xd9a441,
+  fodderSprouts: 0x6fae7a,
   forage: 0x8fbf5a,
   pellets: 0xb87333,
   eggs: 0xf5ecd8,

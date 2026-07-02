@@ -429,7 +429,14 @@ export default function App() {
         <div className="flex flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas — the board. */}
         <div className="flex flex-col items-center gap-3">
-          <ZoneBar state={state} activeZone={activeZone} onPick={setActiveZone} />
+          <ZoneBar
+            state={state}
+            activeZone={activeZone}
+            onPick={(id) => {
+              setActiveZone(id);
+              setBuildType(null); // a yard tool is meaningless on the winter board (and vice versa)
+            }}
+          />
           <div className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
             {/* Status pills tuck into the board's empty top headroom (the canvas
                 reserves space there) — present, but adding no height. Yard only:
@@ -702,7 +709,7 @@ export default function App() {
             Yard-only: the water canvases aren't build space. */}
         {isBuildZone && (
           <div className="rounded-lg bg-[#1f1812] p-3 ring-1 ring-[#3a2e22]">
-            <BuildBar state={state} buildType={buildType} onPick={setBuildType} />
+            <BuildBar state={state} buildType={buildType} onPick={setBuildType} activeZone={activeZone} />
           </div>
         )}
 

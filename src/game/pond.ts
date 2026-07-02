@@ -163,7 +163,9 @@ export function runCirculation(state: GameState, dt: number, rateMult: number): 
   const feats = state.pond.features;
   if (feats.length === 0) return;
   const step = dt * rateMult;
-  const flock = state.ducks.length;
+  // Winter-assigned ducks (6d) aren't in the pond — they don't foul it.
+  let flock = 0;
+  for (const d of state.ducks) if (d.site !== 'winter') flock++;
   const live = liveFountains(state);
   const fresh = state.pond.freshness;
   const span = 1 - C.circulationFloor;

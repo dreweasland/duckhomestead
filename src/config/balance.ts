@@ -17,7 +17,13 @@ export type StationType =
   | 'peaPatch'
   | 'mealwormFarm'
   | 'yeastVat'
-  | 'oysterSource';
+  | 'oysterSource'
+  // Phase 6d: Winterstead-only stations (zone-exclusive via ZoneDef.allowedStations).
+  | 'seedStore'
+  | 'fodderRack'
+  | 'winterCoop'
+  | 'heater'
+  | 'heatedWaterer';
 
 /** Phase 2 ingredient-producing stations (raw producers, like the plot). */
 export const INGREDIENT_STATIONS: StationType[] = [
@@ -71,6 +77,12 @@ export const BALANCE = {
     mealwormFarm: 35,
     yeastVat: 45,
     oysterSource: 30,
+    // Phase 6d: Winterstead stations (endgame prices — eggs are abundant by tier 3).
+    seedStore: 200,
+    fodderRack: 240,
+    winterCoop: 500,
+    heater: 350,
+    heatedWaterer: 300,
   } as Record<StationType, number>,
 
   /** Fraction of a station's PLACEMENT cost refunded when removed (0..1). */
@@ -99,6 +111,15 @@ export const BALANCE = {
       mealwormFarm: 50,
       yeastVat: 60,
       oysterSource: 45,
+      // Phase 6d: winter producers upgrade on the capped PRODUCER curve. The three
+      // infrastructure pieces (coop/heater/waterer) don't upgrade in v1 — upgrades
+      // are BLOCKED in code (see upgradeStation); these entries only satisfy the
+      // Record<StationType> shape.
+      seedStore: 250,
+      fodderRack: 300,
+      winterCoop: 999999,
+      heater: 999999,
+      heatedWaterer: 999999,
     } as Record<StationType, number>,
     costGrowth: 1.6,
     /** Output multiplier per level. Level N output = base * mult^(N-1). */
@@ -170,6 +191,11 @@ export const BALANCE = {
       mealworms: { energy: 0.2, protein: 1.0, niacin: 0, calcium: 0 },
       brewersYeast: { energy: 0, protein: 0.3, niacin: 1.0, calcium: 0 },
       oysterShell: { energy: 0, protein: 0, niacin: 0, calcium: 1.0 },
+      // Phase 6d: Winterstead's local lines — usable in ANY ration (shared
+      // storage; the overlap re-tilts every formulation optimum, which is the
+      // point). Seeds are the energy-dense winter staple; sprouts the overlap.
+      sunflowerSeeds: { energy: 1.2, protein: 0.3, niacin: 0, calcium: 0 },
+      fodderSprouts: { energy: 0.3, protein: 0.5, niacin: 0.6, calcium: 0 },
     },
     /**
      * The active ration: units of each ingredient fed per coop per coop-cycle.
@@ -180,7 +206,7 @@ export const BALANCE = {
      */
     // On-grid (0.25 slider step) so every default is settable; yeast/shell 1.25
     // keep ~25% niacin/calcium headroom.
-    DEFAULT_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.25, oysterShell: 1.25 },
+    DEFAULT_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.25, oysterShell: 1.25, sunflowerSeeds: 0, fodderSprouts: 0 },
     /** Feed throughput a single mill can blend per second (level-scaled). Raised
      * with the producer rates so mills don't also need ~1 per hen (~0.5/hen now). */
     MILL_CAPACITY: 4,
@@ -574,7 +600,7 @@ export const BALANCE = {
     DUCKLING_REQUIREMENT: { energy: 1, protein: 3, niacin: 2, calcium: 0 },
     DUCKLING_RATION_MATURE_PENALTY_FLOOR: 0.3, // worst-case maturation speed mult
     /** Default grow-out ration fed to immature ducks (satisfies E/P/N when stocked). */
-    DEFAULT_DUCKLING_RATION: { corn: 1, peas: 0, mealworms: 2.5, brewersYeast: 2, oysterShell: 0 },
+    DEFAULT_DUCKLING_RATION: { corn: 1, peas: 0, mealworms: 2.5, brewersYeast: 2, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 },
     /**
      * Drake maintenance ration — adult breeding males eat too, but lay no eggs, so
      * they need NO calcium (the layers' eggshell cost). Per-drake demand matches a
@@ -587,7 +613,7 @@ export const BALANCE = {
     DRAKE_REQUIREMENT: { energy: 3, protein: 2, niacin: 1, calcium: 0 },
     DRAKE_BREED_PENALTY_FLOOR: 0.4, // worst-case clutch-rate mult when underfed
     /** Default drake ration — the layer default minus the (unneeded) oyster shell. */
-    DEFAULT_DRAKE_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.25, oysterShell: 0 },
+    DEFAULT_DRAKE_RATION: { corn: 2.5, peas: 1.5, mealworms: 1, brewersYeast: 1.25, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 },
 
     /**
      * Flock RATIO health — an over-drake flock harasses itself into injury (drakes
@@ -801,6 +827,47 @@ export const BALANCE = {
     },
   },
 
+  // ── Phase 6d: WINTERSTEAD (the second homestead — the tier-3 finale) ─
+  // A boutique winter site where Hardy genes finally PAY: winter lay = base ×
+  // layMult × hardinessMult × winter nutrition × warmth × waterer support, at a
+  // premium, into the ONE shared egg pool. The formulation twist survives the
+  // no-logistics law: a cold, energy-dominant requirement + two winter-only
+  // ingredient LINES (the ingredients themselves are shared) mean winter demand
+  // competes with the yard flock through the one stock. Warmth is a LAYOUT
+  // puzzle (heater adjacency, set-and-holds) — the water system remains the
+  // game's ONE upkeep loop. Cold throttles, NEVER kills; no predators here.
+  WINTER: {
+    /** Triple-gated: legacy tier AND rank AND the biggest egg sink yet. */
+    UNLOCK: { rankRequired: 20, eggCost: 20000, minLegacyTier: 3 },
+    GRID: { width: 7, height: 6 },
+    /** Per winter hen per coop-cycle — energy-dominant (cold burns calories). */
+    REQUIREMENT: { energy: 5, protein: 2, niacin: 1, calcium: 1 },
+    /** Seed-forward default; satisfies the cold profile once both winter lines run. */
+    DEFAULT_RATION: { corn: 1, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 1.25, sunflowerSeeds: 3, fodderSprouts: 1.5 },
+    /** Worst-case winter output mult from nutrition (throttle, never a wall). */
+    PENALTY_FLOOR: 0.25,
+    /** Premium on winter lay — the reason to run the site at all. Watch-item:
+     *  if TOTAL winter income rivals the yard's, cut THIS, not capacity. */
+    PREMIUM_EGG_MULT: 2.5,
+    /** Winter output bonus per H gene: hardinessMult = 1 + this × (H count).
+     *  Makes LLLHHH out-earn all-L HERE and only here (the 6d thesis). */
+    HARDINESS_PER_H: 0.15,
+    /** Output mult for a winter coop with NO heater in range (cold, not dead). */
+    COLD_FLOOR: 0.25,
+    /** Support-factor floor when heated waterers are overloaded. */
+    WATERER_FLOOR: 0.5,
+    STATIONS: {
+      seedStore: { resource: 'sunflowerSeeds', perCycle: 1, cycleSeconds: 2 },
+      fodderRack: { resource: 'fodderSprouts', perCycle: 1, cycleSeconds: 2 },
+      /** Assigned-duck housing per winter coop (flat; no upgrades in v1). */
+      winterCoop: { capacity: 4 },
+      /** A heater warms tiles within this Chebyshev radius (binary warm/cold v1). */
+      heater: { warmthRadius: 1 },
+      /** Winter ducks supported per heated waterer (their water; the pond is frozen/irrelevant). */
+      heatedWaterer: { supports: 6 },
+    },
+  },
+
   // ── Simulation ──────────────────────────────────────────────────────
   /** Fixed-timestep rate for the sim loop. Render is decoupled (rAF). */
   TICKS_PER_SECOND: 10,
@@ -815,6 +882,8 @@ type ResourceKey =
   | 'mealworms'
   | 'brewersYeast'
   | 'oysterShell'
+  | 'sunflowerSeeds'
+  | 'fodderSprouts'
   | 'forage'
   | 'pellets'
   | 'eggs';
@@ -887,6 +956,47 @@ export const STATION_DEFS: Record<
     inputs: {},
     outputs: { oysterShell: BALANCE.INGREDIENT_PROD.oysterSource.perCycle },
   },
+  // Phase 6d: Winterstead stations (zone-exclusive; see ZONE_DEFS.allowedStations).
+  seedStore: {
+    label: 'Seed Store',
+    color: 0xd9a441,
+    cycleSeconds: BALANCE.WINTER.STATIONS.seedStore.cycleSeconds,
+    inputs: {},
+    outputs: { sunflowerSeeds: BALANCE.WINTER.STATIONS.seedStore.perCycle },
+  },
+  fodderRack: {
+    label: 'Fodder Rack',
+    color: 0x6fae7a,
+    cycleSeconds: BALANCE.WINTER.STATIONS.fodderRack.cycleSeconds,
+    inputs: {},
+    outputs: { fodderSprouts: BALANCE.WINTER.STATIONS.fodderRack.perCycle },
+  },
+  winterCoop: {
+    // Houses ASSIGNED winter ducks; lay is handled by the winter nutrition pool
+    // (never the yard's — nutrition.ts filters on type 'coop'). outputs.eggs is
+    // the base winter lay per cycle, read by the winter chain + tend bursts.
+    label: 'Winter Coop',
+    color: 0x8fb4d9,
+    cycleSeconds: BALANCE.COOP.cycleSeconds,
+    inputs: {},
+    outputs: { eggs: BALANCE.COOP.eggPerCycle },
+  },
+  heater: {
+    // Pure infrastructure: warms adjacent tiles (layout puzzle). No cycles.
+    label: 'Heater',
+    color: 0xd96a3f,
+    cycleSeconds: 0,
+    inputs: {},
+    outputs: {},
+  },
+  heatedWaterer: {
+    // Pure infrastructure: supports N winter ducks. No cycles.
+    label: 'Heated Waterer',
+    color: 0x5fa8c9,
+    cycleSeconds: 0,
+    inputs: {},
+    outputs: {},
+  },
 };
 
 export const STATION_ORDER: StationType[] = [
@@ -897,6 +1007,11 @@ export const STATION_ORDER: StationType[] = [
   'mealwormFarm',
   'yeastVat',
   'oysterSource',
+  'seedStore',
+  'fodderRack',
+  'winterCoop',
+  'heater',
+  'heatedWaterer',
 ];
 
 // ── Phase 4b: data-driven zones ──────────────────────────────────────
@@ -914,12 +1029,18 @@ export interface ZoneDef {
   grid: { width: number; height: number };
   /** Non-buildable region within the grid (e.g. the Yard pond). */
   blocked?: { x: number; y: number; w: number; h: number };
-  /** Double-gated unlock. Absent ⇒ always unlocked (the Yard). */
-  unlock?: { rankRequired: number; eggCost: number };
+  /** Double-gated unlock (Phase 6d: optionally TRIPLE — a legacy-tier floor).
+   *  Absent ⇒ always unlocked (the Yard). */
+  unlock?: { rankRequired: number; eggCost: number; minLegacyTier?: number };
   /** Stage 1: the Pond layout-adjacency canvas (place provision features). */
   pondLayout?: boolean;
   /** Stage 2: the Waterworks circulation canvas (route flow over the pond). */
   waterworks?: boolean;
+  /** Phase 6d: when set, ONLY these station types may be placed here — and they
+   *  become zone-EXCLUSIVE (no other zone accepts them). See placeStation. */
+  allowedStations?: StationType[];
+  /** Phase 6d: the Winterstead build board (assignment site + warmth layout). */
+  winter?: boolean;
 }
 
 export const ZONE_DEFS: ZoneDef[] = [
@@ -946,9 +1067,25 @@ export const ZONE_DEFS: ZoneDef[] = [
     unlock: BALANCE.WATER.WORKS_UNLOCK,
     waterworks: true,
   },
+  {
+    // Phase 6d — WINTERSTEAD: the tier-3 second homestead. A small build board
+    // whose stations are zone-exclusive; the warmth layout + assignment live here.
+    id: 'winterstead',
+    name: 'Winterstead',
+    grid: BALANCE.WINTER.GRID,
+    unlock: BALANCE.WINTER.UNLOCK,
+    winter: true,
+    allowedStations: ['seedStore', 'fodderRack', 'winterCoop', 'heater', 'heatedWaterer'],
+  },
 ];
 
 export const zoneDef = (id: string): ZoneDef | undefined => ZONE_DEFS.find((z) => z.id === id);
+
+/** Station types that are EXCLUSIVE to some zone (they appear in a ZoneDef's
+ *  allowedStations) — every other zone rejects them. Derived, not hand-kept. */
+export const EXCLUSIVE_STATIONS: ReadonlySet<StationType> = new Set(
+  ZONE_DEFS.flatMap((z) => z.allowedStations ?? []),
+);
 
 // ── Phase 4c: data-driven predators ──────────────────────────────────
 /**

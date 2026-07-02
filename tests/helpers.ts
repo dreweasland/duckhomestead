@@ -8,7 +8,15 @@ export const FLAT_GENOME: Genome = ['D', 'D', 'D', 'D', 'D', 'D'];
 /** Build a 6-slot genome from a gene string like "LLLDDD". */
 export const genome = (s: string): Genome => s.split('') as Gene[];
 
-export const INGREDIENTS = ['corn', 'peas', 'mealworms', 'brewersYeast', 'oysterShell'] as const;
+export const INGREDIENTS = [
+  'corn',
+  'peas',
+  'mealworms',
+  'brewersYeast',
+  'oysterShell',
+  'sunflowerSeeds',
+  'fodderSprouts',
+] as const;
 
 /** Build a state with the given station counts, laid out across the grid. The
  *  game now starts with EMPTY rations (the player sets them), but sim tests want a
