@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sim:nutrition": "NUTRI=1 vitest run tests/nutrition-metrics.test.ts --disableConsoleIntercept",
+    "sim:balance": "SIM=1 vitest run tests/balance-sim.test.ts --disableConsoleIntercept",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
