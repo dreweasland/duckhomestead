@@ -242,6 +242,37 @@ export const BALANCE = {
     DOSE_COOLDOWN_S: 60,
     DOSE_COST_YEAST: 3, // brewer's yeast spent per dose
     DOSE_XP: 8,
+
+    /**
+     * CONDITION REWORK (playtest, 2026-07-02): condition becomes the flock's
+     * STRESS battery — the recharge side is unchanged (nutrition target +
+     * water/module regen), but the battery finally DISCHARGES: harm events
+     * drain it in attributable chunks, and a rattled flock (condition below
+     * THROTTLE_BELOW) lays at a direct, gentle penalty even on a green ration.
+     * Why: with the eat-order protecting layer satisfaction and offline
+     * preserving ratios, condition pegged at 100 after the early game and the
+     * whole regen reward channel (conditionRegen modules, water's regen mult,
+     * H water synergy) fed a battery that never discharged.
+     *
+     * Guardrails: every drain traces to a VISIBLE event (attributability);
+     * the direct throttle is floored (never a wall) and BLENDS IN only while
+     * nutrition is green (FED_BLEND) — a starved flock is the feed system's
+     * problem (the existing mask), never double-punished by stress. Winter
+     * hens are insulated (stress is a home-flock phenomenon). No death path.
+     */
+    STRESS: {
+      /** Condition drained per harm event (on the 0..CONDITION_MAX scale).
+       *  One wound is a blip; a bad night is a real dent to nurse back. */
+      DRAIN: { wound: 15, crowdInjury: 10, loss: 30 } as Record<string, number>,
+      /** Below this fraction of CONDITION_MAX the direct lay throttle engages. */
+      THROTTLE_BELOW: 0.5,
+      /** The direct throttle at condition 0 (gentle — a shaved rate, never a wall). */
+      THROTTLE_FLOOR: 0.75,
+      /** The stress throttle fades in as eggMultRaw crosses this band, so it only
+       *  acts where the condition MASK is inert (green nutrition) and can never
+       *  stack onto a feed shortfall the mask already handles. */
+      FED_BLEND: [0.8, 1.0] as readonly [number, number],
+    },
   },
 
   // ── Milestones ──────────────────────────────────────────────────────

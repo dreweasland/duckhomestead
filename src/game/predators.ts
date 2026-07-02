@@ -1,6 +1,7 @@
 import { BALANCE, PREDATOR_DEFS, type PredatorDef } from '../config/balance';
 import {
   defenseFloor,
+  drainCondition,
   infirmaryCapacity,
   infirmaryOccupied,
   type Duck,
@@ -222,6 +223,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   if (P.ALLOW_INSTANT_SNATCH && rng() < P.INSTANT_SNATCH_CHANCE && permitPermanentLoss(opts)) {
     emit(state, { kind: 'snatched', predatorId: def.id, duckId: target.id });
     removeDuck(state, target.id);
+    drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.loss); // a taken duck rattles the flock
     return;
   }
 
@@ -234,6 +236,9 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   target.woundElapsed = 0;
   target.severity = rollWoundSeverity(!!opts.activeDefense, target.genome, rng);
   emit(state, { kind: 'wound', predatorId: def.id, duckId: target.id });
+  // Condition stress: a landed hit rattles the whole flock (a blip alone; a bad
+  // night compounds into a real dent to nurse back). A shrugged-off hit doesn't.
+  drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.wound);
 }
 
 /** Resolve one attack attempt immediately (offline catch-up): roll against the
@@ -577,6 +582,7 @@ function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void 
     if (d.woundElapsed < threshold) continue;
     if (permitPermanentLoss(opts)) {
       emit(state, { kind: 'escalated', duckId: d.id, source: d.woundSource ?? 'predator' });
+      drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.loss); // losing one rattles the rest
       (lost ??= []).push(d.id);
     } else {
       // Mercy rail (offline budget spent): hold at the brink, don't kill.

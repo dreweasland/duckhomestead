@@ -289,7 +289,13 @@ export function NutritionPanel({
                   <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-[#0f0b07]">
                     <div className="h-full rounded-full bg-gradient-to-r from-[#e8835a] via-[#e8c45a] to-[#8fe388]" style={{ width: `${condPct}%` }} />
                   </div>
-                  <div className="mt-0.5 text-[10px] text-[#9a8a6a]">{condPct}% reserve</div>
+                  {n && n.stressMult < 0.995 ? (
+                    <div className="mt-0.5 text-[10px] font-bold text-[#e8a35a]" title="Harm events (attacks, injuries, losses) rattle the flock — a rattled flock lays slower until its condition recovers. Good rations, water, and condition-regen modules speed the recovery.">
+                      rattled — laying ×{n.stressMult.toFixed(2)} until recovered
+                    </div>
+                  ) : (
+                    <div className="mt-0.5 text-[10px] text-[#9a8a6a]">{condPct}% reserve</div>
+                  )}
                 </div>
               </div>
 
