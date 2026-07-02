@@ -1,10 +1,36 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { runOfflineCatchUp } from '../src/game/save';
+import { tick } from '../src/game/tick';
+import { waterWoundMult } from '../src/game/water';
 import { build, fullSetup, stockAll, setHens, run, INGREDIENTS } from './helpers';
 
 const N = BALANCE.NUTRITION;
 const HOUR = 3600 * 1000;
+
+describe('offline catch-up × the mercy rail boundary', () => {
+  it('rewinds brink-held wounds on return — they must NOT escalate on the first online frame', () => {
+    const s = setHens(stockAll(fullSetup()), 2);
+    // A wound at the very brink of escalation (what the exhausted mercy budget
+    // leaves behind), with no infirmary to auto-admit it.
+    s.ducks[0].wounded = true;
+    s.ducks[0].woundSource = 'predator';
+    s.ducks[0].woundElapsed = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(s);
+    s.lastSeen = -60 * 1000; // a real (short) absence
+    runOfflineCatchUp(s, 0);
+
+    // Still alive, and rewound to a real triage window…
+    const survivor = s.ducks.find((d) => d.id === 'h0');
+    expect(survivor?.wounded).toBe(true);
+    const threshold = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(s);
+    expect(survivor!.woundElapsed!).toBeLessThanOrEqual(
+      threshold - BALANCE.PREDATORS.OFFLINE_RETURN_WOUND_GRACE_S,
+    );
+    // …so the first online frames (behind the Away modal) can't kill it.
+    for (let i = 0; i < 10; i++) tick(s, 0.1, { mode: 'online', autoHaul: true });
+    expect(s.ducks.some((d) => d.id === 'h0')).toBe(true);
+  });
+});
 
 describe('offline catch-up × nutrition', () => {
   it('grants no XP or rank while running nutrition', () => {

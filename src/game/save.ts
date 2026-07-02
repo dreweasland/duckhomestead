@@ -1,7 +1,8 @@
-import { BALANCE } from '../config/balance';
-import { collectAll, placeStation } from './actions';
+import { BALANCE, STATION_DEFS } from '../config/balance';
+import { collectAll, placeStarterEngine } from './actions';
 import { initialState, rackSockets, seedFlock, type Duck, type Gene, type GameState, type Genome, type Resource } from './state';
 import { tick } from './tick';
+import { waterWoundMult } from './water';
 
 const SAVE_KEY = 'duck-homestead-save-v1';
 
@@ -157,6 +158,7 @@ export function deserialize(raw: string, now: number): GameState {
         active: parsed.contracts?.active ?? base.contracts.active,
         nextContractId: parsed.contracts?.nextContractId ?? base.contracts.nextContractId,
         refreshRemaining: parsed.contracts?.refreshRemaining ?? base.contracts.refreshRemaining,
+        peakEggRate: parsed.contracts?.peakEggRate ?? 0,
       },
       // Pre-4c saves (and any not-yet-introduced save) keep the first-contact
       // grace: predators won't resolve their first window until the player is
@@ -164,16 +166,40 @@ export function deserialize(raw: string, now: number): GameState {
       // during the load's offline catch-up.
       predatorsIntroduced: parsed.predatorsIntroduced ?? false,
       pendingPredatorEvents: undefined,
-      stations: (parsed.stations ?? []).map((s) => ({
-        ...s,
-        zoneId: s.zoneId ?? 'yard', // pre-4b stations all lived in the Yard
-        level: s.level ?? 1,
-        cycleProgress: s.cycleProgress ?? 0,
-        buffer: s.buffer ?? {},
-        tendCooldownRemaining: s.tendCooldownRemaining ?? 0,
-        modules: s.modules ?? [],
-      })),
+      // Never replay a previous session's expiry toast on load.
+      pendingContractExpired: 0,
+      stations: (parsed.stations ?? [])
+        // A station type this build doesn't know (a newer build's save, or a
+        // type ever removed) would crash EVERY load inside the catch-up tick
+        // (STATION_DEFS[type].cycleSeconds) — an unrecoverable boot loop. Drop
+        // the foreign stations; keep the save.
+        .filter((s) => s.type in STATION_DEFS)
+        .map((s) => ({
+          ...s,
+          zoneId: s.zoneId ?? 'yard', // pre-4b stations all lived in the Yard
+          level: s.level ?? 1,
+          cycleProgress: s.cycleProgress ?? 0,
+          buffer: s.buffer ?? {},
+          tendCooldownRemaining: s.tendCooldownRemaining ?? 0,
+          modules: s.modules ?? [],
+        })),
     };
+    // Sanitize numerics: a NaN/negative resource (hand-edit, old bug) passes the
+    // affordability checks (`NaN < need` is false), gets consumed, and spreads
+    // NaN permanently through storage/production. Reset any such value.
+    for (const key of Object.keys(result.resources) as Resource[]) {
+      const v = result.resources[key];
+      if (!Number.isFinite(v) || v < 0) result.resources[key] = base.resources[key];
+    }
+    if (!Number.isFinite(result.dust) || result.dust < 0) result.dust = 0;
+    if (!Number.isFinite(result.legacyCurrency) || result.legacyCurrency < 0) result.legacyCurrency = 0;
+    if (!Number.isFinite(result.condition)) result.condition = base.condition;
+    result.condition = Math.max(0, Math.min(BALANCE.NUTRITION.CONDITION_MAX, result.condition));
+    // A winter-assigned duck whose zone isn't unlocked (rollback/hand-edit) is
+    // unreachable limbo — invulnerable, feed-eating, un-recallable. Walk it home.
+    if (!result.zones['winterstead']?.unlocked) {
+      for (const d of result.ducks) if (d.site === 'winter') d.site = 'home';
+    }
     // Migrate a pre-breeding save that has coops but no flock yet.
     if (result.ducks.length === 0 && result.stations.some((s) => s.type === 'coop')) {
       seedFlock(result);
@@ -211,7 +237,10 @@ export function deserialize(raw: string, now: number): GameState {
     if (result.rank >= BALANCE.MILESTONE_TENDALL_RANK) result.tendAllUnlocked = true;
     return result;
   } catch {
-    return base;
+    // Corrupt beyond parsing: fall back to a REAL fresh game (starter engine +
+    // seeded flock), not the bare initialState template — an empty board with a
+    // 70-egg stipend is strictly poorer than any new player ever starts.
+    return newGame(now);
   }
 }
 
@@ -226,7 +255,15 @@ export function saveToStorage(state: GameState, now: number): void {
 
 export function clearStorage(): void {
   try {
-    localStorage.removeItem(SAVE_KEY);
+    // Wipe the save AND the onboarding flags (welcome, defenses-down, water
+    // help) so a full reset really is a fresh start. The mute key survives —
+    // it's a device preference, not game state.
+    const doomed: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('duck-homestead-') && k !== 'duck-homestead-muted') doomed.push(k);
+    }
+    for (const k of doomed) localStorage.removeItem(k);
   } catch {
     /* ignore */
   }
@@ -273,6 +310,17 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
   }
   // Sweep any residual buffers into storage so the summary is complete.
   collectAll(state);
+
+  // The mercy rail holds budget-exhausted wounds AT the escalation brink — but
+  // online, permanent loss is uncapped, so without a rewind every brink-held
+  // duck would escalate on the FIRST online frame, behind the Away modal,
+  // before any admit is possible (and the toll reported below would already be
+  // false). Rewind every un-admitted wound to a real triage window.
+  const woundThreshold = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(state);
+  const brink = Math.max(0, woundThreshold - BALANCE.PREDATORS.OFFLINE_RETURN_WOUND_GRACE_S);
+  for (const d of state.ducks) {
+    if (d.wounded && !d.recovering) d.woundElapsed = Math.min(d.woundElapsed ?? 0, brink);
+  }
 
   const produced: Partial<Record<Resource, number>> = {};
   for (const key of Object.keys(state.resources) as Resource[]) {
@@ -336,13 +384,9 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
  */
 export function newGame(now: number): GameState {
   const state = initialState(now);
-  // placeStation charges eggs and seeds the flock on the first coop, so fund it
-  // generously, place the engine, then set the actual starting stipend.
-  state.resources.eggs = Number.MAX_SAFE_INTEGER;
-  placeStation(state, 'plot', 2, 3);
-  placeStation(state, 'mill', 3, 3);
-  placeStation(state, 'coop', 4, 3);
-  state.resources.eggs = BALANCE.STARTING_EGGS;
+  // The shared starter helper (actions.ts) — prestigeReset uses the SAME one,
+  // so a post-prestige run never starts poorer than a brand-new game.
+  placeStarterEngine(state);
   return state;
 }
 

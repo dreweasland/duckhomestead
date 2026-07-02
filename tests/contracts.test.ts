@@ -72,21 +72,42 @@ describe('The Grange — tier gate', () => {
 });
 
 describe('offer generation', () => {
-  it('a delivery quota scales with the SNAPSHOTTED live eggRate (self-balancing)', () => {
+  it("a delivery quota scales with the run's PEAK live eggRate (self-balancing)", () => {
     const s = setHens(stockAll(fullSetup()), 4);
     s.legacyTier = C.UNLOCK_TIER;
-    run(s, 10); // warm up nutrition so state.nutrition.eggRate is real
+    run(s, 10); // warm up nutrition so state.nutrition.eggRate (and the peak) is real
     const eggRate = s.nutrition!.eggRate;
     expect(eggRate).toBeGreaterThan(0);
+    // runContracts tracked the run's peak during warm-up — quotas price off it
+    // (never the instantaneous rate a parked flock could throttle to zero).
+    const peak = s.contracts.peakEggRate ?? 0;
+    expect(peak).toBeGreaterThanOrEqual(eggRate * 0.99);
     const offer = generateOffer(s, zero); // zero rng -> notch 0, type 'delivery'
     expect(offer.type).toBe('delivery');
     const d = offer as DeliveryContract;
     const expectedQuota = Math.max(
       C.DELIVERY.MIN_QUOTA,
-      Math.round(eggRate * 60 * C.DELIVERY.QUOTA_MINUTES * C.DELIVERY.QUOTA_MULT_BY_NOTCH[0]),
+      Math.round(Math.max(eggRate, peak) * 60 * C.DELIVERY.QUOTA_MINUTES * C.DELIVERY.QUOTA_MULT_BY_NOTCH[0]),
     );
     expect(d.quota).toBe(expectedQuota);
     expect(d.delivered).toBe(0);
+  });
+
+  it("a parked/culled flock can't price deliveries down to the MIN_QUOTA floor (peak pricing)", () => {
+    const s = setHens(stockAll(fullSetup()), 40); // a big flock → a real peak
+    s.legacyTier = C.UNLOCK_TIER;
+    run(s, 10);
+    const peak = s.contracts.peakEggRate ?? 0;
+    expect(peak).toBeGreaterThan(0);
+    s.ducks = []; // the exploit: park/cull everything, then roll + accept offers
+    s.nutrition = undefined;
+    const d = generateOffer(s, zero) as DeliveryContract;
+    expect(d.quota).toBeGreaterThan(C.DELIVERY.MIN_QUOTA); // still peak-priced
+    // ...and accept-time re-snapshot can't undercut it either.
+    s.contracts.offers = [d];
+    const r = acceptContract(s, d.id);
+    if (!r.ok) throw new Error('accept failed');
+    expect((s.contracts.active as DeliveryContract).quota).toBe(d.quota);
   });
 
   it('a delivery quota floors at MIN_QUOTA when there is no flock yet', () => {
@@ -251,16 +272,24 @@ describe('delivery: the egg sink', () => {
   });
 
   it("tend()'s coop burst also diverts at the lay point (the other lay path) — no double count", () => {
-    const s = build({ coop: 1 });
+    // The burst is now derived from the flock's LIVE lay (never the raw station
+    // base), so warm a real flock up first.
+    const s = setHens(stockAll(fullSetup()), 3);
     s.legacyTier = C.UNLOCK_TIER;
+    run(s, 5);
+    const rate = s.nutrition!.eggRate;
+    expect(rate).toBeGreaterThan(0);
+    const coop = s.stations.find((st) => st.type === 'coop')!;
+    coop.tendCooldownRemaining = 0;
     s.contracts.active = deliveryContract({ quota: 3 });
-    const r = tend(s, s.stations[0].id);
+    const r = tend(s, coop.id);
     if (!r.ok) throw new Error('tend failed');
     const c = s.contracts.active as DeliveryContract;
     expect(c.delivered).toBe(3);
     expect(c.completed).toBe(true);
-    const totalBurst = BALANCE.TEND_BURST_MULT * BALANCE.COOP.eggPerCycle;
-    expect((r.value.burst.eggs ?? 0) + c.delivered).toBe(totalBurst); // conserved
+    // 5 cycles' worth of the live flock lay, conserved across buffer + contract.
+    const totalBurst = rate * BALANCE.COOP.cycleSeconds * BALANCE.TEND_BURST_MULT;
+    expect((r.value.burst.eggs ?? 0) + c.delivered).toBeCloseTo(totalBurst, 4);
   });
 
   it('collectAll never resurrects diverted eggs into the delivered count', () => {

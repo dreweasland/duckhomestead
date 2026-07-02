@@ -697,9 +697,10 @@ export class GameEngine {
     return result;
   }
 
-  /** Active-only intervention: clear one duck's niacin leg debuff. */
-  dose(): ActionResult<unknown> {
-    const r = doseNiacin(this.state);
+  /** Active-only intervention: clear one duck's niacin leg debuff. Pass a
+   *  duckId to target a specific duck; omit for the first debuffed one. */
+  dose(duckId?: string): ActionResult<unknown> {
+    const r = doseNiacin(this.state, duckId);
     if (r.ok) this.fireXp(r.value.xp);
     this.notify();
     return r;

@@ -82,6 +82,7 @@ describe('active drops', () => {
       const events: LootEvent[] = [];
       eng.onLoot((e) => events.push(e));
       const coop = eng.state.stations.find((s) => s.type === 'coop')!;
+      coop.tendCooldownRemaining = 0; // fresh builds now start on cooldown
       eng.tend(coop.id);
       expect(events.some((e) => e.source === 'drop')).toBe(true);
       expect(eng.state.inventory.length).toBeGreaterThan(0);

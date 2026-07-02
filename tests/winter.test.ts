@@ -6,6 +6,7 @@ import {
   placeStation,
   recallFromWinter,
   removeStation,
+  tend,
   unlockZone,
   upgradeStation,
 } from '../src/game/actions';
@@ -474,12 +475,43 @@ describe('save round-trip + back-compat (the union-growth sweep)', () => {
     expect(legacy.winterRation).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 });
   });
 
+  it("a winter coop's tend burst follows the LIVE winter pool (warmth/support/hardiness included) — zero on an empty site", () => {
+    const s = winterSite(2);
+    // Empty site first: no assigned hens → state.winter undefined → zero burst.
+    const coop = s.stations.find((st) => st.type === 'winterCoop')!;
+    coop.tendCooldownRemaining = 0;
+    const r0 = tend(s, coop.id);
+    if (!r0.ok) throw new Error('tend failed');
+    expect(r0.value.burst.eggs ?? 0).toBe(0);
+
+    // Assigned + warmed: the burst is TEND_BURST_MULT cycles of the winter
+    // eggRate share — which already folds nutrition × warmth × support ×
+    // (lay × hardiness) × the premium, so the layout puzzle can't be bypassed.
+    s.ducks = [duck('w1'), duck('w2')];
+    assignToWinter(s, 'w1');
+    assignToWinter(s, 'w2');
+    for (let i = 0; i < 50; i++) tick(s, 0.1, { mode: 'online', autoHaul: true });
+    const rate = s.winter!.eggRate;
+    expect(rate).toBeGreaterThan(0);
+    const winterCoops = s.stations.filter((st) => st.type === 'winterCoop').length;
+    coop.tendCooldownRemaining = 0;
+    const r = tend(s, coop.id);
+    if (!r.ok) throw new Error('tend failed');
+    expect(r.value.burst.eggs).toBeCloseTo(
+      (rate / winterCoops) * BALANCE.COOP.cycleSeconds * BALANCE.TEND_BURST_MULT,
+      4,
+    );
+  });
+
   it('prestige wipes assignments with the flock (reset = fresh game)', () => {
     const s = winterSite(1);
     s.ducks = [duck('w1')];
     assignToWinter(s, 'w1');
     const reset = prestigeReset(s, 0);
-    expect(reset.ducks).toEqual([]);
+    // The reset is a real fresh game (starter engine seeds a flock) — what
+    // matters here: no duck of the wiped run survives, none winter-assigned.
+    expect(reset.ducks.some((d) => d.id === 'w1')).toBe(false);
+    expect(reset.ducks.every((d) => d.site !== 'winter')).toBe(true);
     expect(reset.winter).toBeUndefined();
     expect(reset.winterRation).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 });
   });

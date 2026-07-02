@@ -131,10 +131,57 @@ describe('back-compat + robustness', () => {
     expect(r.resources.mealworms).toBe(0);
   });
 
-  it('falls back to a fresh state on corrupt JSON', () => {
+  it('falls back to a REAL fresh game (starter engine + seed flock) on corrupt JSON', () => {
     const r = deserialize('}{ not json', 0);
-    expect(r.stations).toHaveLength(0);
+    expect(r.stations.map((s) => s.type).sort()).toEqual(['coop', 'mill', 'plot']);
+    expect(r.ducks.length).toBeGreaterThan(0); // the coop seeded the flock
     expect(r.resources.eggs).toBe(BALANCE.STARTING_EGGS);
+  });
+
+  it('drops stations of an unknown type instead of boot-looping every load', () => {
+    // A save written by a newer build (or a type ever removed) must not crash
+    // the catch-up tick's STATION_DEFS[type] dereference on every load.
+    const raw = JSON.stringify({
+      stations: [
+        { id: 's1', type: 'plot', zoneId: 'yard', x: 0, y: 0, level: 1, cycleProgress: 0, buffer: {}, tendCooldownRemaining: 0 },
+        { id: 's2', type: 'cheeseForge', zoneId: 'yard', x: 1, y: 0, level: 1, cycleProgress: 0, buffer: {}, tendCooldownRemaining: 0 },
+      ],
+    });
+    const r = deserialize(raw, 0);
+    expect(r.stations.map((s) => s.type)).toEqual(['plot']);
+  });
+
+  it('sanitizes NaN/negative numerics so they can never propagate through storage', () => {
+    const raw = JSON.stringify({
+      resources: { corn: Number.NaN, eggs: -50, peas: 12 },
+      dust: Number.NaN,
+      legacyCurrency: -3,
+      condition: Number.NaN,
+    });
+    const r = deserialize(raw, 0);
+    expect(r.resources.corn).toBe(0);
+    expect(r.resources.eggs).toBe(BALANCE.STARTING_EGGS); // reset to the base value
+    expect(r.resources.peas).toBe(12); // sane values untouched
+    expect(r.dust).toBe(0);
+    expect(r.legacyCurrency).toBe(0);
+    expect(Number.isFinite(r.condition)).toBe(true);
+  });
+
+  it('recalls winter-assigned ducks when the save has Winterstead locked (no limbo)', () => {
+    const raw = JSON.stringify({
+      ducks: [
+        { id: 'd1', genome: ['L', 'L', 'L', 'L', 'L', 'L'], sex: 'hen', stage: 'adult', ageTicks: 0, site: 'winter' },
+      ],
+      // zones absent → defaults: winterstead locked.
+    });
+    const r = deserialize(raw, 0);
+    expect(r.ducks[0].site).toBe('home');
+  });
+
+  it('never replays a stale contract-expired toast from the previous session', () => {
+    const raw = JSON.stringify({ pendingContractExpired: 3 });
+    const r = deserialize(raw, 0);
+    expect(r.pendingContractExpired).toBe(0);
   });
 
   it('advances id counters past existing ids so no duplicate id is ever minted', () => {

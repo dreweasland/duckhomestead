@@ -1,4 +1,7 @@
 import { BALANCE } from '../config/balance';
+// Circular at module level (actions → prestige for the boost multipliers), but
+// both sides only use the other inside function bodies, so ESM resolves it.
+import { placeStarterEngine } from './actions';
 import { targetMatch } from './genetics';
 import { COLORS, initialState, type ChampionSnapshot, type GameState, type Genome } from './state';
 
@@ -185,15 +188,20 @@ export function championSnapshot(state: GameState, now: number): ChampionSnapsho
 }
 
 /**
- * Produce the post-prestige state: a FRESH game (initialState) carrying only the
- * meta — incremented tier, accrued currency, kept boosts, and the new Hall entry.
- * Everything else is initialState's, so zones re-lock and no run reference can
- * dangle. Pure; the caller (engine) gates on canPrestige and supplies `now`.
+ * Produce the post-prestige state: a FRESH game carrying only the meta —
+ * incremented tier, accrued currency, kept boosts, and the new Hall entry.
+ * Everything else matches a brand-new game — INCLUDING the free pre-placed
+ * starter engine (plot + mill + coop, which seeds the flock), so run 2+ never
+ * starts poorer than run 1 (it used to: an empty board + the same 70-egg
+ * stipend, ~85 eggs of stations behind a new player). Zones re-lock and no run
+ * reference can dangle. The caller (engine) gates on canPrestige, supplies
+ * `now`, and saves.
  */
 export function prestigeReset(state: GameState, now: number): GameState {
   const granted = prestigeCurrency(state);
   const snapshot = championSnapshot(state, now);
   const fresh = initialState(now);
+  placeStarterEngine(fresh); // the same floor a brand-new game gets (save.ts newGame)
   fresh.legacyTier = state.legacyTier + 1;
   fresh.legacyCurrency = state.legacyCurrency + granted;
   fresh.purchasedBoosts = { ...state.purchasedBoosts };

@@ -75,10 +75,32 @@ function rollReward(notch: number, rng: () => number): ContractReward {
   return band.moduleRarity ? { dust, shards, moduleRarity: band.moduleRarity as Rarity } : { dust, shards };
 }
 
+/** The flock's LIVE egg rate — home lay + the premium winter lay. One shared
+ *  egg pool: deliveries divert at BOTH lay points (nutrition.ts), so the quota
+ *  must price against both, or a winter-heavy homestead gets permanently
+ *  under-scaled quotas. */
+function liveEggRate(state: GameState): number {
+  return (state.nutrition?.eggRate ?? 0) + (state.winter?.eggRate ?? 0);
+}
+
+/**
+ * The self-balancing delivery quota. Priced off the RUN'S PEAK egg rate (see
+ * runContracts), not the instantaneous one — the live rate reads 0 while the
+ * hens are parked at Winterstead / the ration is unset, so pricing off it let
+ * a player throttle the flock, reroll every delivery down to MIN_QUOTA, accept
+ * a top-notch offer, and un-park (a rare-module lottery ticket per ~300 eggs).
+ * The peak resets with the run (prestige composes fresh contracts state).
+ * Tradeoff: a flock deliberately downsized mid-run keeps peak-priced quotas —
+ * abandon/reroll covers that rare case.
+ */
+function deliveryQuota(state: GameState, notch: number): number {
+  const rate = Math.max(liveEggRate(state), state.contracts.peakEggRate ?? 0);
+  const base = rate * 60 * C.DELIVERY.QUOTA_MINUTES * C.DELIVERY.QUOTA_MULT_BY_NOTCH[notch];
+  return Math.max(C.DELIVERY.MIN_QUOTA, Math.round(base));
+}
+
 function generateDelivery(state: GameState, notch: number, id: string, rng: () => number): DeliveryContract {
-  const eggRate = state.nutrition?.eggRate ?? 0;
-  const base = eggRate * 60 * C.DELIVERY.QUOTA_MINUTES * C.DELIVERY.QUOTA_MULT_BY_NOTCH[notch];
-  const quota = Math.max(C.DELIVERY.MIN_QUOTA, Math.round(base));
+  const quota = deliveryQuota(state, notch);
   return {
     id,
     type: 'delivery',
@@ -140,7 +162,12 @@ export function acceptContract(state: GameState, contractId: string): ActionResu
   const idx = state.contracts.offers.findIndex((o) => o.id === contractId);
   if (idx < 0) return fail('No such offer');
   const [contract] = state.contracts.offers.splice(idx, 1);
-  if (contract.type === 'delivery') contract.limitRemaining = C.DELIVERY.LIMIT_MIN * 60;
+  if (contract.type === 'delivery') {
+    contract.limitRemaining = C.DELIVERY.LIMIT_MIN * 60;
+    // Re-snapshot at ACCEPT: an offer that aged on the board must price against
+    // the flock that will actually run it, not the one that generated it.
+    contract.quota = deliveryQuota(state, contract.notch);
+  }
   state.contracts.active = contract;
   refillOffers(state); // the emptied slot regenerates immediately
   return done(contract);
@@ -238,6 +265,12 @@ export function onPredatorEvent(state: GameState, e: PredatorEvent): void {
 export function runContracts(state: GameState, dt: number): void {
   if (state.legacyTier < C.UNLOCK_TIER) return;
   const cs = state.contracts;
+
+  // Track the run's peak egg rate — the honest base for delivery quotas (a
+  // parked/throttled flock can't talk its way down to MIN_QUOTA). Online-only
+  // like every other contract clock; wiped with the run by prestige.
+  const rate = liveEggRate(state);
+  if (rate > (cs.peakEggRate ?? 0)) cs.peakEggRate = rate;
 
   if (cs.offers.length === 0) refillOffers(state);
 

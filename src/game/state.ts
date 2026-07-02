@@ -643,10 +643,20 @@ export interface ContractsState {
   /** Seconds until every offer fully refreshes (a manual reroll is separate,
    *  costs dust, and doesn't reset this timer). */
   refreshRemaining: number;
+  /** The run's PEAK egg rate (home + winter, eggs/sec) — the honest base for
+   *  delivery quotas, so a parked/throttled flock can't price them down to the
+   *  floor. Updated online-only (runContracts); wiped with the run by prestige. */
+  peakEggRate?: number;
 }
 
 export function initialContracts(): ContractsState {
-  return { offers: [], active: null, nextContractId: 1, refreshRemaining: BALANCE.CONTRACTS.OFFER_REFRESH_S };
+  return {
+    offers: [],
+    active: null,
+    nextContractId: 1,
+    refreshRemaining: BALANCE.CONTRACTS.OFFER_REFRESH_S,
+    peakEggRate: 0,
+  };
 }
 
 /** Fresh per-predator state from the defs: first window is a full interval out. */

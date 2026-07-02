@@ -417,8 +417,14 @@ export const BALANCE = {
      * stays reliable (it carries the no-wipe guarantee), so a worn-down offline
      * night is still soft, capped losses on the UNSECURED flock — not a wipe.
      */
-    DETERRENT_WEAR_PER_WINDOW: 0.03, // ambient weathering per threat window
-    DETERRENT_WEAR_PER_HIT: 0.12, // extra damage when an attack breaches the floor
+    // Wear is a flat drain on ONE shared integrity meter per defense line, and
+    // offline windows run on wall-clock (~96 owl windows per 8h night) — at the
+    // old 0.03/window the floor zeroed ~80min into EVERY night regardless of
+    // investment, making built defenses cosmetic overnight. At 0.005 ambient an
+    // undefended night costs ~0.5 integrity: morning repair is a routine bill
+    // and the floor still means something at 3am.
+    DETERRENT_WEAR_PER_WINDOW: 0.005, // ambient weathering per threat window
+    DETERRENT_WEAR_PER_HIT: 0.06, // extra damage when an attack breaches the floor
     DETERRENT_REPAIR_COST_PER_NET: 50, // eggs to fully repair one net (prorated by wear)
     /** Eggs to build one Secure Coop. Each adds SECURE_SLOTS_PER_COOP slots; a
      *  duck marked secured (up to the slot total) is excluded from targeting. */
@@ -470,6 +476,12 @@ export const BALANCE = {
      *  guarantees "a defended/secured overnight is soft losses, not a wipe" for
      *  any absence length. Secured ducks never count against it (they're safe). */
     MAX_OFFLINE_LOSS_FRACTION: 0.25,
+    /** On returning from an offline catch-up, every un-admitted wound is rewound
+     *  to at least this many seconds before escalation. Without it, the wounds
+     *  the mercy rail held AT the brink all escalate on the first online frame —
+     *  behind the Away modal, before any triage is possible — voiding the rail's
+     *  "return to woundeds to TREAT" guarantee at the online boundary. */
+    OFFLINE_RETURN_WOUND_GRACE_S: 120,
 
     /** The owl — first predator instance. Aerial, dusk/night windows. Foxes/hawks
      *  are later config: add an entry to PREDATOR_DEFS, no core changes. */

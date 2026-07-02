@@ -239,12 +239,33 @@ export function placeStation(
     level: 1,
     cycleProgress: 0,
     buffer: {},
-    tendCooldownRemaining: 0,
+    // A fresh build starts on a full tend cooldown — nothing to tend yet.
+    // (Also closes the place→tend→remove loop: a 50% refund plus an instant
+    // tend bought unbounded XP + loot rolls at click speed for ~5 eggs/cycle.)
+    tendCooldownRemaining: BALANCE.TEND_COOLDOWN_S,
   };
   state.stations.push(station);
   // First coop seeds the starting flock (housing now exists for it).
   if (type === 'coop' && state.ducks.length === 0) seedFlock(state);
   return done(station);
+}
+
+/**
+ * Pre-place the free starter engine — plot + mill + coop — on a fresh state.
+ * The floor under BOTH a brand-new game (save.ts newGame) and a post-prestige
+ * run (prestige.ts prestigeReset): eggs flow from t=0, the coop seeds the
+ * flock, and nothing can softlock. Preserves the caller's egg stipend (the
+ * stations are free); the starters arrive tend-ready — the pre-place isn't the
+ * player's build, so the anti-exploit placement cooldown doesn't apply.
+ */
+export function placeStarterEngine(state: GameState): void {
+  const stipend = state.resources.eggs;
+  state.resources.eggs = Number.MAX_SAFE_INTEGER;
+  placeStation(state, 'plot', 2, 3);
+  placeStation(state, 'mill', 3, 3);
+  placeStation(state, 'coop', 4, 3);
+  state.resources.eggs = stipend;
+  for (const s of state.stations) s.tendCooldownRemaining = 0;
 }
 
 // ── Remove (demolish, partial egg refund) ─────────────────────────────
@@ -603,10 +624,11 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
  * Set the TRACKING target the flock browser/pair-preview measures against — a
  * planning aid only. The champion gate, currency, and god-clone DING read the
  * tier-authoritative targetForTier() (prestige.ts), never this. Validated to
- * GENOME.SLOTS genes from the gene set; rejected otherwise.
+ * GENOME.SLOTS good genes; rejected otherwise — a target slot is never D (an
+ * untargetable filler, same convention as hatch specs) nor P (the wildcard).
  */
 export function setGenomeTarget(state: GameState, target: Gene[]): ActionResult<unknown> {
-  const genes = BALANCE.GENOME.GENES as readonly string[];
+  const genes: readonly string[] = ['L', 'V', 'H'];
   if (target.length !== BALANCE.GENOME.SLOTS || !target.every((g) => genes.includes(g))) {
     return fail('Invalid target profile');
   }
@@ -675,10 +697,14 @@ export interface DoseResult {
   xp: XpResult;
 }
 
-/** Clear one leg-debuffed duck (flock-level). Costed + on a global cooldown. */
-export function doseNiacin(state: GameState): ActionResult<DoseResult> {
-  const duck = state.ducks.find((d) => d.debuffed);
-  if (!duck) return fail('No duck needs dosing');
+/** Clear one leg-debuffed duck. Costed + on a global cooldown. Pass a duckId to
+ *  target a specific duck (the FlockPanel row); omit it for the first debuffed
+ *  duck (the flock-level HUD button). */
+export function doseNiacin(state: GameState, duckId?: string): ActionResult<DoseResult> {
+  const duck = duckId
+    ? state.ducks.find((d) => d.id === duckId && d.debuffed)
+    : state.ducks.find((d) => d.debuffed);
+  if (!duck) return fail(duckId ? 'That duck doesn’t need dosing' : 'No duck needs dosing');
   if (state.doseCooldownRemaining > 0) {
     return fail(`Dosing in ${Math.ceil(state.doseCooldownRemaining)}s`);
   }
@@ -836,41 +862,53 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   }
 
   const def = STATION_DEFS[station.type];
-  const mult = UPGRADE_OUTPUT(station.level);
   const burst: Partial<Record<Resource, number>> = {};
-  // A coop's tend burst (tending the flock) is throttled by current nutrition,
-  // same as the flock's passive lay. (Leg debuffs are per-duck now.) A WINTER
-  // coop's burst follows the winter pool at the premium rate — and is 0 with no
-  // assigned flock (no eggs from an empty site; XP still granted, like a mill).
-  const nutritionMult =
-    station.type === 'coop'
-      ? (state.nutrition?.eggMult ?? 1)
-      : station.type === 'winterCoop'
-        ? (state.winter ? state.winter.eggMult * BALANCE.WINTER.PREMIUM_EGG_MULT : 0)
-        : 1;
   const tendPower = tendPowerMult(state); // rack-boosted burst size
 
-  for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {
-    // Affordable inputs?
-    let affordable = true;
-    for (const key of Object.keys(def.inputs) as Resource[]) {
-      if (state.resources[key] < (def.inputs[key] ?? 0) * mult) {
-        affordable = false;
-        break;
+  if (station.type === 'coop' || station.type === 'winterCoop') {
+    // A coop's burst is TEND_BURST_MULT cycles' worth of the FLOCK'S LIVE LAY,
+    // attributed to this coop — the full per-hen chain (genome layMult ×
+    // nutrition throttle × debuff/wound × rack eggOutput × legacy eggValue),
+    // never the raw station base. The old base-rate burst minted full eggs from
+    // an empty or starving flock, feed-free (one tended L8 coop ≈ 3 god-clone
+    // hens). Winter coops mirror it from the winter pool, which already folds
+    // in warmth × waterer support × hardiness × the premium. Empty flock/site
+    // ⇒ 0 eggs; XP is still granted (the reward is for the action).
+    const rate =
+      station.type === 'coop' ? (state.nutrition?.eggRate ?? 0) : (state.winter?.eggRate ?? 0);
+    const coops = state.stations.filter((s) => s.type === station.type).length;
+    let out = (rate / Math.max(1, coops)) * BALANCE.COOP.cycleSeconds * BALANCE.TEND_BURST_MULT * tendPower;
+    // The Grange (Phase 6b): tend() is always online, so an active delivery
+    // contract diverts eggs here too (the coop's other lay point) — the
+    // remainder is what actually lands in the buffer/burst feedback.
+    if (out > 0) {
+      out -= onEggsLaid(state, out);
+      station.buffer.eggs = (station.buffer.eggs ?? 0) + out;
+      burst.eggs = out;
+    }
+  } else {
+    // Producers burst on the SAME output curve as their passive cycles — the
+    // capped PRODUCER curve for ingredient farms, the uncapped one for the rest
+    // (the old flat UPGRADE_OUTPUT over-delivered ~6.4× at the producer cap).
+    const mult = stationOutputMult(station.type, station.level);
+    for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {
+      // Affordable inputs?
+      let affordable = true;
+      for (const key of Object.keys(def.inputs) as Resource[]) {
+        if (state.resources[key] < (def.inputs[key] ?? 0) * mult) {
+          affordable = false;
+          break;
+        }
       }
-    }
-    if (!affordable) break;
-    for (const key of Object.keys(def.inputs) as Resource[]) {
-      state.resources[key] -= (def.inputs[key] ?? 0) * mult;
-    }
-    for (const key of Object.keys(def.outputs) as Resource[]) {
-      let out = (def.outputs[key] ?? 0) * mult * nutritionMult * tendPower;
-      // The Grange (Phase 6b): tend() is always online, so an active delivery
-      // contract diverts eggs here too (the coop's other lay point) — the
-      // remainder is what actually lands in the buffer/burst feedback.
-      if (key === 'eggs') out -= onEggsLaid(state, out);
-      station.buffer[key] = (station.buffer[key] ?? 0) + out;
-      burst[key] = (burst[key] ?? 0) + out;
+      if (!affordable) break;
+      for (const key of Object.keys(def.inputs) as Resource[]) {
+        state.resources[key] -= (def.inputs[key] ?? 0) * mult;
+      }
+      for (const key of Object.keys(def.outputs) as Resource[]) {
+        const out = (def.outputs[key] ?? 0) * mult * tendPower;
+        station.buffer[key] = (station.buffer[key] ?? 0) + out;
+        burst[key] = (burst[key] ?? 0) + out;
+      }
     }
   }
 

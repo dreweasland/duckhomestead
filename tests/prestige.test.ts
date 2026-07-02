@@ -26,7 +26,7 @@ import {
   boostMult,
 } from '../src/game/prestige';
 import { tend } from '../src/game/actions';
-import { deserialize } from '../src/game/save';
+import { deserialize, newGame } from '../src/game/save';
 import { build, fullSetup, stockAll, setHens, run, FLAT_GENOME } from './helpers';
 
 const NOW = 1_700_000_000_000;
@@ -116,28 +116,38 @@ function messyRun(): GameState {
 }
 
 describe('RESET VALIDITY (the highest-risk guarantee)', () => {
-  it('prestigeReset == a fresh game except carried meta — zero dangling references', () => {
+  it('prestigeReset == a fresh NEW GAME except carried meta — zero dangling references', () => {
     const s = messyRun();
     const reset = prestigeReset(s, NOW);
 
-    // The single strongest assertion: the reset deep-equals initialState() with
-    // ONLY the meta fields (+ the new tier's tracking target) overridden. If any
-    // run field survived (a duck, a pair, an unlocked zone, a non-default ration,
-    // a stray module/wound), this fails.
-    const expected = initialState(NOW);
+    // The single strongest assertion: the reset deep-equals newGame() — the
+    // REAL fresh-game state, starter engine + seeded flock included, so run 2+
+    // never starts poorer than run 1 — with ONLY the meta fields (+ the new
+    // tier's tracking target) overridden. If any run field survived (a duck, a
+    // pair, an unlocked zone, a non-default ration, a stray module/wound),
+    // this fails. Seed genomes are random rolls, so compare them by shape.
+    const expected = newGame(NOW);
     expected.legacyTier = 3;
     expected.legacyCurrency = 7 + prestigeCurrency(s);
     expected.purchasedBoosts = { output: 3, eggValue: 1 };
     expected.legacyHall = [...s.legacyHall, championSnapshot(s, NOW)];
     expected.genomeTarget = targetForTier(3); // tracking starts on the new tier's puzzle
-    expect(reset).toEqual(expected);
+    const scrubGenomes = (st: GameState) => ({
+      ...st,
+      ducks: st.ducks.map((d) => ({ ...d, genome: d.genome.length })),
+    });
+    expect(scrubGenomes(reset)).toEqual(scrubGenomes(expected));
   });
 
-  it('re-locks the zones and clears every run reference', () => {
+  it('re-locks the zones and clears every run reference (fresh starter engine + seed flock)', () => {
     const reset = prestigeReset(messyRun(), NOW);
-    expect(reset.ducks).toEqual([]);
+    // The fresh game's floor, not the wiped run's flock: the seeded starters.
+    const seedCount = BALANCE.BREEDING.SEED_DRAKES + BALANCE.BREEDING.SEED_HENS;
+    expect(reset.ducks).toHaveLength(seedCount);
+    expect(reset.ducks.every((d) => !d.wounded && !d.secured && d.site !== 'winter')).toBe(true);
     expect(reset.breedingPairs).toEqual([]); // no pair pointing at a wiped duck
-    expect(reset.stations).toEqual([]);
+    expect(reset.stations.map((st) => st.type).sort()).toEqual(['coop', 'mill', 'plot']); // the free starter engine
+    expect(reset.resources.eggs).toBe(BALANCE.STARTING_EGGS); // stipend intact — starters are free
     expect(reset.rack).toEqual([]); // no module on a removed station
     expect(reset.inventory).toEqual([]);
     expect(reset.deterrents).toBe(0);
@@ -371,6 +381,8 @@ describe('Phase 6a: Renown scales active-action XP (the re-run rank clock)', () 
     const plain = build({ plot: 1 });
     const boosted = build({ plot: 1 });
     boosted.purchasedBoosts = { renown: 5 }; // +50%
+    plain.stations[0].tendCooldownRemaining = 0; // fresh builds start on cooldown
+    boosted.stations[0].tendCooldownRemaining = 0;
     const rp = tend(plain, plain.stations[0].id);
     const rb = tend(boosted, boosted.stations[0].id);
     if (!rp.ok || !rb.ok) throw new Error('tend failed');

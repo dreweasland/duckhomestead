@@ -5,6 +5,7 @@ import {
   placeStation,
   moveStation,
   removeStation,
+  tend,
   upgradeStation,
   upgradeCost,
   outputPerCycle,
@@ -12,7 +13,7 @@ import {
   PRODUCER_OUTPUT,
   producerMaxed,
 } from '../src/game/actions';
-import { build, run } from './helpers';
+import { build, fullSetup, run, setHens, stockAll } from './helpers';
 
 describe('placement', () => {
   it('charges eggs and places on an empty tile', () => {
@@ -22,6 +23,13 @@ describe('placement', () => {
     expect(r.ok).toBe(true);
     expect(s.resources.eggs).toBe(BALANCE.STARTING_EGGS - BALANCE.COSTS.plot);
     expect(s.stations).toHaveLength(1);
+  });
+
+  it('a fresh build starts on a full tend cooldown (closes place→tend→remove XP/loot farming)', () => {
+    const s = initialState(0);
+    placeStation(s, 'plot', 0, 0);
+    expect(s.stations[0].tendCooldownRemaining).toBe(BALANCE.TEND_COOLDOWN_S);
+    expect(tend(s, s.stations[0].id).ok).toBe(false); // no instant tend on placement
   });
 
   it('rejects occupied tiles, out of bounds, the pond, and unaffordable builds', () => {
@@ -103,6 +111,48 @@ describe('upgrade', () => {
     expect(upgradeStation(s, st.id).ok).toBe(true);
     expect(st.level).toBe(2);
     expect(upgradeCost(st)).toBeGreaterThan(c1);
+  });
+});
+
+describe('tend burst — derived from the live lay chain, never the raw base', () => {
+  it('a coop with NO flock bursts ZERO eggs (XP still granted)', () => {
+    // The old base-rate burst minted full eggs from an empty coop, feed-free.
+    const s = stockAll(fullSetup());
+    s.ducks = [];
+    run(s, 2); // no layers → state.nutrition stays undefined
+    const coop = s.stations.find((st) => st.type === 'coop')!;
+    coop.tendCooldownRemaining = 0;
+    const r = tend(s, coop.id);
+    if (!r.ok) throw new Error('tend failed');
+    expect(r.value.burst.eggs ?? 0).toBe(0);
+    expect(r.value.xp.xpGained).toBeGreaterThan(0); // the reward is for the action
+  });
+
+  it("a coop burst is TEND_BURST_MULT cycles of the flock's LIVE egg rate", () => {
+    const s = setHens(stockAll(fullSetup()), 3);
+    run(s, 5); // warm the nutrition EMA / eggRate
+    const rate = s.nutrition!.eggRate;
+    const coop = s.stations.find((st) => st.type === 'coop')!;
+    coop.tendCooldownRemaining = 0;
+    const r = tend(s, coop.id);
+    if (!r.ok) throw new Error('tend failed');
+    expect(r.value.burst.eggs).toBeCloseTo(
+      rate * BALANCE.COOP.cycleSeconds * BALANCE.TEND_BURST_MULT,
+      4,
+    );
+  });
+
+  it('a producer burst uses the CAPPED producer curve, same as its passive cycles', () => {
+    const s = build({ plot: 1 });
+    const plot = s.stations[0];
+    plot.level = BALANCE.UPGRADE.PRODUCER.levelCap; // where the old flat curve overshot ~6.4×
+    plot.tendCooldownRemaining = 0;
+    const r = tend(s, plot.id);
+    if (!r.ok) throw new Error('tend failed');
+    expect(r.value.burst.corn).toBeCloseTo(
+      BALANCE.PLOT.cornPerCycle * PRODUCER_OUTPUT(plot.level) * BALANCE.TEND_BURST_MULT,
+      6,
+    );
   });
 });
 
