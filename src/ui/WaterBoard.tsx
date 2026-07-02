@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { pondFeatureUpgradeCost, pondView } from '../game/pond';
 import { flockRequirement, waterAccess, waterProvision, waterStatus } from '../game/water';
 import {
   cellKey,
+  phenotype,
+  type Color,
   type FlowFeature,
   type FlowFeatureType,
   type GameState,
@@ -12,6 +14,7 @@ import {
   type PondFeatureType,
 } from '../game/state';
 import { playPlace, playUpgrade } from '../audio/sfx';
+import { loadDuckTintImages } from '../render/assets';
 import { CloseIcon, EggIcon, WaterIcon } from './icons';
 
 const W = BALANCE.WATER;
@@ -39,6 +42,40 @@ const FLOW_META: Record<FlowFeatureType, { label: string; color: string; tag: st
 
 const FEAT_TYPES = Object.keys(FEAT_META) as PondFeatureType[];
 const FLOW_TYPES = Object.keys(FLOW_META) as FlowFeatureType[];
+
+// ── Ambient pond swimmers (Phase 5 juice, water assessment fix ②) ──────
+// Pure render: nothing here reads or writes GameState. Cache the recolored
+// duck frames at module scope so flipping between the Pond/Waterworks tabs
+// doesn't re-decode/re-recolor the source art every mount.
+let duckTintCache: Promise<Record<Color, string[]>> | null = null;
+function getDuckTintImages(): Promise<Record<Color, string[]>> {
+  if (!duckTintCache) duckTintCache = loadDuckTintImages();
+  return duckTintCache;
+}
+
+const SWIMMER_SIZE = 22;
+const SWIMMER_CAP = 8;
+
+interface Swimmer {
+  id: string;
+  color: Color;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  duration: number;
+  delay: number;
+  bobDuration: number;
+  bobDelay: number;
+}
+
+/** How many swimmers the pond shows: 0 at a thirsty/empty pond, up to the cap
+ *  once access reaches ~2 (the "busy" point) — the system's one number (water
+ *  access) finally made visible as something alive. */
+function swimmerCount(access: number, requirement: number): number {
+  if (requirement <= 0) return 0; // no yard-relevant flock ⇒ nothing to swim
+  return Math.max(0, Math.min(SWIMMER_CAP, Math.round((access / 2) * SWIMMER_CAP)));
+}
 
 function statusColor(s: ReturnType<typeof waterStatus>): string {
   return s === 'good' ? '#8fe388' : s === 'ok' ? '#e8c45a' : '#e8835a';
@@ -250,6 +287,18 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
   const [help, setHelp] = useState(false);
   // Selected provision feature (layout mode) — opens the upgrade/remove panel.
   const [selKey, setSelKey] = useState<string | null>(null);
+  // Ambient pond swimmers: the recolored duck art loads once (async, decoded
+  // off the raw PNGs) and is reused for the life of the component.
+  const [duckImgs, setDuckImgs] = useState<Record<Color, string[]> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getDuckTintImages().then((imgs) => {
+      if (!cancelled) setDuckImgs(imgs);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // Auto-open the help sheet the first time each tab is viewed (once per browser).
   useEffect(() => {
     try {
@@ -278,6 +327,46 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
   const healthPct = Math.round(view.circulationHealth * 100);
   const outgrowing = state.ducks.length > 0 && provision < requirement * 0.999;
   const stagnating = view.features.filter((f) => !f.covered && f.freshness < 0.85).length;
+
+  // Ambient swimmers: recomputed only when the swimmer count or the pond's
+  // feature LAYOUT changes — never on freshness/covered churn, which updates
+  // every tick and would otherwise restart every drift animation constantly.
+  const swimCount = swimmerCount(access, requirement);
+  const featureLayoutKey = view.features.map((f) => `${f.x},${f.y}`).join('|');
+  const swimmers = useMemo<Swimmer[]>(() => {
+    if (swimCount <= 0) return [];
+    // Waypoint pool: feature tiles first (covered + fresher ranked ahead — the
+    // "prefer fresh/covered tiles" bias), padded with random water tiles.
+    const featTiles = [...view.features]
+      .sort((a, b) => (b.covered ? 1 : 0) - (a.covered ? 1 : 0) || b.freshness - a.freshness)
+      .map((f) => ({ x: f.x * TILE + TILE / 2, y: f.y * TILE + TILE / 2 }));
+    const pool = [...featTiles];
+    while (pool.length < swimCount * 2 + 4) pool.push({ x: Math.random() * GW, y: Math.random() * GH });
+    const flockColors = state.ducks.filter((d) => d.site !== 'winter').map((d) => phenotype(d.genotype));
+    const pickColor = (): Color =>
+      flockColors.length > 0 ? flockColors[Math.floor(Math.random() * flockColors.length)] : 'black';
+    return Array.from({ length: swimCount }, (_, i) => {
+      const a = pool[i % pool.length];
+      const b = pool[(i + 1 + Math.floor(Math.random() * (pool.length - 1))) % pool.length];
+      const duration = 8 + Math.random() * 8;
+      const bobDuration = 1.2 + Math.random() * 0.8;
+      return {
+        id: `sw${i}`,
+        color: pickColor(),
+        x1: a.x,
+        y1: a.y,
+        x2: b.x,
+        y2: b.y,
+        duration,
+        delay: -Math.random() * duration, // negative delay: starts mid-cycle, so swimmers don't sync up
+        bobDuration,
+        bobDelay: -Math.random() * bobDuration,
+      };
+    });
+    // eslint: swimCount/featureLayoutKey are the intended deps — colors/waypoints
+    // resampling on every duck/freshness tick would restart the animations.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swimCount, featureLayoutKey]);
 
   // One-tap starter: drop the worked example for whichever tab you're on.
   const starterSet = isFlow ? EXAMPLE_FLOW : EXAMPLE_FEATURES;
@@ -424,6 +513,48 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
               </g>
             );
           }),
+        )}
+        {/* Ambient pond swimmers (Phase 5 juice) — pure decoration, drawn on
+            top of the tile grid; pointer-events off so they never intercept
+            tile clicks. */}
+        {duckImgs && (
+          <g pointerEvents="none">
+            {swimmers.map((sw) => {
+              const frame = duckImgs[sw.color]?.[0] ?? duckImgs[sw.color]?.[1];
+              if (!frame) return null;
+              return (
+                <g
+                  key={sw.id}
+                  className="waterduck-drift"
+                  style={
+                    {
+                      '--wd-x1': `${sw.x1}px`,
+                      '--wd-y1': `${sw.y1}px`,
+                      '--wd-x2': `${sw.x2}px`,
+                      '--wd-y2': `${sw.y2}px`,
+                      animationDuration: `${sw.duration}s`,
+                      animationDelay: `${sw.delay}s`,
+                    } as CSSProperties
+                  }
+                >
+                  <g
+                    className="waterduck-bob"
+                    style={{ animationDuration: `${sw.bobDuration}s`, animationDelay: `${sw.bobDelay}s` }}
+                  >
+                    <image
+                      href={frame}
+                      x={-SWIMMER_SIZE / 2}
+                      y={-SWIMMER_SIZE / 2}
+                      width={SWIMMER_SIZE}
+                      height={SWIMMER_SIZE}
+                      opacity={0.92}
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                  </g>
+                </g>
+              );
+            })}
+          </g>
         )}
       </svg>
 

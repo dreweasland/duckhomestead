@@ -284,6 +284,36 @@ body {
   animation: owl-fuse linear both;
 }
 
+/* Ambient pond swimmers (Phase 5 juice, water assessment fix ②): a slow drift
+   between two waypoints (outer group) plus a gentle bob (inner group) —
+   duration/delay/waypoints are set per-swimmer via inline custom properties. */
+@keyframes waterduck-drift {
+  0% {
+    transform: translate(var(--wd-x1), var(--wd-y1));
+  }
+  100% {
+    transform: translate(var(--wd-x2), var(--wd-y2));
+  }
+}
+.waterduck-drift {
+  animation-name: waterduck-drift;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes waterduck-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.waterduck-bob {
+  animation: waterduck-bob 1.6s ease-in-out infinite;
+}
+
 /* Respect the OS "reduce motion" setting: kill the looping, spinning, and flashing
    animations (motion-sensitivity / photosensitivity) while keeping every threat cue
    VISIBLE as a static state, so the owl encounter stays fully playable. The owl and
@@ -324,5 +354,10 @@ body {
     top: var(--spot-top, 58%);
     transform: translate(-50%, -50%) scale(1.35);
     opacity: 1;
+  }
+  /* Pond swimmers — hold still at their first waypoint rather than drift/bob. */
+  .waterduck-drift,
+  .waterduck-bob {
+    animation: none;
   }
 }

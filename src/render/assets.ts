@@ -59,14 +59,16 @@ export interface GameTextures {
 // The baked duck sprite's BODY is exactly three yellow shades; beak/eye/legs are
 // separate. So we exact-match the body pixels and swap in three shades of the
 // flock's body color (orange bill + legs stay — Swedish ducks have those too).
-type RGB = [number, number, number];
+export type RGB = [number, number, number];
 const DUCK_BODY: RGB[] = [
   [246, 212, 60], // C.duck  — main body
   [224, 182, 42], // C.duckD — wing/tail shade
   [255, 236, 150], // C.duckH — belly highlight
 ];
-/** Body color per phenotype (matches the Flock panel swatches). */
-const DUCK_BODY_COLOR: Record<Color, RGB> = {
+/** Body color per phenotype (matches the Flock panel swatches). Exported so
+ *  other plain-DOM renderers (e.g. WaterBoard's pond swimmers) can recolor
+ *  without duplicating the palette. */
+export const DUCK_BODY_COLOR: Record<Color, RGB> = {
   black: [56, 56, 66],
   blue: [91, 122, 157],
   splash: [174, 190, 210],
@@ -76,7 +78,7 @@ const darker = (c: RGB, f: number): RGB => [clampByte(c[0] * f), clampByte(c[1] 
 const lighter = (c: RGB, t: number): RGB =>
   [clampByte(c[0] + (255 - c[0]) * t), clampByte(c[1] + (255 - c[1]) * t), clampByte(c[2] + (255 - c[2]) * t)];
 
-function loadImage(url: string): Promise<HTMLImageElement | null> {
+export function loadImage(url: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -85,8 +87,10 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
   });
 }
 
-/** Recolor one duck frame's body to `body`, returning a crisp pixel texture. */
-function recolorDuck(img: HTMLImageElement, body: RGB): Texture | null {
+/** Recolor one duck frame's body to `body`, returning the plain canvas (no
+ *  Pixi dependency) — the shared core for both the Pixi texture path below
+ *  and any plain-DOM consumer (e.g. WaterBoard's pond swimmers). */
+export function recolorDuckCanvas(img: HTMLImageElement, body: RGB): HTMLCanvasElement | null {
   try {
     const w = img.naturalWidth || 16;
     const h = img.naturalHeight || 16;
@@ -115,12 +119,19 @@ function recolorDuck(img: HTMLImageElement, body: RGB): Texture | null {
       }
     }
     ctx.putImageData(data, 0, 0);
-    const tex = Texture.from(canvas);
-    tex.source.scaleMode = 'nearest';
-    return tex;
+    return canvas;
   } catch {
     return null;
   }
+}
+
+/** Recolor one duck frame's body to `body`, returning a crisp pixel texture. */
+function recolorDuck(img: HTMLImageElement, body: RGB): Texture | null {
+  const canvas = recolorDuckCanvas(img, body);
+  if (!canvas) return null;
+  const tex = Texture.from(canvas);
+  tex.source.scaleMode = 'nearest';
+  return tex;
 }
 
 /** Sample a texture with no smoothing — crisp pixels when scaled up. */
@@ -180,6 +191,22 @@ export async function loadTextures(): Promise<GameTextures> {
   }
 
   return { stations, millSails, ducks, duckTints, ground, water };
+}
+
+/** Recolored duck frames as data URLs, per phenotype — for plain-DOM (non-
+ *  Pixi) consumers, namely WaterBoard's ambient pond swimmers (Phase 5
+ *  juice). Same source art + palette as the canvas's duckTints above. */
+export async function loadDuckTintImages(): Promise<Record<Color, string[]>> {
+  const out: Record<Color, string[]> = { black: [], blue: [], splash: [] };
+  const duckImgs = await Promise.all(DUCK_URLS.map(loadImage));
+  for (const color of COLORS) {
+    duckImgs.forEach((img, i) => {
+      if (!img) return;
+      const canvas = recolorDuckCanvas(img, DUCK_BODY_COLOR[color]);
+      if (canvas) out[color][i] = canvas.toDataURL();
+    });
+  }
+  return out;
 }
 
 /** Stable pseudo-random ground-variant index for a tile, so it doesn't flicker. */
