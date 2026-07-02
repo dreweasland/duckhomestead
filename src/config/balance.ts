@@ -663,7 +663,11 @@ export const BALANCE = {
      *  chains as multipliers (1 + Σ). Never a nutrition/water requirement. */
     STAT_PER_GENE: {
       L: { eggOutput: 0.12 },
-      V: { eggOutput: 0.05, maturationSpeed: 0.1 },
+      // Balance review: V's steady-state egg bump is deliberately weak (raising
+      // it just makes V a worse L) — its identity is SPEED. 0.2/gene makes a
+      // V6 line mature ×2.2 (360s→164s): the re-grind gene, compounding with
+      // Husbandry on the breeding-program clock and the prestige size target.
+      V: { eggOutput: 0.05, maturationSpeed: 0.2 },
       H: { woundResist: 0.1, waterSynergy: 0.08 },
       D: {},
       // Phase 6c: Prime is a GENERALIST, never a specialist — each contribution
@@ -681,16 +685,22 @@ export const BALANCE = {
      *  is the whole point of catching one — once caught, it tends to pass on. */
     DOMINANCE: { L: 3, V: 3, H: 3, D: 1, P: 4 } as Record<string, number>,
     /** Per-slot chance the inherited gene is replaced by a uniformly-random gene
-     *  (the occasional upgrade / escape from two-Dud parents). */
-    MUTATION_CHANCE: 0.04,
+     *  (the occasional upgrade / escape from two-Dud parents). Balance review:
+     *  at 0.04 the sweat policy hit a god clone in ~3 program-generations (~30
+     *  min — a first-session accident); 0.02 roughly doubles the chase AND
+     *  preserves the gene-reader's edge on positional targets (high mutation
+     *  lets band-only play just get lucky). Don't go below 0.02 — the casual
+     *  tail on positional tiers gets ugly (see tests/balance-sim.md, table C). */
+    MUTATION_CHANCE: 0.02,
     /** Phase 6c: THE PRIME GENE. Mutation-only, tier-gated wildcard — never in
      *  SEED_GENE_WEIGHTS, HATCH_GENES, or TARGETS_BY_TIER (see genetics.ts's
      *  breedGenome/slotOdds + PHASE6c.md). Never appears below this legacy tier. */
     PRIME_MIN_TIER: 2,
     /** Share of MUTATION_CHANCE rolls (when Prime-eligible) that resolve to 'P'
-     *  instead of the ordinary uniform {L,V,H,D} mutation — ≈0.02 × 0.04 =
-     *  ~0.08%/slot/hatch. Ultra rare; the lottery-ticket long-tail chase. */
-    PRIME_MUTATION_SHARE: 0.02,
+     *  instead of the ordinary uniform {L,V,H,D} mutation — ≈0.04 × 0.02 =
+     *  ~0.08%/slot/hatch. Ultra rare; the lottery-ticket long-tail chase.
+     *  (Doubled when MUTATION_CHANCE halved to 0.02 so the Prime rate held.) */
+    PRIME_MUTATION_SHARE: 0.04,
     // ── gene-reader (Step 3) ──
     /** Eggs to build the gene-reader. Once built it reveals genomes passively/in
      *  bulk (the whole flock at build time, then every new duck auto-reads on
@@ -862,8 +872,13 @@ export const BALANCE = {
      *  if TOTAL winter income rivals the yard's, cut THIS, not capacity. */
     PREMIUM_EGG_MULT: 2.5,
     /** Winter output bonus per H gene: hardinessMult = 1 + this × (H count).
-     *  Makes LLLHHH out-earn all-L HERE and only here (the 6d thesis). */
-    HARDINESS_PER_H: 0.15,
+     *  Makes LLLHHH out-earn all-L HERE and only here (the 6d thesis). Balance
+     *  review: at 0.15 the best mix beat all-L by only ~15% — a shrug next to
+     *  the 2.5× premium ANY hen earns here, so the lazy play was parking spare
+     *  god-clones. At 0.2 the optimum (L2H4 ≈ 2.23 vs all-L 1.72) is +30%:
+     *  breeding the H-line is now clearly the right play for the boutique
+     *  slots, without moving total winter income much. */
+    HARDINESS_PER_H: 0.2,
     /** Output mult for a winter coop with NO heater in range (cold, not dead). */
     COLD_FLOOR: 0.25,
     /** Support-factor floor when heated waterers are overloaded. */
