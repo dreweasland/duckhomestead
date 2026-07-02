@@ -21,8 +21,7 @@ export const STATION_TEXTURE_URL: Record<StationType, string> = {
   mealwormFarm: `${FARM}/mealwormFarm.png`,
   yeastVat: `${FARM}/yeastVat.png`,
   oysterSource: `${FARM}/oysterSource.png`,
-  // Phase 6d: no baked art yet — the loader's flat-color fallback (STATION_DEFS
-  // colors) carries these until the Phase 5 pixel pass.
+  // Winterstead (Phase 6d stations, baked in the Phase 5 pixel pass).
   seedStore: `${FARM}/seedStore.png`,
   fodderRack: `${FARM}/fodderRack.png`,
   winterCoop: `${FARM}/winterCoop.png`,
