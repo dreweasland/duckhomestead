@@ -14,6 +14,7 @@ import {
 } from './loot';
 import { outputBoostMult, renownBoostMult, speedBoostMult } from './prestige';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
+import { waterWoundMult } from './water';
 import type { Gene, GameState, Ingredient, Module, Rarity, Resource, Station } from './state';
 import {
   adultDrakes,
@@ -834,6 +835,18 @@ export function admitToInfirmary(state: GameState, duckId: string): ActionResult
   if (duck.recovering) return done(true); // already admitted
   if (infirmaryOccupied(state) >= infirmaryCapacity(state)) {
     return fail('Infirmary full — build another, wait, or cull');
+  }
+  // Water attribution (Phase 5 juice): above-par water widens the escalation
+  // window (waterWoundMult); the slack still on the clock at admission, minus
+  // what a merely-par pond would have left, is what THIS pond specifically
+  // bought. A transient pending event, drained by the engine for a toast —
+  // never touches the wound/recovery math itself.
+  const woundMult = waterWoundMult(state);
+  if (woundMult > 1) {
+    const threshold = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * woundMult;
+    const spareSec = Math.max(0, threshold - (duck.woundElapsed ?? 0));
+    const boughtSec = (spareSec * (woundMult - 1)) / woundMult;
+    if (boughtSec >= 1) (state.pendingWoundSaved ??= []).push({ spareSec, boughtSec });
   }
   duck.recovering = true;
   duck.recoveryElapsed = 0;

@@ -164,6 +164,34 @@ export default function App() {
     return () => clearTimeout(t);
   }, [grangeExpired]);
 
+  // Water attribution beats (Phase 5 juice) — the pond's payout made visible
+  // at the exact moments it pays. Quiet toasts, pure UI over existing water
+  // math (see game/water.ts, game/engine.ts's drainWoundSaved/drainConditionRebound).
+  const [woundSaved, setWoundSaved] = useState<{ id: number; spareSec: number; boughtSec: number } | null>(
+    null,
+  );
+  useEffect(
+    () =>
+      engine.onWoundSaved((e) => setWoundSaved({ id: Date.now(), spareSec: e.spareSec, boughtSec: e.boughtSec })),
+    [engine],
+  );
+  useEffect(() => {
+    if (!woundSaved) return;
+    const t = window.setTimeout(() => setWoundSaved(null), 2500);
+    return () => clearTimeout(t);
+  }, [woundSaved]);
+
+  const [conditionRebound, setConditionRebound] = useState<{ id: number; mult: number } | null>(null);
+  useEffect(
+    () => engine.onConditionRebound((e) => setConditionRebound({ id: Date.now(), mult: e.mult })),
+    [engine],
+  );
+  useEffect(() => {
+    if (!conditionRebound) return;
+    const t = window.setTimeout(() => setConditionRebound(null), 2500);
+    return () => clearTimeout(t);
+  }, [conditionRebound]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
@@ -319,6 +347,23 @@ export default function App() {
             className="salvage-toast rounded-full bg-[#3a2a1a] px-3 py-1 text-xs font-bold text-[#e8a45a] shadow ring-1 ring-[#5a3e22]"
           >
             Delivery expired — the Grange slot freed up
+          </span>
+        )}
+        {woundSaved && (
+          <span
+            key={woundSaved.id}
+            className="salvage-toast rounded-full bg-[#1a2e3a] px-3 py-1 text-xs font-bold text-[#8fd4f0] shadow ring-1 ring-[#2a4a5a]"
+          >
+            Treated with {Math.round(woundSaved.spareSec)}s to spare — your pond bought{' '}
+            {Math.round(woundSaved.boughtSec)}s of those seconds
+          </span>
+        )}
+        {conditionRebound && (
+          <span
+            key={conditionRebound.id}
+            className="salvage-toast rounded-full bg-[#1a2e3a] px-3 py-1 text-xs font-bold text-[#8fd4f0] shadow ring-1 ring-[#2a4a5a]"
+          >
+            Condition recovered ×{conditionRebound.mult.toFixed(1)} faster — well watered
           </span>
         )}
       </NotifyRail>

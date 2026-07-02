@@ -48,6 +48,8 @@ import { goodGeneCount } from './genetics';
 import { flockRatio } from './state';
 import { scareOff, type ScareResult } from './predators';
 import { tryTendDrop } from './loot';
+import { conditionTarget } from './nutrition';
+import { waterConditionMult } from './water';
 import type { Milestone } from './rank';
 import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
 import { tick } from './tick';
@@ -101,6 +103,19 @@ export interface CollectEvent {
   resources: Partial<Record<Resource, number>>;
 }
 
+/** Emitted when an infirmary admission beat the escalation clock while the
+ *  pond ran above par — the water attribution beat (Phase 5 juice). */
+export interface WoundSavedEvent {
+  spareSec: number;
+  boughtSec: number;
+}
+
+/** Emitted when flock condition recovers to target after a dip while the pond
+ *  ran well above par — the other water attribution beat. */
+export interface ConditionReboundEvent {
+  mult: number;
+}
+
 /** Emitted when a module enters the inventory — the loot moment. */
 export interface LootEvent {
   module: Module;
@@ -140,6 +155,15 @@ export class GameEngine {
   /** Fires when an active delivery contract hits its deadline — a contract must
    *  never vanish with zero feedback. */
   private contractExpireListeners = new Set<() => void>();
+  private woundSavedListeners = new Set<(e: WoundSavedEvent) => void>();
+  private conditionReboundListeners = new Set<(e: ConditionReboundEvent) => void>();
+
+  // Water attribution (Phase 5 juice): the condition-rebound edge-detection
+  // lives here, engine-side, never in tick — these are pure UI bookkeeping,
+  // not sim state, so they live on the instance rather than on GameState.
+  private conditionWasLow = false;
+  private lastConditionReboundAt = 0;
+  private static readonly CONDITION_REBOUND_COOLDOWN_MS = 10 * 60 * 1000;
 
   private rafId = 0;
   private lastTime = 0;
@@ -203,6 +227,16 @@ export class GameEngine {
     this.contractExpireListeners.add(fn);
     return () => this.contractExpireListeners.delete(fn);
   }
+  /** Fires when an infirmary admission beats the clock thanks to above-par water. */
+  onWoundSaved(fn: (e: WoundSavedEvent) => void): () => void {
+    this.woundSavedListeners.add(fn);
+    return () => this.woundSavedListeners.delete(fn);
+  }
+  /** Fires when condition recovers to target after a dip, well-watered. */
+  onConditionRebound(fn: (e: ConditionReboundEvent) => void): () => void {
+    this.conditionReboundListeners.add(fn);
+    return () => this.conditionReboundListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
@@ -230,12 +264,51 @@ export class GameEngine {
   private emitContractClaim(e: ClaimResult) {
     for (const fn of this.contractClaimListeners) fn(e);
   }
+  private emitWoundSaved(e: WoundSavedEvent) {
+    for (const fn of this.woundSavedListeners) fn(e);
+  }
+  private emitConditionRebound(e: ConditionReboundEvent) {
+    for (const fn of this.conditionReboundListeners) fn(e);
+  }
   /** Surface any delivery-deadline expiry accrued during ticks (quiet toast). */
   private drainContractExpiry() {
     const n = this.state.pendingContractExpired ?? 0;
     if (n <= 0) return;
     this.state.pendingContractExpired = 0;
     for (let i = 0; i < n; i++) for (const fn of this.contractExpireListeners) fn();
+  }
+  /** Surface any infirmary admissions that beat the clock on above-par water
+   *  (set by actions.ts's admitToInfirmary — a live-action-only event). */
+  private drainWoundSaved() {
+    const pending = this.state.pendingWoundSaved;
+    if (!pending || pending.length === 0) return;
+    for (const e of pending) this.emitWoundSaved(e);
+    this.state.pendingWoundSaved = [];
+  }
+  /** Water attribution beat ②: detect the exact frame condition recovers to
+   *  target after a dip, while the pond ran well above par. The edge-detection
+   *  lives here (engine drain), never in tick — `conditionWasLow` is instance
+   *  state, not persisted GameState, so a reset/reload starts it fresh. Rate-
+   *  limited so it can never nag. */
+  private drainConditionRebound() {
+    const target = conditionTarget(this.state);
+    if (target <= 0) {
+      this.conditionWasLow = false;
+      return;
+    }
+    const isLow = this.state.condition < target - 0.01;
+    if (isLow) {
+      this.conditionWasLow = true;
+      return;
+    }
+    if (!this.conditionWasLow) return;
+    this.conditionWasLow = false;
+    const mult = waterConditionMult(this.state);
+    if (mult <= 1.15) return;
+    const now = Date.now();
+    if (now - this.lastConditionReboundAt < GameEngine.CONDITION_REBOUND_COOLDOWN_MS) return;
+    this.lastConditionReboundAt = now;
+    this.emitConditionRebound({ mult });
   }
   /** Fire DINGs for any first-of-color hatches accrued during ticks. */
   private drainDex() {
@@ -331,6 +404,8 @@ export class GameEngine {
       this.drainGodClone(); // fire the god-clone DING for a perfect-target hatch
       this.drainPredatorEvents(); // telegraph / attack / loss feedback this frame
       this.drainContractExpiry(); // a deadline lapse gets a toast, never silence
+      this.drainWoundSaved(); // water attribution ①: an admission that beat the clock
+      this.drainConditionRebound(); // water attribution ②: a dip recovered, well-watered
       if (t - this.lastNotify >= this.notifyIntervalMs) {
         this.lastNotify = t;
         this.notify();
@@ -801,6 +876,8 @@ export class GameEngine {
     clearStorage();
     this.state = newGame(Date.now());
     this.away = null;
+    this.conditionWasLow = false; // fresh detector state for the new run
+    this.lastConditionReboundAt = 0;
     this.saveNow();
     this.notify();
   }

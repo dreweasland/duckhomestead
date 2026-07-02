@@ -754,6 +754,46 @@ describe('wound → escalation → admit to infirmary (the checkpoint)', () => {
     expect(s.ducks.find((d) => d.id === 'd0')).toBeDefined(); // admitted → safe
   });
 
+  it('admitting with above-par water queues a pendingWoundSaved attribution beat', () => {
+    const s = flock(3); // access = 6/3 = 2.0 → waterWoundMult = WOUND_TIMER_AT_DOUBLE (1.5, > 1)
+    s.infirmaries = 1;
+    s.ducks[0].wounded = true;
+    s.ducks[0].severity = 'minor';
+    s.ducks[0].woundElapsed = 100;
+    const mult = waterWoundMult(s);
+    expect(mult).toBeGreaterThan(1);
+    const threshold = P.WOUND_ESCALATE_SEC * mult;
+    expect(admitToInfirmary(s, 'd0').ok).toBe(true);
+    expect(s.pendingWoundSaved).toHaveLength(1);
+    const [e] = s.pendingWoundSaved!;
+    expect(e.spareSec).toBeCloseTo(threshold - 100, 5);
+    expect(e.boughtSec).toBeCloseTo(((threshold - 100) * (mult - 1)) / mult, 5);
+    expect(e.boughtSec).toBeGreaterThan(0);
+  });
+
+  it('does NOT queue a wound-saved beat at/below par water (no pond bonus to credit)', () => {
+    const s = flock(20); // access = 6/20 = 0.3 < 1 → a PENALTY mult, not a bonus
+    s.infirmaries = 1;
+    s.ducks[0].wounded = true;
+    s.ducks[0].severity = 'minor';
+    s.ducks[0].woundElapsed = 50;
+    expect(waterWoundMult(s)).toBeLessThanOrEqual(1);
+    admitToInfirmary(s, 'd0');
+    expect(s.pendingWoundSaved ?? []).toHaveLength(0);
+  });
+
+  it('re-admitting an already-recovering duck (a no-op) never double-queues the beat', () => {
+    const s = flock(3);
+    s.infirmaries = 1;
+    s.ducks[0].wounded = true;
+    s.ducks[0].severity = 'minor';
+    s.ducks[0].woundElapsed = 100;
+    admitToInfirmary(s, 'd0');
+    expect(s.pendingWoundSaved).toHaveLength(1);
+    admitToInfirmary(s, 'd0'); // already recovering — early-return, no new event
+    expect(s.pendingWoundSaved).toHaveLength(1);
+  });
+
   it('a recovering duck heals and rejoins the flock after RECOVERY_SEC (water-scaled)', () => {
     const s = flock(3);
     s.infirmaries = 1;

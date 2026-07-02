@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { initialState } from '../src/game/state';
 import { doseNiacin } from '../src/game/actions';
-import { axisFactor } from '../src/game/nutrition';
+import { axisFactor, conditionTarget } from '../src/game/nutrition';
 import { build, fullSetup, stockAll, run, setHens } from './helpers';
 
 const N = BALANCE.NUTRITION;
@@ -125,6 +125,22 @@ describe('flock condition battery', () => {
     s.condition = 0;
     run(s, 1);
     expect(s.nutrition!.eggMult).toBeCloseTo(s.nutrition!.eggMultRaw, 5);
+  });
+});
+
+describe('conditionTarget — the battery target mirror (Phase 5 water attribution beat)', () => {
+  it('is 0 with no mill (there IS a nutrition snapshot — hasMill just reads false)', () => {
+    const s = setHens(build({ plot: 1, coop: 1 }), 1); // no mill
+    run(s, 1);
+    expect(s.nutrition?.hasMill).toBe(false);
+    expect(conditionTarget(s)).toBe(0);
+  });
+
+  it('mirrors the tick’s own target once nutrition has run — a fully-fed flock converges to it', () => {
+    const s = stockAll(fullSetup());
+    run(s, 120);
+    expect(conditionTarget(s)).toBeCloseTo(N.CONDITION_MAX, 5);
+    expect(s.condition).toBeCloseTo(conditionTarget(s), 3);
   });
 });
 

@@ -494,6 +494,13 @@ export interface GameState {
    *  (expiry clocks are online-only), so it can't accrue during catch-up. */
   pendingContractExpired?: number;
 
+  // ── Phase 5 juice: water attribution beats (assessment fix ①, pure UI over
+  // existing water math — see game/water.ts) ──
+  /** Transient: infirmary admissions that beat the escalation clock while the
+   *  pond ran above par, drained by the engine for a "seconds bought" toast.
+   *  Set only by the live admit action (never during offline catch-up). */
+  pendingWoundSaved?: { spareSec: number; boughtSec: number }[];
+
   /** Wall-clock ms of last save; used for offline catch-up on load. */
   lastSeen: number;
 }

@@ -31,6 +31,17 @@ function zeroAxes(): Record<Axis, number> {
   return { energy: 0, protein: 0, niacin: 0, calcium: 0 };
 }
 
+/** The condition battery's current target — mirrors runNutrition's own
+ *  formula, read from the persisted post-tick snapshot. Exported for the
+ *  water attribution beat (Phase 5 juice), which detects a dip-recovery edge
+ *  engine-side without re-deriving nutrition math. Pure; changes nothing. */
+export function conditionTarget(state: GameState): number {
+  const n = state.nutrition;
+  if (!n || !n.hasMill) return 0;
+  const minEggSat = Math.min(...EGG_AXES.map((a) => n.satisfaction[a]));
+  return clamp01(minEggSat) * N.CONDITION_MAX;
+}
+
 /**
  * Advance the nutrition grid by `dt`: consume ingredients from storage per the
  * active ration (stock-limited — supply IS the stock read this tick), compute

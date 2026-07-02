@@ -166,8 +166,9 @@ export function deserialize(raw: string, now: number): GameState {
       // during the load's offline catch-up.
       predatorsIntroduced: parsed.predatorsIntroduced ?? false,
       pendingPredatorEvents: undefined,
-      // Never replay a previous session's expiry toast on load.
+      // Never replay a previous session's expiry/attribution toasts on load.
       pendingContractExpired: 0,
+      pendingWoundSaved: undefined,
       stations: (parsed.stations ?? [])
         // A station type this build doesn't know (a newer build's save, or a
         // type ever removed) would crash EVERY load inside the catch-up tick
