@@ -4,6 +4,7 @@ import { onEggsLaid } from './contracts';
 import { hardinessMult, layMult } from './genetics';
 import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { waterConditionMult } from './water';
+import { flockWarmth, winterSupportFactor } from './winter';
 import { eggValueBoostMult } from './prestige';
 import {
   adultLayers,
@@ -382,9 +383,10 @@ export function runWinterNutrition(
   const minSat = Math.min(...AXES.map((a) => satisfaction[a]));
   const eggMult = W.PENALTY_FLOOR + (1 - W.PENALTY_FLOOR) * clamp01(minSat);
 
-  // Warmth + waterer support land in Step 3 (heater layout); full until then.
-  const warmth = 1;
-  const support = 1;
+  // Warmth (heater layout, warmest coops fill first) + waterer support — pure
+  // layout reads, set-and-holds (see winter.ts). Floors, never walls.
+  const warmth = flockWarmth(state);
+  const support = winterSupportFactor(state);
 
   // Premium lay — genome-scaled per hen (lay × HARDINESS), into winter coops.
   const winterCoops = state.stations.filter((s) => s.type === 'winterCoop');

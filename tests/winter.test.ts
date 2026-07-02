@@ -13,6 +13,7 @@ import { prestigeReset } from '../src/game/prestige';
 import { deserialize, serialize } from '../src/game/save';
 import { tick } from '../src/game/tick';
 import { flockRequirement } from '../src/game/water';
+import { coopWarmth, flockWarmth, winterSupportFactor } from '../src/game/winter';
 import {
   flockRatio,
   initialState,
@@ -151,10 +152,16 @@ const duck = (id: string, g: Genome = FLAT_GENOME, o: Partial<Duck> = {}): Duck 
   ...o,
 });
 
-/** A stocked site: full home setup + N winter coops + the winter default ration. */
+/** A stocked, fully-serviced site: full home setup + N winter coops, a heater
+ *  covering them (radius 1 from (0,1) reaches (0,0)+(1,0)), a waterer, and the
+ *  winter default ration. Warmth/support tests build their own bare sites. */
 function winterSite(nCoops = 2): GameState {
   const s = withWinter(stockAll(fullSetup()));
   for (let i = 0; i < nCoops; i++) placeStation(s, 'winterCoop', i, 0, 'winterstead');
+  if (nCoops > 0) {
+    placeStation(s, 'heater', 0, 1, 'winterstead');
+    placeStation(s, 'heatedWaterer', 3, 1, 'winterstead');
+  }
   s.winterRation = { ...BALANCE.WINTER.DEFAULT_RATION };
   s.ration = { ...BALANCE.NUTRITION.DEFAULT_RATION };
   return s;
@@ -303,6 +310,69 @@ describe('hardiness pays at Winterstead — and only there (the 6d thesis)', () 
       W.PREMIUM_EGG_MULT;
     expect(s.winter!.eggRate).toBeCloseTo(expected, 4);
     expect(s.resources.eggs).toBeGreaterThan(eggsBefore); // hauled into SHARED storage
+  });
+});
+
+// ── Step 3: warmth layout (set-and-holds) + waterer support ──────────
+describe('warmth is a LAYOUT puzzle — set-and-holds, never an upkeep loop', () => {
+  const W = BALANCE.WINTER;
+
+  it('a coop within heater radius is warm; out of radius is COLD_FLOOR', () => {
+    const s = winterSite(0);
+    placeStation(s, 'winterCoop', 0, 0, 'winterstead'); // far corner
+    placeStation(s, 'winterCoop', 5, 5, 'winterstead');
+    placeStation(s, 'heater', 1, 1, 'winterstead'); // covers (0,0) at radius 1
+    const [cold, warm] = [s.stations.find((x) => x.type === 'winterCoop' && x.x === 5)!, s.stations.find((x) => x.type === 'winterCoop' && x.x === 0)!];
+    expect(coopWarmth(s, warm)).toBe(1);
+    expect(coopWarmth(s, cold)).toBe(W.COLD_FLOOR);
+  });
+
+  it('hens fill the WARMEST coops first — the cold coop only bites once warm ones fill', () => {
+    const s = winterSite(0);
+    placeStation(s, 'winterCoop', 0, 0, 'winterstead'); // warm (heater below)
+    placeStation(s, 'winterCoop', 5, 5, 'winterstead'); // cold
+    placeStation(s, 'heater', 1, 1, 'winterstead');
+    s.ducks = Array.from({ length: 8 }, (_, i) => duck(`h${i}`));
+    for (let i = 0; i < 4; i++) assignToWinter(s, `h${i}`);
+    expect(flockWarmth(s)).toBe(1); // 4 hens ≤ the warm coop's capacity
+    for (let i = 4; i < 8; i++) assignToWinter(s, `h${i}`);
+    expect(flockWarmth(s)).toBeCloseTo((4 * 1 + 4 * W.COLD_FLOOR) / 8, 6); // overflow chills
+  });
+
+  it('cold throttles output but NEVER kills, and rearranging fixes it instantly (no decay state)', () => {
+    const mk = (withHeater: boolean) => {
+      const s = winterSite(0);
+      placeStation(s, 'winterCoop', 0, 0, 'winterstead');
+      if (withHeater) placeStation(s, 'heater', 1, 0, 'winterstead');
+      s.ducks = [duck('w')];
+      assignToWinter(s, 'w');
+      run(s, 90);
+      return s;
+    };
+    const warm = mk(true);
+    const cold = mk(false);
+    expect(cold.winter!.warmth).toBe(W.COLD_FLOOR);
+    expect(cold.winter!.eggRate).toBeCloseTo(warm.winter!.eggRate * W.COLD_FLOOR, 4);
+    expect(cold.ducks).toHaveLength(1); // alive — cold is a throttle, not a wall
+    // Set-and-holds: another 10 minutes changes NOTHING (no fouling analogue).
+    const before = warm.winter!.eggRate;
+    run(warm, 600);
+    expect(warm.winter!.eggRate).toBeCloseTo(before, 6);
+    // Placing a heater fixes the cold site the very next tick — a decision, not a chore.
+    placeStation(cold, 'heater', 1, 0, 'winterstead');
+    run(cold, 1);
+    expect(cold.winter!.warmth).toBe(1);
+  });
+
+  it('waterer support eases toward its floor as the site outgrows its waterers', () => {
+    const s = winterSite(0); // bare board — build our own
+    placeStation(s, 'winterCoop', 0, 0, 'winterstead');
+    placeStation(s, 'winterCoop', 1, 0, 'winterstead'); // capacity 8, NO waterers
+    s.ducks = Array.from({ length: 6 }, (_, i) => duck(`h${i}`));
+    for (const d of s.ducks) assignToWinter(s, d.id);
+    expect(winterSupportFactor(s)).toBe(BALANCE.WINTER.WATERER_FLOOR); // 0 waterers
+    placeStation(s, 'heatedWaterer', 3, 3, 'winterstead'); // supports 6
+    expect(winterSupportFactor(s)).toBe(1);
   });
 });
 
