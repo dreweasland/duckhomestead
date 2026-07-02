@@ -32,6 +32,8 @@ const ING_LABEL: Record<Ingredient, string> = {
   mealworms: 'Mealworms',
   brewersYeast: "Brewer's Yeast",
   oysterShell: 'Oyster Shell',
+  sunflowerSeeds: 'Sunflower Seeds',
+  fodderSprouts: 'Fodder Sprouts',
 };
 const RATION_MAX = 6;
 const DUCKLING_AXES: Axis[] = ['energy', 'protein', 'niacin'];

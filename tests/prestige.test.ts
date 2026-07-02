@@ -148,7 +148,7 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expect(reset.geneReader).toBe(false); // a fresh run must re-build the reader
     expect(reset.genomeTarget).toEqual(targetForTier(3)); // tracking = the new tier's gate target
     expect(reset.predatorsIntroduced).toBe(false);
-    expect(reset.ration).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 });
+    expect(reset.ration).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 });
     expect(zoneUnlocked(reset, 'yard')).toBe(true);
     expect(zoneUnlocked(reset, 'backPasture')).toBe(false);
     expect(zoneUnlocked(reset, 'pond')).toBe(false);

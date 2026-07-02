@@ -71,12 +71,12 @@ describe('GUARDRAIL: duckling ration never alters the layer nutrition math', () 
 describe('save', () => {
   it('round-trips the duckling ration', () => {
     const s = build({ coop: 1 });
-    s.ducklingRation = { corn: 5, peas: 1, mealworms: 0, brewersYeast: 3, oysterShell: 0 };
+    s.ducklingRation = { corn: 5, peas: 1, mealworms: 0, brewersYeast: 3, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 };
     expect(deserialize(serialize(s), 0).ducklingRation).toEqual(s.ducklingRation);
   });
 
   it('starts the duckling ration empty for a pre-step-5 save (player sets it)', () => {
     const r = deserialize(JSON.stringify({ ducks: [], stations: [] }), 0);
-    expect(r.ducklingRation).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 });
+    expect(r.ducklingRation).toEqual({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 });
   });
 });

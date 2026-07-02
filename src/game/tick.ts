@@ -99,8 +99,11 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     }
 
     // Mills (formulation) and coops (nutrition-throttled laying) are handled by
-    // runNutrition below, not the generic producer path.
-    if (station.type === 'mill' || station.type === 'coop') continue;
+    // runNutrition below, not the generic producer path. Winter coops (6d) lay
+    // via the WINTER pool, and pure infrastructure (heater/waterer, cycle 0)
+    // never cycles at all — a 0s cycle would spin the loop to its guard.
+    if (station.type === 'mill' || station.type === 'coop' || station.type === 'winterCoop') continue;
+    if (STATION_DEFS[station.type].cycleSeconds <= 0) continue;
 
     // The boost divides cycle time — a global top-level rate scalar.
     const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleScale;

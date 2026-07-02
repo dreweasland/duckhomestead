@@ -20,19 +20,31 @@ export type Resource =
   | 'mealworms'
   | 'brewersYeast'
   | 'oysterShell'
+  | 'sunflowerSeeds' // Phase 6d: Winterstead's energy-rich line
+  | 'fodderSprouts' // Phase 6d: Winterstead's multi-axis overlap line
   | 'forage'
   | 'pellets'
   | 'eggs';
 
 export type Resources = Record<Resource, number>;
 
-/** The five nutrition ingredients (overlapping axis matrix lives in balance.ts). */
-export const INGREDIENTS = ['corn', 'peas', 'mealworms', 'brewersYeast', 'oysterShell'] as const;
+/** The nutrition ingredients (overlapping axis matrix lives in balance.ts).
+ *  The last two are Winterstead's local lines (6d) — producible only there,
+ *  but usable in ANY ration (one shared storage; overlap is the point). */
+export const INGREDIENTS = [
+  'corn',
+  'peas',
+  'mealworms',
+  'brewersYeast',
+  'oysterShell',
+  'sunflowerSeeds',
+  'fodderSprouts',
+] as const;
 export type Ingredient = (typeof INGREDIENTS)[number];
 
 /** An all-zero ration (the empty starting point — nothing fed until the player sets it). */
 export const zeroRation = (): Record<Ingredient, number> =>
-  ({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0 });
+  ({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 });
 /** True when a ration is entirely unset (every ingredient is 0). */
 export const rationUnset = (ration: Record<Ingredient, number>): boolean =>
   INGREDIENTS.every((i) => (ration[i] ?? 0) === 0);
@@ -698,7 +710,18 @@ export function initialPond(): PondState {
 export const cellKey = (x: number, y: number): string => `${x},${y}`;
 
 export function initialResources(): Resources {
-  return { corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, forage: 0, pellets: 0, eggs: 0 };
+  return {
+    corn: 0,
+    peas: 0,
+    mealworms: 0,
+    brewersYeast: 0,
+    oysterShell: 0,
+    sunflowerSeeds: 0,
+    fodderSprouts: 0,
+    forage: 0,
+    pellets: 0,
+    eggs: 0,
+  };
 }
 
 export function initialState(now: number): GameState {

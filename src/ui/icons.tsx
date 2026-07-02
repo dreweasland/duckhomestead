@@ -61,6 +61,39 @@ export const CornIcon = (p: PixProps) => (
   />
 );
 
+/** Phase 6d: sunflower seed head — gold petals, seed-brown center. */
+export const SunflowerIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ y: '#e8c45a', o: '#c79530', b: '#6a4a2a' }}
+    rows={[
+      '.y.y.',
+      'yoboy',
+      '.bbb.',
+      'yoboy',
+      '.y.y.',
+      '..o..',
+      '..o..',
+    ]}
+  />
+);
+
+/** Phase 6d: fodder sprouts — fresh green shoots in a tray. */
+export const SproutIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ g: '#6fae7a', l: '#9fd98a', t: '#8a6a4a' }}
+    rows={[
+      'l.g.l',
+      '.lgl.',
+      'g.g.g',
+      '.ggg.',
+      'ttttt',
+      '.ttt.',
+    ]}
+  />
+);
+
 export const PelletIcon = (p: PixProps) => (
   <Pix
     {...p}
@@ -542,6 +575,8 @@ export const RESOURCE_ICON = {
   mealworms: MealwormIcon,
   brewersYeast: YeastIcon,
   oysterShell: ShellIcon,
+  sunflowerSeeds: SunflowerIcon,
+  fodderSprouts: SproutIcon,
   forage: ForageIcon,
   pellets: PelletIcon,
   eggs: EggIcon,

@@ -1,4 +1,4 @@
-import { BALANCE, STATION_DEFS, STATION_ORDER, type StationType } from '../config/balance';
+import { BALANCE, EXCLUSIVE_STATIONS, STATION_DEFS, STATION_ORDER, zoneDef, type StationType } from '../config/balance';
 import type { GameState } from '../game/state';
 import { CornIcon, EggIcon } from './icons';
 
@@ -6,6 +6,9 @@ interface Props {
   state: GameState;
   buildType: StationType | null;
   onPick: (t: StationType | null) => void;
+  /** Which zone the canvas is showing — the bar offers only stations placeable
+   *  THERE (same compatibility rule as placeStation). Defaults to the Yard. */
+  activeZone?: string;
 }
 
 const swatch = (color: string, label: string) => (
@@ -35,14 +38,24 @@ const CHAIN_HINT: Record<StationType, React.ReactNode> = {
   mealwormFarm: swatch('#d9a07a', 'mealworms · protein'),
   yeastVat: swatch('#e8d9a0', 'yeast · niacin'),
   oysterSource: swatch('#c9cdd2', 'shell · calcium'),
+  // Phase 6d: Winterstead-only stations (shown only on the winter board).
+  seedStore: swatch('#d9a441', 'sunflower seeds · winter energy'),
+  fodderRack: swatch('#6fae7a', 'fodder sprouts · winter overlap'),
+  winterCoop: <span>houses assigned winter ducks</span>,
+  heater: <span>warms nearby winter coops</span>,
+  heatedWaterer: <span>waters 6 winter ducks</span>,
 };
 
-export function BuildBar({ state, buildType, onPick }: Props) {
+export function BuildBar({ state, buildType, onPick, activeZone = 'yard' }: Props) {
+  const zone = zoneDef(activeZone);
+  const placeable = STATION_ORDER.filter((t) =>
+    zone?.allowedStations ? zone.allowedStations.includes(t) : !EXCLUSIVE_STATIONS.has(t),
+  );
   return (
     <div className="flex flex-col gap-2">
       <div className="text-xs font-bold uppercase tracking-wider text-[#9a8a6a]">Build</div>
       <div className="grid grid-cols-12 gap-2">
-        {STATION_ORDER.map((t) => {
+        {placeable.map((t) => {
           const cost = BALANCE.COSTS[t];
           const affordable = state.resources.eggs >= cost;
           const selected = buildType === t;

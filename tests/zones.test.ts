@@ -28,10 +28,12 @@ describe('zone model', () => {
     s.zones.backPasture.unlocked = true; // Waterworks (circulation)
     expect(placeStation(s, 'coop', 0, 0, 'pond').ok).toBe(false);
     expect(placeStation(s, 'coop', 0, 0, 'backPasture').ok).toBe(false);
-    // Generic build space is retired as a zone reward — only the Yard builds.
-    expect(ZONE_DEFS.filter((z) => !z.pondLayout && !z.waterworks)).toEqual([
-      ZONE_DEFS.find((z) => z.id === 'yard'),
-    ]);
+    // Generic build space is retired as a zone reward — the only build boards are
+    // the Yard and (6d) Winterstead, whose space is PURPOSEFUL: station-gated via
+    // allowedStations and carrying the warmth layout puzzle, not generic tiles.
+    const buildZones = ZONE_DEFS.filter((z) => !z.pondLayout && !z.waterworks);
+    expect(buildZones.map((z) => z.id)).toEqual(['yard', 'winterstead']);
+    expect(buildZones.find((z) => z.id === 'winterstead')?.allowedStations?.length).toBeGreaterThan(0);
   });
 
   it('builds within the Yard (the one build zone) and bounds to its grid', () => {

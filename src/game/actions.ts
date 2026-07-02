@@ -1,4 +1,4 @@
-import { BALANCE, STATION_DEFS, zoneDef, type StationType } from '../config/balance';
+import { BALANCE, EXCLUSIVE_STATIONS, STATION_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
 import { onEggsLaid } from './contracts';
 import {
   activeStatWeights,
@@ -48,7 +48,14 @@ export const INGREDIENT_PRODUCERS = new Set<StationType>([
   'mealwormFarm',
   'yeastVat',
   'oysterSource',
+  // Phase 6d: the two Winterstead ingredient lines scale on the same capped curve.
+  'seedStore',
+  'fodderRack',
 ]);
+
+/** Phase 6d: pure winter infrastructure — no cycles, no upgrades (v1). Housing,
+ *  warmth, and water support scale by COUNT, like defenses. */
+export const NO_UPGRADE_STATIONS = new Set<StationType>(['winterCoop', 'heater', 'heatedWaterer']);
 
 /** Output multiplier for an ingredient producer: gentler slope, capped at levelCap. */
 export function PRODUCER_OUTPUT(level: number): number {
@@ -201,6 +208,14 @@ export function placeStation(
   if (!zone) return fail('No such zone');
   if (!zoneUnlocked(state, zoneId)) return fail('Zone locked');
   if (zone.pondLayout || zone.waterworks) return fail('That’s a water canvas, not build space');
+  // Phase 6d: zone-station compatibility, both directions — a zone with an
+  // allowedStations list accepts ONLY those; every other zone rejects any
+  // zone-exclusive type (winter gear can't heat the yard).
+  if (zone.allowedStations) {
+    if (!zone.allowedStations.includes(type)) return fail(`Can’t build that at ${zone.name}`);
+  } else if (EXCLUSIVE_STATIONS.has(type)) {
+    return fail(`That only works at ${ZONE_DEFS.find((z) => z.allowedStations?.includes(type))?.name ?? 'its own site'}`);
+  }
   if (x < 0 || y < 0 || x >= zone.grid.width || y >= zone.grid.height) {
     return fail('Out of bounds');
   }
@@ -271,6 +286,11 @@ export function unlockZone(state: GameState, zoneId: string): ActionResult<{ nam
   if (!zone) return fail('No such zone');
   if (zoneUnlocked(state, zoneId)) return fail('Already unlocked');
   if (!zone.unlock) return fail('Zone has no unlock');
+  // Phase 6d: some zones carry a legacy-tier floor (Winterstead: tier 3) —
+  // checked FIRST so the tease reads as a legacy gate, not a rank/egg problem.
+  if (zone.unlock.minLegacyTier != null && state.legacyTier < zone.unlock.minLegacyTier) {
+    return fail(`Requires Legacy Tier ${zone.unlock.minLegacyTier}`);
+  }
   if (state.rank < zone.unlock.rankRequired) return fail(`Reach Rank ${zone.unlock.rankRequired}`);
   if (state.resources.eggs < zone.unlock.eggCost) return fail(`Need ${zone.unlock.eggCost} eggs`);
   state.resources.eggs -= zone.unlock.eggCost;
@@ -282,6 +302,7 @@ export function unlockZone(state: GameState, zoneId: string): ActionResult<{ nam
 export function upgradeStation(state: GameState, stationId: string): ActionResult<Station> {
   const station = state.stations.find((s) => s.id === stationId);
   if (!station) return fail('No such station');
+  if (NO_UPGRADE_STATIONS.has(station.type)) return fail('Doesn’t upgrade — build another');
   if (producerMaxed(station)) return fail('At max level — build another producer');
   const cost = upgradeCost(station);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
@@ -771,8 +792,15 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   const mult = UPGRADE_OUTPUT(station.level);
   const burst: Partial<Record<Resource, number>> = {};
   // A coop's tend burst (tending the flock) is throttled by current nutrition,
-  // same as the flock's passive lay. (Leg debuffs are per-duck now.)
-  const nutritionMult = station.type === 'coop' ? (state.nutrition?.eggMult ?? 1) : 1;
+  // same as the flock's passive lay. (Leg debuffs are per-duck now.) A WINTER
+  // coop's burst is throttled by the winter pool instead — 0 until Step 2 wires
+  // the winter metrics (no assigned flock ⇒ no eggs; XP still granted, like a mill).
+  const nutritionMult =
+    station.type === 'coop'
+      ? (state.nutrition?.eggMult ?? 1)
+      : station.type === 'winterCoop'
+        ? 0
+        : 1;
   const tendPower = tendPowerMult(state); // rack-boosted burst size
 
   for (let i = 0; i < BALANCE.TEND_BURST_MULT; i++) {
