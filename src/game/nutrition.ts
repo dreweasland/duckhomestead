@@ -389,16 +389,27 @@ export function runWinterNutrition(
   const support = winterSupportFactor(state);
 
   // Premium lay — genome-scaled per hen (lay × HARDINESS), into winter coops.
+  // Mirrors the home per-duck chain: a lingering leg debuff still halves her lay
+  // (wounded/recovering hens can't be assigned at all), and the rack's flock-wide
+  // eggOutput modules apply — a wintering hen is still your flock.
   const winterCoops = state.stations.filter((s) => s.type === 'winterCoop');
   let flockMult = 0;
   for (const d of state.ducks) {
     if (d.stage === 'adult' && d.sex === 'hen' && d.site === 'winter') {
-      flockMult += layMult(d.genome) * hardinessMult(d.genome);
+      const debuff = d.debuffed ? N.DEBUFF_COOP_OUTPUT_MULT : 1;
+      flockMult += layMult(d.genome) * hardinessMult(d.genome) * debuff;
     }
   }
   const basePerHen = BALANCE.COOP.eggPerCycle / coopCycle;
   const eggRate =
-    flockMult * basePerHen * eggMult * warmth * support * W.PREMIUM_EGG_MULT * eggValueBoostMult(state);
+    flockMult *
+    basePerHen *
+    eggMult *
+    warmth *
+    support *
+    W.PREMIUM_EGG_MULT *
+    eggOutputMult(state) *
+    eggValueBoostMult(state);
   const eggsThisStep = eggRate * step;
   if (eggsThisStep > 0 && winterCoops.length > 0) {
     const share = eggsThisStep / winterCoops.length;

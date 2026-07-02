@@ -236,7 +236,7 @@ export function NutritionPanel({
   onClose: () => void;
 }) {
   useEscapeKey(onClose);
-  const [tab, setTab] = useState<'layers' | 'ducklings' | 'drakes'>('layers');
+  const [tab, setTab] = useState<'layers' | 'ducklings' | 'drakes' | 'winter'>('layers');
   const n = state.nutrition;
   const coops = state.stations.filter((s) => s.type === 'coop');
   const debuffed = state.ducks.filter((d) => d.debuffed).length;
@@ -244,6 +244,8 @@ export function NutritionPanel({
   const eggPct = Math.round((n?.eggMult ?? 1) * 100);
   const dn = state.ducklingNutrition;
   const drn = state.drakeNutrition;
+  const wn = state.winter;
+  const winterOpen = zoneUnlocked(state, 'winterstead');
   const adults = state.ducks.filter((d) => d.stage === 'adult').length;
 
   return (
@@ -257,7 +259,7 @@ export function NutritionPanel({
         </div>
 
         <div className="mb-3 flex gap-1 border-b border-[#3a2e22]">
-          {(['layers', 'ducklings', 'drakes'] as const).map((id) => (
+          {(winterOpen ? (['layers', 'ducklings', 'drakes', 'winter'] as const) : (['layers', 'ducklings', 'drakes'] as const)).map((id) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -356,7 +358,7 @@ export function NutritionPanel({
               </p>
             </>
           )
-        ) : !drn ? (
+        ) : tab !== 'drakes' ? null : !drn ? ( // 'winter' (6d) has its own block below — drakes is no longer the fallback
           <div className="py-6 text-center text-sm text-[#9a8a6a]">
             {breedingEstablished(state)
               ? 'No adult drakes to feed yet.'
@@ -393,6 +395,63 @@ export function NutritionPanel({
             </p>
           </>
         )}
+
+        {/* ── Winterstead (Phase 6d): the 4th pool — eats LAST, lays at a premium ── */}
+        {tab === 'winter' &&
+          (!wn ? (
+            <div className="py-6 text-center text-sm text-[#9a8a6a]">
+              No hens are wintering over yet — assign adult hens from the Flock panel (winter coops
+              set the capacity). Hardy (H-gene) hens earn the most out there.
+            </div>
+          ) : (
+            <>
+              <div className="mb-4 grid grid-cols-3 gap-2 text-xs">
+                <div className="rounded-md bg-[#1f1812] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-[#7a6a4a]">Winter lay</div>
+                  <div className="text-lg font-bold" style={{ color: barColor(wn.eggMult) }}>
+                    {Math.round(wn.eggMult * 100)}%
+                  </div>
+                  <div className="text-[10px] text-[#9a8a6a]">
+                    {wn.henCount} hen{wn.henCount > 1 ? 's' : ''} · ×{BALANCE.WINTER.PREMIUM_EGG_MULT} premium
+                  </div>
+                </div>
+                <div className="rounded-md bg-[#1f1812] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-[#7a6a4a]">Warmth</div>
+                  <div className="text-lg font-bold" style={{ color: barColor(wn.warmth) }}>
+                    {Math.round(wn.warmth * 100)}%
+                  </div>
+                  <div className="text-[10px] text-[#9a8a6a]">heaters warm nearby coops</div>
+                </div>
+                <div className="rounded-md bg-[#1f1812] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-[#7a6a4a]">Water</div>
+                  <div className="text-lg font-bold" style={{ color: barColor(wn.support) }}>
+                    {Math.round(wn.support * 100)}%
+                  </div>
+                  <div className="text-[10px] text-[#9a8a6a]">heated waterers</div>
+                </div>
+              </div>
+
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
+                Cold-weather balance (energy-hungry)
+              </div>
+              <AxisBars satisfaction={wn.satisfaction} axes={AXES} />
+
+              <RationEditor
+                state={state}
+                title="Winter ration — units per winter hen per cycle"
+                ration={state.winterRation}
+                suggested={BALANCE.WINTER.DEFAULT_RATION}
+                onSet={(i, v) => engine.setWinterRation(i, v)}
+              />
+              <p className="mt-3 text-[10px] text-[#7a6a4a]">
+                Winter hens draw from the SAME stores as everyone else and eat LAST — a shortage
+                throttles the winter site before your home flock, down to{' '}
+                {Math.round(BALANCE.WINTER.PENALTY_FLOOR * 100)}%. Cold burns calories: lean on
+                sunflower seeds and fodder sprouts from the winter lines. Hardy hens (H genes) lay up
+                to +{Math.round(6 * BALANCE.WINTER.HARDINESS_PER_H * 100)}% out here.
+              </p>
+            </>
+          ))}
       </div>
     </div>
   );

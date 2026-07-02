@@ -3,7 +3,8 @@ import { playCollect, playRemove, playUpgrade } from '../audio/sfx';
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import { millLoad, outputPerCycle, producerMaxed, stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
-import { coopCapacity, type GameState, type Resource, type Station } from '../game/state';
+import { coopCapacity, winterCapacity, winterHens, type GameState, type Resource, type Station } from '../game/state';
+import { coopWarmth } from '../game/winter';
 import {
   CloseIcon,
   CollectIcon,
@@ -97,6 +98,18 @@ export function StationBar({
   } else if (station.type === 'mill') {
     statusText = 'Blending ration';
     statusColor = '#c9b88f';
+  } else if (station.type === 'winterCoop') {
+    // Phase 6d: warm/cold is THE layout read — make it legible right here.
+    const warm = coopWarmth(state, station) >= 1;
+    const layPct = Math.round((state.winter?.eggMult ?? 0) * 100);
+    statusText = warm ? `Warm · laying ${layPct}% ×${BALANCE.WINTER.PREMIUM_EGG_MULT}` : 'COLD — no heater in range';
+    statusColor = warm ? '#8fe388' : '#8fc8e8';
+  } else if (station.type === 'heater') {
+    statusText = 'Radiating warmth';
+    statusColor = '#e8a35a';
+  } else if (station.type === 'heatedWaterer') {
+    statusText = `Waters ${BALANCE.WINTER.STATIONS.heatedWaterer.supports} winter ducks`;
+    statusColor = '#8fc8e8';
   } else if (status.producing) {
     statusText = 'Producing';
   } else {
@@ -108,11 +121,13 @@ export function StationBar({
   // produced via nutrition, not a flat per-cycle number); every other producer
   // shows its true per-cycle yield.
   const isCoop = station.type === 'coop';
+  const isWinterCoop = station.type === 'winterCoop';
   const isMill = station.type === 'mill';
   const thisCoopCap = BALANCE.BREEDING.COOP_CAPACITY * station.level;
   const totalCap = coopCapacity(state);
-  const flock = state.ducks.length;
-  const yields = isCoop || isMill ? [] : outputPerCycle(state, station);
+  // Home housing houses the HOME flock — wintering ducks (6d) occupy winter slots.
+  const flock = state.ducks.filter((d) => d.site !== 'winter').length;
+  const yields = isCoop || isMill || isWinterCoop || def.cycleSeconds <= 0 ? [] : outputPerCycle(state, station);
   // Mill load: the flock's blend demand vs total mill capacity (the "do I need
   // another mill?" read). Colour ramps amber → red as it nears/exceeds 100%.
   const load = isMill ? millLoad(state) : null;
@@ -156,6 +171,13 @@ export function StationBar({
         <span className="flex items-center gap-1 text-[11px] text-[#c9b88f]" title="This coop's housing · whole-flock usage">
           <DuckIcon size={12} /> {thisCoopCap} cap
           <span className="text-[#7a6a4a]">· flock {flock}/{totalCap}</span>
+        </span>
+      ) : isWinterCoop ? (
+        <span className="flex items-center gap-1 text-[11px] text-[#c9b88f]" title="Winter housing — assign hens from the Flock panel">
+          <DuckIcon size={12} /> {BALANCE.WINTER.STATIONS.winterCoop.capacity} cap
+          <span className="text-[#7a6a4a]">
+            · wintering {winterHens(state).length}/{winterCapacity(state)}
+          </span>
         </span>
       ) : isMill && load ? (
         <span

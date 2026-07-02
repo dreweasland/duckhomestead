@@ -51,10 +51,11 @@ export function ZoneUnlockCard({
 }) {
   const zone = zoneDef(zoneId);
   if (!zone?.unlock) return null;
-  const { rankRequired, eggCost } = zone.unlock;
+  const { rankRequired, eggCost, minLegacyTier } = zone.unlock;
+  const tierMet = minLegacyTier == null || state.legacyTier >= minLegacyTier;
   const rankMet = state.rank >= rankRequired;
   const canAfford = state.resources.eggs >= eggCost;
-  const ready = rankMet && canAfford;
+  const ready = tierMet && rankMet && canAfford;
 
   return (
     <div className="w-full max-w-[460px] rounded-lg bg-[#2a2018] p-4 text-center ring-1 ring-[#3a2e22]">
@@ -66,10 +67,18 @@ export function ZoneUnlockCard({
           ? 'The Pond: arrange springs, bathing pools, plant beds and a deep zone so a thoughtful layout gives your flock far more water — deepening flock condition and buying more time to treat wounds.'
           : zone.waterworks
             ? 'Waterworks: a growing flock fouls the pond faster. Route intake → fountains → outflow to keep it circulating, or its provision coasts toward a floor.'
-            : 'New buildable space for more coops and stations.'}
+            : zone.winter
+              ? 'Winterstead: a harsh second homestead where HARDY ducks earn a premium. Grow sunflower seeds and fodder, keep assigned hens warm with heaters, and feed a cold, energy-hungry ration from the same shared stores.'
+              : 'New buildable space for more coops and stations.'}
       </p>
 
       <div className="mt-3 flex items-center justify-center gap-4 text-xs">
+        {minLegacyTier != null && (
+          <span className={tierMet ? 'text-[#8fe388]' : 'text-[#e8835a]'}>
+            Legacy Tier {minLegacyTier}
+            <span className="text-[#7a6a4a]"> (you’re T{state.legacyTier})</span>
+          </span>
+        )}
         <span className={rankMet ? 'text-[#8fe388]' : 'text-[#e8835a]'}>
           Rank {rankRequired}
           <span className="text-[#7a6a4a]"> (you’re {state.rank})</span>
@@ -92,9 +101,11 @@ export function ZoneUnlockCard({
       >
         {ready
           ? `Unlock ${zone.name}`
-          : !rankMet
-            ? `Reach Rank ${rankRequired} first`
-            : `Need ${eggCost.toLocaleString()} eggs`}
+          : !tierMet
+            ? `Raise your Legacy to Tier ${minLegacyTier} first`
+            : !rankMet
+              ? `Reach Rank ${rankRequired} first`
+              : `Need ${eggCost.toLocaleString()} eggs`}
       </button>
     </div>
   );

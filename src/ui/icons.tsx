@@ -78,6 +78,21 @@ export const SunflowerIcon = (p: PixProps) => (
   />
 );
 
+/** Phase 6d: snowflake — the Winterstead assign/recall glyph. */
+export const SnowflakeIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ c: '#9fd4e8', w: '#e8f6fc' }}
+    rows={[
+      'c.w.c',
+      '.ccc.',
+      'wcwcw',
+      '.ccc.',
+      'c.w.c',
+    ]}
+  />
+);
+
 /** Phase 6d: fodder sprouts — fresh green shoots in a tray. */
 export const SproutIcon = (p: PixProps) => (
   <Pix

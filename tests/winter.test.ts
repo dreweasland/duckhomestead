@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { BALANCE, EXCLUSIVE_STATIONS, ZONE_DEFS } from '../src/config/balance';
 import {
   assignToWinter,
+  createPair,
   placeStation,
   recallFromWinter,
   removeStation,
@@ -199,6 +200,15 @@ describe('assignment: adults-only, hens-only, capacity-gated, always recallable'
     expect(assignToWinter(s, 'h1').ok).toBe(false);
   });
 
+  it('a wintering hen can’t be paired (breeding is home-only — the assign mirror)', () => {
+    const s = winterSite(1);
+    s.ducks = [duck('dr', FLAT_GENOME, { sex: 'drake' }), duck('he')];
+    assignToWinter(s, 'he');
+    expect(createPair(s, 'dr', 'he').ok).toBe(false);
+    recallFromWinter(s, 'he');
+    expect(createPair(s, 'dr', 'he').ok).toBe(true);
+  });
+
   it('demolishing a winter coop auto-recalls the stranded excess (never a loss)', () => {
     const s = winterSite(2); // capacity 8
     s.ducks = Array.from({ length: 8 }, (_, i) => duck(`h${i}`));
@@ -237,6 +247,27 @@ describe('pool exclusivity (the correctness heart): one duck, exactly one pool',
     expect(oneWinter.nutrition!.eggRate).toBeLessThan(allHome.nutrition!.eggRate);
     expect(oneWinter.winter!.eggRate).toBeGreaterThan(0);
     expect(allHome.winter).toBeUndefined(); // no assigned flock ⇒ no winter pool
+  });
+
+  it('wintering hens free HOME housing: a full home coop can still hatch', () => {
+    const s = winterSite(1);
+    // One home coop (capacity 4 at level 1) — fill it exactly, then winter one hen.
+    const homeCap = 4;
+    s.ducks = [
+      duck('dr', FLAT_GENOME, { sex: 'drake' }),
+      duck('he'),
+      duck('h3'),
+      duck('h4'),
+    ];
+    expect(s.ducks.length).toBe(homeCap);
+    s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [59.9] }];
+    // Home full: the egg waits for a slot.
+    run(s, 1);
+    expect(s.ducks.length).toBe(homeCap);
+    // Winter a hen → a home slot frees → the SAME egg hatches.
+    assignToWinter(s, 'h3');
+    run(s, 1);
+    expect(s.ducks.length).toBe(homeCap + 1);
   });
 
   it('she is ELSEWHERE for every home system: water demand + flock ratio', () => {

@@ -135,7 +135,8 @@ export function outputPerCycle(
 export function resourceFlow(state: GameState, resource: Resource): { in: number; out: number } {
   let inflow = 0;
   if (resource === 'eggs') {
-    inflow = state.nutrition?.eggRate ?? 0;
+    // Home lay + (6d) the premium winter lay — one shared egg pool.
+    inflow = (state.nutrition?.eggRate ?? 0) + (state.winter?.eggRate ?? 0);
   } else {
     // Hoist the loop-invariant throughput multipliers (each O(rack)) — they were
     // recomputed per station (and again inside outputPerCycle).
@@ -166,6 +167,9 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
       const drakes = adultDrakes(state).length;
       outflow += ((state.drakeRation[ing] ?? 0) * drakes) / coopCycle;
     }
+    // Phase 6d: wintering hens draw the winter ration from the same stores.
+    const wintering = state.winter?.henCount ?? 0;
+    if (wintering > 0) outflow += ((state.winterRation[ing] ?? 0) * wintering) / coopCycle;
   }
 
   return { in: inflow, out: outflow };
@@ -572,6 +576,9 @@ export function createPair(state: GameState, drakeId: string, henId: string): Ac
   const hen = state.ducks.find((d) => d.id === henId);
   if (!drake || drake.sex !== 'drake' || drake.stage !== 'adult') return fail('Need an adult drake');
   if (!hen || hen.sex !== 'hen' || hen.stage !== 'adult') return fail('Need an adult hen');
+  // Phase 6d: breeding happens at HOME — a wintering hen must be recalled first
+  // (the mirror of assignToWinter rejecting paired hens).
+  if (drake.site === 'winter' || hen.site === 'winter') return fail('Wintering birds can’t pair — recall first');
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
   if (paired(drakeId) || paired(henId)) return fail('A bird is already paired');
   state.breedingPairs.push({
