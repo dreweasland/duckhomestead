@@ -1,9 +1,62 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { GUIDE_DEFS, guideStorageKey } from '../src/config/guides';
+import { targetForTier } from '../src/game/prestige';
 import { tick } from '../src/game/tick';
-import { zeroRation, type Duck, type GameState } from '../src/game/state';
+import {
+  COLORS,
+  zeroRation,
+  type Duck,
+  type GameState,
+  type Module,
+  type NutritionState,
+} from '../src/game/state';
 import { build, run } from './helpers';
+
+const P = BALANCE.PRESTIGE;
+
+/** A full, self-consistent-enough NutritionState stub — the rattled predicate
+ *  only reads `.stressMult`, but the field is typed, so every field needs a
+ *  plausible value. */
+function stubNutrition(overrides: Partial<NutritionState> = {}): NutritionState {
+  const axes = { energy: 1, protein: 1, niacin: 1, calcium: 1 };
+  return {
+    satisfaction: { ...axes },
+    supply: { ...axes },
+    requirement: { ...axes },
+    eggMultRaw: 1,
+    eggMult: 1,
+    stressMult: 1,
+    feedScale: 1,
+    hasMill: true,
+    millCapacity: 10,
+    feedDemand: 5,
+    eggRate: 1,
+    ...overrides,
+  };
+}
+
+/** Force a champion flock exactly meeting the CURRENT tier's goal — mirrors
+ *  engine.test.ts's makeChampion (every color dexed + SIZE_BASE truebred hens
+ *  matching targetForTier(legacyTier), so meanQuality comfortably clears the
+ *  quality gate). */
+function makeChampion(s: GameState): void {
+  s.dexSeen = [...COLORS];
+  const target = targetForTier(s.legacyTier);
+  s.ducks = Array.from({ length: P.SIZE_BASE }, (_, i): Duck => ({
+    id: `champ${i + 1}`,
+    genotype: ['Bl', 'bl'] as ['Bl', 'bl'],
+    genome: [...target],
+    genomeKnown: true,
+    sex: 'hen',
+    stage: 'adult',
+    ageTicks: 5,
+  }));
+}
+
+function makeModule(): Module {
+  return { id: 'm1', stat: 'eggOutput', rarity: 'common', magnitude: 0.1 };
+}
 
 const defOf = (id: string) => {
   const def = GUIDE_DEFS.find((d) => d.id === id);
@@ -164,6 +217,314 @@ describe('guide: defenses-down (migrated)', () => {
     const s = activeState();
     s.predators.owl.windowRemaining = 0;
     s.predators.owl.timeToNextWindow = BALANCE.PREDATORS.OWL.windowEverySec;
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: housing-full', () => {
+  const when = defOf('housing-full').when;
+
+  it('fires when the flock has reached coop capacity', () => {
+    const s = build({ coop: 1 }); // COOP_CAPACITY(4) × level 1 = 4 slots
+    s.ducks = []; // placing the first coop auto-seeds a flock; start from a known count
+    for (let i = 0; i < 4; i++) s.ducks.push(makeDuck('hen'));
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire below capacity', () => {
+    const s = build({ coop: 1 });
+    s.ducks = [];
+    s.ducks.push(makeDuck('hen'));
+    expect(when(s)).toBe(false);
+  });
+
+  it('does NOT fire with zero ducks and zero coops (0 >= 0 is not "full")', () => {
+    const s = build({});
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: duckling-ration', () => {
+  const when = defOf('duckling-ration').when;
+
+  it('fires when a duckling exists and the duckling ration is unset', () => {
+    const s = build({});
+    s.ducklingRation = zeroRation();
+    s.ducks.push(makeDuck('hen', 'duckling'));
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire before any duckling exists', () => {
+    const s = build({});
+    s.ducklingRation = zeroRation();
+    s.ducks.push(makeDuck('hen'));
+    expect(when(s)).toBe(false);
+  });
+
+  it('does NOT fire once the duckling ration is set', () => {
+    const s = build({}); // build() seeds DEFAULT_DUCKLING_RATION
+    s.ducks.push(makeDuck('hen', 'duckling'));
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: drake-ration', () => {
+  const when = defOf('drake-ration').when;
+
+  it('fires once breeding is established, a drake exists, and the drake ration is unset', () => {
+    const s = build({});
+    s.drakeRation = zeroRation();
+    s.geneReader = true; // breedingEstablished
+    s.ducks.push(makeDuck('drake'));
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire before breeding is established', () => {
+    const s = build({});
+    s.drakeRation = zeroRation();
+    s.ducks.push(makeDuck('drake'));
+    expect(when(s)).toBe(false);
+  });
+
+  it('does NOT fire without an adult drake', () => {
+    const s = build({});
+    s.drakeRation = zeroRation();
+    s.geneReader = true;
+    expect(when(s)).toBe(false);
+  });
+
+  it('does NOT fire once the drake ration is set', () => {
+    const s = build({}); // build() seeds DEFAULT_DRAKE_RATION
+    s.geneReader = true;
+    s.ducks.push(makeDuck('drake'));
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: gene-reader', () => {
+  const when = defOf('gene-reader').when;
+
+  it('fires once a pair exists, the reader is unbuilt, and eggs cover the cost', () => {
+    const s = build({});
+    const drake = makeDuck('drake');
+    const hen = makeDuck('hen');
+    s.ducks.push(drake, hen);
+    s.breedingPairs.push({ id: 'p1', drakeId: drake.id, henId: hen.id, clutchProgress: 0, incubating: [] });
+    expect(s.resources.eggs).toBeGreaterThanOrEqual(BALANCE.GENOME.READER_COST_EGGS); // build() stocks 1e6
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire without a pair', () => {
+    const s = build({});
+    expect(when(s)).toBe(false);
+  });
+
+  it('does NOT fire once the reader is built', () => {
+    const s = build({});
+    const drake = makeDuck('drake');
+    const hen = makeDuck('hen');
+    s.ducks.push(drake, hen);
+    s.breedingPairs.push({ id: 'p1', drakeId: drake.id, henId: hen.id, clutchProgress: 0, incubating: [] });
+    s.geneReader = true;
+    expect(when(s)).toBe(false);
+  });
+
+  it('does NOT fire short of the egg cost', () => {
+    const s = build({});
+    const drake = makeDuck('drake');
+    const hen = makeDuck('hen');
+    s.ducks.push(drake, hen);
+    s.breedingPairs.push({ id: 'p1', drakeId: drake.id, henId: hen.id, clutchProgress: 0, incubating: [] });
+    s.resources.eggs = BALANCE.GENOME.READER_COST_EGGS - 1;
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: clutch-economy', () => {
+  const when = defOf('clutch-economy').when;
+
+  it('fires the first time a pair exists', () => {
+    const s = build({});
+    const drake = makeDuck('drake');
+    const hen = makeDuck('hen');
+    s.ducks.push(drake, hen);
+    s.breedingPairs.push({ id: 'p1', drakeId: drake.id, henId: hen.id, clutchProgress: 0, incubating: [] });
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire before any pair exists', () => {
+    const s = build({});
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: modules', () => {
+  const when = defOf('modules').when;
+
+  it('fires once a module lands in inventory', () => {
+    const s = build({});
+    s.inventory.push(makeModule());
+    expect(when(s)).toBe(true);
+  });
+
+  it('fires once a module lands in the rack', () => {
+    const s = build({});
+    s.rack.push(makeModule());
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire with no modules anywhere', () => {
+    const s = build({});
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: wound-care', () => {
+  const when = defOf('wound-care').when;
+
+  it('fires once a duck is wounded', () => {
+    const s = build({});
+    const duck = makeDuck('hen');
+    duck.wounded = true;
+    s.ducks.push(duck);
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire with no wounded ducks', () => {
+    const s = build({});
+    s.ducks.push(makeDuck('hen'));
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: rattled', () => {
+  const when = defOf('rattled').when;
+
+  it('fires the first time stressMult dips below 0.995', () => {
+    const s = build({});
+    s.nutrition = stubNutrition({ stressMult: 0.9 });
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire at full stressMult (calm/fed)', () => {
+    const s = build({});
+    s.nutrition = stubNutrition({ stressMult: 1 });
+    expect(when(s)).toBe(false);
+  });
+
+  it('does NOT fire before nutrition has ever been computed', () => {
+    const s = build({});
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: overcrowding', () => {
+  const when = defOf('overcrowding').when;
+
+  function flock(hens: number, drakes: number, established = true): GameState {
+    const s = build({});
+    s.geneReader = established; // breedingEstablished
+    for (let i = 0; i < hens; i++) s.ducks.push(makeDuck('hen'));
+    for (let i = 0; i < drakes; i++) s.ducks.push(makeDuck('drake'));
+    return s;
+  }
+
+  it('fires once the flock is over-drake past the size gate', () => {
+    const s = flock(2, 9); // 11 ducks ≥ OVERCROWD_MIN_FLOCK(10); way over 1 drake per 4 hens
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire below the flock-size gate, even badly over-drake', () => {
+    const s = flock(1, 4); // 5 ducks — exempt, a starter pair is never punished
+    expect(when(s)).toBe(false);
+  });
+
+  it('does NOT fire at a healthy ratio', () => {
+    const s = flock(8, 2); // 10 ducks, ratio fine (≤1 drake per 4 hens)
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: champion-goal', () => {
+  const when = defOf('champion-goal').when;
+
+  it('fires at rank 14+ regardless of readiness', () => {
+    const s = build({});
+    s.rank = 14;
+    expect(when(s)).toBe(true);
+  });
+
+  it('fires below rank 14 once readiness reaches 25%', () => {
+    const s = build({});
+    s.rank = 1;
+    makeChampion(s); // full champion flock → readiness 1.0 ≥ 0.25
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire on a fresh flock well below rank 14', () => {
+    const s = build({});
+    s.rank = 1;
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: prestige-ready', () => {
+  const when = defOf('prestige-ready').when;
+
+  it('fires once canPrestige is true', () => {
+    const s = build({});
+    makeChampion(s);
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire on a fresh flock', () => {
+    const s = build({});
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: grange', () => {
+  const when = defOf('grange').when;
+
+  it('fires once legacyTier reaches the Grange unlock tier', () => {
+    const s = build({});
+    s.legacyTier = BALANCE.CONTRACTS.UNLOCK_TIER;
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire pre-prestige (tier 0)', () => {
+    const s = build({});
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: winterstead', () => {
+  const when = defOf('winterstead').when;
+
+  it('fires once Winterstead unlocks', () => {
+    const s = build({});
+    s.zones.winterstead.unlocked = true;
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire while still locked', () => {
+    const s = build({});
+    expect(when(s)).toBe(false);
+  });
+});
+
+describe('guide: backup', () => {
+  const when = defOf('backup').when;
+
+  it('fires at rank 10+', () => {
+    const s = build({});
+    s.rank = 10;
+    expect(when(s)).toBe(true);
+  });
+
+  it('does NOT fire below rank 10', () => {
+    const s = build({});
+    s.rank = 9;
     expect(when(s)).toBe(false);
   });
 });

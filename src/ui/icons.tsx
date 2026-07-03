@@ -541,6 +541,39 @@ export const PrimeIcon = (p: PixProps) => (
   />
 );
 
+/** The gene-reader — a watching eye (Phase 7 Almanac: the gene-reader guide). */
+export const ReaderIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ w: '#e8d9b8', p: '#8a6fc0', k: '#2a2018' }}
+    rows={[
+      '..www..',
+      '.wwwww.',
+      'wwpppww',
+      'wwpkpww',
+      'wwpppww',
+      '.wwwww.',
+      '..www..',
+    ]}
+  />
+);
+
+/** Backup / restore — a floppy disk (Phase 7 Almanac: the backup-nudge guide). */
+export const BackupIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ d: '#8a6a42', k: '#4a3a22', w: '#e8d9b8' }}
+    rows={[
+      'dddddd',
+      'd.kk.d',
+      'dwwwwd',
+      'dw..wd',
+      'dwwwwd',
+      'dddddd',
+    ]}
+  />
+);
+
 /** Legacy / prestige — a champion's trophy cup. */
 export const LegacyIcon = (p: PixProps) => (
   <Pix

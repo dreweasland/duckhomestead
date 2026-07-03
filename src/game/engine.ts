@@ -360,16 +360,19 @@ export class GameEngine {
       }
       if (e.kind === 'introduced') {
         const raccoon = e.predatorId === 'raccoon';
+        const siege = e.predatorId === 'greatHorned';
         this.emitDing({
           newRank: this.state.rank,
           levelsGained: 0,
           milestones: [
             {
               rank: this.state.rank,
-              title: raccoon ? 'The Raccoon' : 'Predators',
+              title: raccoon ? 'The Raccoon' : siege ? 'The Great Horned' : 'Predators',
               description: raccoon
                 ? 'A raccoon now raids from the ground in its own telegraphed windows. Nets won’t stop it — build HARDWARE CLOTH in The Watch. Its threat is separate from the owl’s.'
-                : 'An owl now hunts the homestead in telegraphed windows. Build deterrents, secure your prize breeders, and admit any wounded ducks to an infirmary before they turn fatal — open The Watch.',
+                : siege
+                  ? 'A Great Horned has begun sieging the homestead — a rare, long-telegraphed assault, tougher and faster than the regular owl. Scare off every committed dive without a single landed hit and the flawless defense pays a guaranteed jackpot; string flawless sieges together for a shot at Legendary loot.'
+                  : 'An owl now hunts the homestead in telegraphed windows. Build deterrents, secure your prize breeders, and admit any wounded ducks to an infirmary before they turn fatal — open The Watch.',
               kind: 'predator',
             },
           ],
