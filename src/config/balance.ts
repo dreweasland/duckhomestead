@@ -642,6 +642,20 @@ export const BALANCE = {
     /** Breeding loop timers (seconds). */
     CLUTCH_INTERVAL_S: 120, // a pair lays a fertilized clutch this often
     CLUTCH_SIZE: 4, // fertilized eggs per clutch
+    /**
+     * Eggs drawn from STORAGE per fertilized egg when a clutch is laid — the
+     * locked 4a law ("eggs are dual-purpose — currency or future duck; every
+     * clutch is a spend-vs-grow choice"), unimplemented until the 2026-07-02
+     * playtest found the mid-game egg economy dead: income compounds with the
+     * flock while every sink was one-shot/capped. The clutch IS eggs, so the
+     * sink scales with exactly how hard the breeding program runs — biggest in
+     * the mid-game window where the inflation lives (~25-35% of a small
+     * program's income), background noise at god-clone scale. Unaffordable →
+     * the clutch WAITS at the threshold (throttle, like an input-starved
+     * station; fires the instant it's funded). Early-game feel knob: if the
+     * cold-start first-clutch pinch (20 eggs) reads wrong, drop toward 2-3.
+     */
+    FERTILIZED_EGG_COST: 5,
     INCUBATE_S: 60, // fertilized egg -> duckling
     MATURE_DUCKLING_S: 180, // duckling -> juvenile (gated by duckling ration)
     MATURE_JUVENILE_S: 180, // juvenile -> adult

@@ -96,7 +96,13 @@ export function runBreeding(
     pair.clutchProgress += step * breedRate;
     // Cap check leaves room for the WHOLE clutch — `< CLUTCH_SIZE * 2` allowed a
     // full clutch to push at one-slot-free, overshooting the bound to 11 of 8.
+    // The clutch IS eggs (the 4a dual-purpose law): laying one draws real eggs
+    // from storage; unaffordable → it WAITS at the threshold and fires the
+    // instant it's funded (throttle, like an input-starved station).
+    const clutchCost = B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST;
     while (pair.clutchProgress >= B.CLUTCH_INTERVAL_S && pair.incubating.length + B.CLUTCH_SIZE <= B.CLUTCH_SIZE * 2) {
+      if (state.resources.eggs < clutchCost) break; // waits — progress clamps below
+      state.resources.eggs -= clutchCost;
       pair.clutchProgress -= B.CLUTCH_INTERVAL_S;
       for (let i = 0; i < B.CLUTCH_SIZE; i++) pair.incubating.push(0);
     }
