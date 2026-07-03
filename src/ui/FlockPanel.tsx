@@ -7,7 +7,9 @@ import { targetForTier } from '../game/prestige';
 import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
-import { CloseIcon, HealIcon, PencilIcon, ShieldIcon, SnowflakeIcon, WoundIcon } from './icons';
+import { CloseIcon, DuckIcon, HealIcon, PencilIcon, ShieldIcon, SnowflakeIcon, WoundIcon } from './icons';
+
+const DuckRowIcon = () => <DuckIcon size={11} />;
 import { useEscapeKey } from './useEscapeKey';
 
 export const COLOR_META: Record<Color, { label: string; swatch: string }> = {
@@ -443,12 +445,12 @@ function Breeding({
               >
                 <span className="w-2 shrink-0 text-[#7a6a4a]">{isOpen ? '▾' : '▸'}</span>
                 <ColorSwatch color={phenotype(dr.genotype)} size={11} />
-                {dr.name && <span className="max-w-16 truncate font-bold text-[#f5ecd8]">{dr.name}</span>}
+                {dr.name && <span className="max-w-24 truncate font-bold text-[#f5ecd8]">{dr.name}</span>}
                 {!dr.genomeKnown && <PhenoBands genome={dr.genome} width={16} />}
                 <GenomeTiles duck={dr} target={target} size={12} />
                 <span className="text-[#5a4d3a]">·</span>
                 <ColorSwatch color={phenotype(he.genotype)} size={11} />
-                {he.name && <span className="max-w-16 truncate font-bold text-[#f5ecd8]">{he.name}</span>}
+                {he.name && <span className="max-w-24 truncate font-bold text-[#f5ecd8]">{he.name}</span>}
                 {!he.genomeKnown && <PhenoBands genome={he.genome} width={16} />}
                 <GenomeTiles duck={he} target={target} size={12} />
               </button>
@@ -578,6 +580,8 @@ export function FlockPanel({
 }) {
   useEscapeKey(onClose);
   const [armedCull, setArmedCull] = useState<string | null>(null);
+  // Role sections in the duck list: which are collapsed (The Flock at scale).
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   // Opt-in naming: which duck's name is being edited + the draft text.
   const [namingId, setNamingId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
@@ -891,8 +895,13 @@ export function FlockPanel({
                   : 'No ducks match these filters.'}
               </div>
             ) : (
-              <div className="flex flex-col gap-1">
-                {shown.map((d) => {
+              <div className="flex flex-col gap-2.5">
+                {(() => {
+                  // The flock's structure at scale is ROLE, not color: the dozen
+                  // you care about vs the masses. One duck, one section — most
+                  // specific wins. Sections respect the active filters; empty
+                  // sections vanish; the header hides when only The Flock exists.
+                  const renderDuck = (d: Duck) => {
                   const canSecure = d.secured || slotsUsed < slotsTotal;
                   const isPaired = pairedIds.has(d.id);
                   const picked = d.id === mateDrakeId || d.id === mateHenId;
@@ -901,7 +910,7 @@ export function FlockPanel({
                   return (
                     <div
                       key={d.id}
-                      className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] ${
+                      className={`flex flex-wrap items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] ${
                         picked
                           ? 'bg-[#241d33] ring-1 ring-[#6b4f9e]'
                           : d.wounded
@@ -936,7 +945,7 @@ export function FlockPanel({
                             setNamingId(d.id);
                             setNameDraft(d.name ?? '');
                           }}
-                          className="max-w-20 truncate font-bold text-[#f5ecd8] hover:text-[#ffe9a8]"
+                          className="max-w-28 shrink-0 truncate font-bold text-[#f5ecd8] hover:text-[#ffe9a8]"
                           title={`${d.name} — click to rename`}
                         >
                           {d.name}
@@ -954,9 +963,9 @@ export function FlockPanel({
                         </button>
                       ) : null}
                       <span className="w-9 text-[#c9b88f]">{d.sex}</span>
-                      <span className="w-16 text-[#9a8a6a]">
-                        {STAGE_LABEL[d.stage]}
-                        {d.stage !== 'adult' && (
+                      {d.stage !== 'adult' && (
+                        <span className="w-16 shrink-0 text-[#9a8a6a]">
+                          {STAGE_LABEL[d.stage]}
                           <span className="text-[#5a4d3a]">
                             {' '}
                             {Math.round(
@@ -968,8 +977,8 @@ export function FlockPanel({
                             )}
                             %
                           </span>
-                        )}
-                      </span>
+                        </span>
+                      )}
                       {d.wounded && (
                         <span
                           className="inline-flex items-center"
@@ -1100,7 +1109,42 @@ export function FlockPanel({
                       </button>
                     </div>
                   );
-                })}
+                  };
+
+                  const sections = [
+                    { id: 'secured', label: 'Secured', icon: <ShieldIcon size={11} />, ducks: shown.filter((d) => d.secured) },
+                    { id: 'winter', label: 'Wintering', icon: <SnowflakeIcon size={11} />, ducks: shown.filter((d) => !d.secured && d.site === 'winter') },
+                    { id: 'named', label: 'Named', icon: <PencilIcon size={10} />, ducks: shown.filter((d) => !d.secured && d.site !== 'winter' && d.name) },
+                    { id: 'rest', label: 'The Flock', icon: <DuckRowIcon />, ducks: shown.filter((d) => !d.secured && d.site !== 'winter' && !d.name) },
+                  ].filter((sec) => sec.ducks.length > 0);
+                  const soloFlock = sections.length === 1 && sections[0].id === 'rest';
+                  return sections.map((sec) => (
+                    <div key={sec.id}>
+                      {!soloFlock && (
+                        <button
+                          onClick={() =>
+                            setCollapsedSections((prev) => {
+                              const n = new Set(prev);
+                              if (n.has(sec.id)) n.delete(sec.id);
+                              else n.add(sec.id);
+                              return n;
+                            })
+                          }
+                          className="mb-1 flex w-full items-center gap-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a] hover:text-[#9a8a6a]"
+                          title={collapsedSections.has(sec.id) ? 'Expand' : 'Collapse'}
+                        >
+                          <span className="w-2">{collapsedSections.has(sec.id) ? '▸' : '▾'}</span>
+                          {sec.icon} {sec.label}
+                          <span className="font-normal text-[#5a4d3a]">{sec.ducks.length}</span>
+                          <span className="ml-1 h-px flex-1 bg-[#3a2e22]" />
+                        </button>
+                      )}
+                      {!collapsedSections.has(sec.id) && (
+                        <div className="flex flex-col gap-1">{sec.ducks.map(renderDuck)}</div>
+                      )}
+                    </div>
+                  ));
+                })()}
               </div>
             )}
           </>
