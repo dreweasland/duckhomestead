@@ -12,7 +12,7 @@ import {
   type Rarity,
 } from '../game/state';
 import { playCollect, playPlace, playUpgrade } from '../audio/sfx';
-import { CloseIcon, HelpIcon, ModuleIcon } from './icons';
+import { CloseIcon, DustIcon, HelpIcon, ModuleIcon } from './icons';
 import { useEscapeKey } from './useEscapeKey';
 import { ModuleChip, RARITY_COLOR, STAT_HELP, STAT_META, rarityRank } from './lootUi';
 
@@ -113,8 +113,11 @@ export function ModulesPanel({
             </button>
           </h2>
           <div className="flex items-center gap-3">
-            <span className="rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#cdbcff]">
-              {state.dust} dust
+            <span
+              className="inline-flex items-center gap-1 rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#cdbcff]"
+              title="Dust — reroll modules (10) or the Grange board (5). Salvage + contracts feed it."
+            >
+              <DustIcon size={11} /> {state.dust}
             </span>
             <button
               onClick={onClose}
@@ -292,7 +295,10 @@ export function ModulesPanel({
                 className="rounded px-1.5 py-0.5 text-[10px] font-bold capitalize transition hover:brightness-110"
                 style={{ background: `${RARITY_COLOR[rarity]}22`, color: RARITY_COLOR[rarity], border: `1px solid ${RARITY_COLOR[rarity]}66` }}
               >
-                {rarity} ×{count} <span className="opacity-70">+{dust}</span>
+                {rarity} ×{count}{' '}
+                <span className="inline-flex items-center gap-0.5 opacity-70">
+                  +{dust} <DustIcon size={9} />
+                </span>
               </button>
             ))}
           </div>
@@ -391,7 +397,9 @@ export function ModulesPanel({
                         className="rounded bg-[#3a2418] px-1.5 py-0.5 text-[10px] font-bold text-[#e8a35a] hover:bg-[#4a3020]"
                         title={`Salvage for ${salvageDust(m.rarity)} dust`}
                       >
-                        Salvage +{salvageDust(m.rarity)}
+                        <span className="inline-flex items-center gap-1">
+                          Salvage +{salvageDust(m.rarity)} <DustIcon size={10} />
+                        </span>
                       </button>
                     </span>
                   </div>
