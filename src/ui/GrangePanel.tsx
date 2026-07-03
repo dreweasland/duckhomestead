@@ -3,7 +3,7 @@ import type { GameEngine } from '../game/engine';
 import { type Contract, type GameState } from '../game/state';
 import { ColorSwatch, GENE_META } from './FlockPanel';
 import { useEscapeKey } from './useEscapeKey';
-import { CheckIcon, CloseIcon, DustIcon, EggIcon, GrangeIcon, OwlIcon } from './icons';
+import { CheckIcon, CloseIcon, DustIcon, EggIcon, GrangeIcon, LegacyIcon, OwlIcon } from './icons';
 
 const C = BALANCE.CONTRACTS;
 
@@ -135,8 +135,17 @@ export function GrangePanel({
             <GrangeIcon size={20} /> The Grange
           </h2>
           <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1 rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#e2b94f]">
+            <span
+              className="inline-flex items-center gap-1 rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#e2b94f]"
+              title="Dust — reroll modules (10) or this board (5). Contracts + salvage feed it."
+            >
               <DustIcon size={11} /> {state.dust}
+            </span>
+            <span
+              className="inline-flex items-center gap-1 rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#cdbcff]"
+              title="Legacy — contract shards land here (the same currency prestige grants). Spend it on permanent boosts in the Legacy panel."
+            >
+              <LegacyIcon size={11} /> {state.legacyCurrency}
             </span>
             <button
               onClick={onClose}
