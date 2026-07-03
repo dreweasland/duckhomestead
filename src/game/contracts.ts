@@ -263,14 +263,15 @@ export function onPredatorEvent(state: GameState, e: PredatorEvent): void {
  * event drain — see onPredatorEvent's doc comment.)
  */
 export function runContracts(state: GameState, dt: number): void {
+  // Track the run's peak egg rate ABOVE the tier gate: it's the honest base for
+  // delivery quotas AND (all tiers) the clutch egg cost (breeding.ts clutchCost)
+  // — a parked/throttled flock can't talk its way down to the floors. Online-
+  // only like every other contract clock; wiped with the run by prestige.
+  const rate = liveEggRate(state);
+  if (rate > (state.contracts.peakEggRate ?? 0)) state.contracts.peakEggRate = rate;
+
   if (state.legacyTier < C.UNLOCK_TIER) return;
   const cs = state.contracts;
-
-  // Track the run's peak egg rate — the honest base for delivery quotas (a
-  // parked/throttled flock can't talk its way down to MIN_QUOTA). Online-only
-  // like every other contract clock; wiped with the run by prestige.
-  const rate = liveEggRate(state);
-  if (rate > (cs.peakEggRate ?? 0)) cs.peakEggRate = rate;
 
   if (cs.offers.length === 0) refillOffers(state);
 

@@ -1,4 +1,5 @@
 import { BALANCE, EXCLUSIVE_STATIONS, STATION_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
+import { clutchCost } from './breeding';
 import { onEggsLaid } from './contracts';
 import {
   activeStatWeights,
@@ -171,7 +172,7 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
     }
     if (pairs > 0) {
       const breedRate = state.drakeNutrition?.breedRate ?? 1;
-      outflow += (pairs * B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST * breedRate) / B.CLUTCH_INTERVAL_S;
+      outflow += (pairs * clutchCost(state) * breedRate) / B.CLUTCH_INTERVAL_S;
     }
   }
   if ((INGREDIENTS as readonly string[]).includes(resource)) {

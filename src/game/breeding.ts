@@ -8,6 +8,18 @@ import { breedingEstablished, coopCapacity, drainCondition, flockRatio, phenotyp
 const B = BALANCE.BREEDING;
 
 /**
+ * What one clutch draws from storage — priced in seconds of the RUN'S PEAK egg
+ * rate (the delivery-quota base, tracked all-tiers in contracts.ts), so a
+ * clutch costs the same FRACTION of your economy at any scale; MIN floors the
+ * cold start. The single source of truth for the sim, the flow panel, and the
+ * pair card.
+ */
+export function clutchCost(state: GameState): number {
+  const peak = state.contracts.peakEggRate ?? 0;
+  return Math.max(B.CLUTCH_COST_MIN, Math.round(peak * B.CLUTCH_COST_PEAK_SECONDS));
+}
+
+/**
  * Flock RATIO health: an over-drake flock harasses itself into injury. Past the
  * flock-size gate, overcrowding stress accrues (faster the more excess drakes);
  * each onset interval injures a random non-secured, non-wounded adult — reusing
@@ -99,10 +111,10 @@ export function runBreeding(
     // The clutch IS eggs (the 4a dual-purpose law): laying one draws real eggs
     // from storage; unaffordable → it WAITS at the threshold and fires the
     // instant it's funded (throttle, like an input-starved station).
-    const clutchCost = B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST;
+    const cost = clutchCost(state);
     while (pair.clutchProgress >= B.CLUTCH_INTERVAL_S && pair.incubating.length + B.CLUTCH_SIZE <= B.CLUTCH_SIZE * 2) {
-      if (state.resources.eggs < clutchCost) break; // waits — progress clamps below
-      state.resources.eggs -= clutchCost;
+      if (state.resources.eggs < cost) break; // waits — progress clamps below
+      state.resources.eggs -= cost;
       pair.clutchProgress -= B.CLUTCH_INTERVAL_S;
       for (let i = 0; i < B.CLUTCH_SIZE; i++) pair.incubating.push(0);
     }

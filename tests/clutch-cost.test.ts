@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { resourceFlow } from '../src/game/actions';
-import { runBreeding } from '../src/game/breeding';
+import { clutchCost, runBreeding } from '../src/game/breeding';
 import { type Duck, type GameState } from '../src/game/state';
 import { FLAT_GENOME, fullSetup, run, stockAll } from './helpers';
 
@@ -12,7 +12,7 @@ import { FLAT_GENOME, fullSetup, run, stockAll } from './helpers';
  */
 
 const B = BALANCE.BREEDING;
-const COST = B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST;
+const COST = B.CLUTCH_COST_MIN; // pairFarm has no peak yet → the cold-start floor
 
 function pairFarm(eggs: number): GameState {
   const s = stockAll(fullSetup());
@@ -62,10 +62,26 @@ describe('the clutch egg cost (spend-vs-grow, restored)', () => {
     expect(s.ducks.length).toBeGreaterThan(2); // clutch laid, incubated, hatched
   });
 
+  it('scales with the run’s PEAK egg rate — the same fraction of any economy', () => {
+    const s = pairFarm(1_000_000);
+    expect(clutchCost(s)).toBe(B.CLUTCH_COST_MIN); // cold start: the floor
+    s.contracts.peakEggRate = 8; // a mid-game economy (~8 eggs/s at peak)
+    expect(clutchCost(s)).toBe(Math.round(8 * B.CLUTCH_COST_PEAK_SECONDS));
+    s.contracts.peakEggRate = 80; // god-clone scale
+    expect(clutchCost(s)).toBe(Math.round(80 * B.CLUTCH_COST_PEAK_SECONDS));
+    // The invariant that makes it scale-proof: cost/income stays constant.
+    const fracAt = (peak: number) => {
+      s.contracts.peakEggRate = peak;
+      return clutchCost(s) / B.CLUTCH_INTERVAL_S / peak;
+    };
+    expect(fracAt(8)).toBeCloseTo(fracAt(80), 3);
+  });
+
   it('the flow panel reports the clutch drain as a recurring egg outflow', () => {
     const s = pairFarm(1000);
+    s.contracts.peakEggRate = 8;
     const flow = resourceFlow(s, 'eggs');
-    expect(flow.out).toBeCloseTo(COST / B.CLUTCH_INTERVAL_S, 6);
+    expect(flow.out).toBeCloseTo(clutchCost(s) / B.CLUTCH_INTERVAL_S, 6);
     // A wounded hen freezes the pair — the drain must vanish with it.
     s.ducks[1].wounded = true;
     expect(resourceFlow(s, 'eggs').out).toBe(0);

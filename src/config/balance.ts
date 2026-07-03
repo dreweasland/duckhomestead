@@ -643,19 +643,20 @@ export const BALANCE = {
     CLUTCH_INTERVAL_S: 120, // a pair lays a fertilized clutch this often
     CLUTCH_SIZE: 4, // fertilized eggs per clutch
     /**
-     * Eggs drawn from STORAGE per fertilized egg when a clutch is laid — the
-     * locked 4a law ("eggs are dual-purpose — currency or future duck; every
-     * clutch is a spend-vs-grow choice"), unimplemented until the 2026-07-02
-     * playtest found the mid-game egg economy dead: income compounds with the
-     * flock while every sink was one-shot/capped. The clutch IS eggs, so the
-     * sink scales with exactly how hard the breeding program runs — biggest in
-     * the mid-game window where the inflation lives (~25-35% of a small
-     * program's income), background noise at god-clone scale. Unaffordable →
-     * the clutch WAITS at the threshold (throttle, like an input-starved
-     * station; fires the instant it's funded). Early-game feel knob: if the
-     * cold-start first-clutch pinch (20 eggs) reads wrong, drop toward 2-3.
+     * The clutch egg cost — the locked 4a law ("eggs are dual-purpose; every
+     * clutch is a spend-vs-grow choice"), enforced 2026-07-02 after playtest
+     * found the mid-game egg economy dead. A FLAT price couldn't work (income
+     * spans ~100× within a run — 20 eggs was brutal at cold start and
+     * decorative against a 1.7k stockpile), so a clutch is priced in SECONDS
+     * OF THE RUN'S PEAK EGG RATE (same honest base as delivery quotas): each
+     * clutch costs ≈ PEAK_SECONDS/CLUTCH_INTERVAL of your income per running
+     * pair (25s/120s ≈ 21%/pair) at ANY scale — one pair is a budget line,
+     * three pairs is most of your income, and parking the program banks pure
+     * surplus for the prestige push. MIN floors the cold start (peak ≈ 0).
+     * Unaffordable → the clutch WAITS at the threshold and fires when funded.
      */
-    FERTILIZED_EGG_COST: 5,
+    CLUTCH_COST_PEAK_SECONDS: 25,
+    CLUTCH_COST_MIN: 8,
     INCUBATE_S: 60, // fertilized egg -> duckling
     MATURE_DUCKLING_S: 180, // duckling -> juvenile (gated by duckling ration)
     MATURE_JUVENILE_S: 180, // juvenile -> adult

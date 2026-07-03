@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotMatches, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
+import { clutchCost } from '../game/breeding';
 import { targetForTier } from '../game/prestige';
 import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
@@ -464,17 +465,17 @@ function Breeding({
                 paused — {dr.wounded ? 'drake' : 'hen'} wounded, treat to resume
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
               </div>
-            ) : next <= 0 && state.resources.eggs < B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST ? (
+            ) : next <= 0 && state.resources.eggs < clutchCost(state) ? (
               <div
                 className="mt-0.5 text-[10px] font-bold text-[#e8a35a]"
-                title="A clutch IS eggs — laying one draws them from storage. It fires the moment you can afford it."
+                title="A clutch IS eggs — laying one draws them from storage (priced off your run's peak lay rate). It fires the moment you can afford it."
               >
-                clutch ready — needs {B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST} eggs
+                clutch ready — needs {clutchCost(state)} eggs
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
               </div>
             ) : (
               <div className="mt-0.5 text-[10px] text-[#9a8a6a]">
-                clutch {Math.ceil(next)}s · {B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST} eggs
+                clutch {Math.ceil(next)}s · {clutchCost(state)} eggs
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
               </div>
             )}
