@@ -891,6 +891,16 @@ export const BALANCE = {
       { dust: [18, 28], shards: [3, 5] },
       { dust: [35, 50], shards: [6, 9], moduleRarity: 'rare' },
     ] as { dust: [number, number]; shards: [number, number]; moduleRarity?: string }[],
+    /**
+     * Per-TYPE reward multiplier on the notch bands (playtest, 2026-07-02):
+     * the three types have wildly different REAL costs at the same notch —
+     * defense free-rides on scares you'd make anyway, delivery charges ~10 min
+     * of peak production in actual eggs, and hatch charges your breeding
+     * program's direction — so notch-only pricing made defense strictly
+     * optimal. Delivery pays like the treasure it costs; hatch like the
+     * program time it costs; defense stays the "you were playing anyway" tier.
+     */
+    TYPE_REWARD_MULT: { delivery: 2.25, hatch: 1.75, defense: 1 } as Record<string, number>,
     DELIVERY: {
       QUOTA_MINUTES: 10,
       MIN_QUOTA: 300,

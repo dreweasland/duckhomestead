@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { slotMatches } from './genetics';
+import { targetForTier } from './prestige';
 import { grantModule } from './loot';
 import {
   COLORS,
@@ -68,10 +69,13 @@ function pickType(rng: () => number): ContractType {
   return entries[entries.length - 1][0];
 }
 
-function rollReward(notch: number, rng: () => number): ContractReward {
+function rollReward(notch: number, type: ContractType, rng: () => number): ContractReward {
   const band = C.REWARD_BY_NOTCH[notch];
-  const dust = Math.round(band.dust[0] + rng() * (band.dust[1] - band.dust[0]));
-  const shards = Math.round(band.shards[0] + rng() * (band.shards[1] - band.shards[0]));
+  // Priced by notch AND type: the bands are scaled by what the type really
+  // costs the player (see TYPE_REWARD_MULT) so defense-only is never optimal.
+  const mult = C.TYPE_REWARD_MULT[type] ?? 1;
+  const dust = Math.round((band.dust[0] + rng() * (band.dust[1] - band.dust[0])) * mult);
+  const shards = Math.round((band.shards[0] + rng() * (band.shards[1] - band.shards[0])) * mult);
   return band.moduleRarity ? { dust, shards, moduleRarity: band.moduleRarity as Rarity } : { dust, shards };
 }
 
@@ -105,7 +109,7 @@ function generateDelivery(state: GameState, notch: number, id: string, rng: () =
     id,
     type: 'delivery',
     notch,
-    reward: rollReward(notch, rng),
+    reward: rollReward(notch, 'delivery', rng),
     completed: false,
     quota,
     delivered: 0,
@@ -113,19 +117,26 @@ function generateDelivery(state: GameState, notch: number, id: string, rng: () =
   };
 }
 
-/** {L,V,H} only — a hatch spec can never demand a D, so it's always breedable-toward. */
-const HATCH_GENES: Gene[] = ['L', 'V', 'H'];
-
-function generateHatch(notch: number, id: string, rng: () => number): HatchContract {
+/**
+ * A hatch spec is a BOUNTY ON THE TIER'S CHAMPION TARGET (playtest, 2026-07-02):
+ * the required gene at each specified position is the tier target's gene THERE,
+ * so contracts pay for checkpoints of the program you're already running instead
+ * of derailing it toward random genes ("too focused on breeding for a side
+ * quest"). The color roll stays as the optional detour spice. Tier targets are
+ * Dud-free by invariant, so specs remain always breedable-toward — and they
+ * follow the target rotation each tier for free.
+ */
+function generateHatch(state: GameState, notch: number, id: string, rng: () => number): HatchContract {
   const slots = Math.min(C.HATCH.SPEC_MAX_SLOTS, C.HATCH.SLOTS_BY_NOTCH[notch]);
+  const target = targetForTier(state.legacyTier);
   const SLOTS = BALANCE.GENOME.SLOTS;
   const positions = new Set<number>();
   while (positions.size < slots) positions.add(Math.floor(rng() * SLOTS));
   const genePattern: (Gene | null)[] = Array.from({ length: SLOTS }, () => null);
-  for (const p of positions) genePattern[p] = HATCH_GENES[Math.floor(rng() * HATCH_GENES.length)];
+  for (const p of positions) genePattern[p] = target[p];
   const color: Color | undefined =
     rng() < C.HATCH.COLOR_CHANCE ? COLORS[Math.floor(rng() * COLORS.length)] : undefined;
-  return { id, type: 'hatch', notch, reward: rollReward(notch, rng), completed: false, color, genePattern };
+  return { id, type: 'hatch', notch, reward: rollReward(notch, 'hatch', rng), completed: false, color, genePattern };
 }
 
 function generateDefense(notch: number, id: string, rng: () => number): DefenseContract {
@@ -133,7 +144,7 @@ function generateDefense(notch: number, id: string, rng: () => number): DefenseC
     id,
     type: 'defense',
     notch,
-    reward: rollReward(notch, rng),
+    reward: rollReward(notch, 'defense', rng),
     completed: false,
     scareTarget: C.DEFENSE.SCARE_COUNT_BY_NOTCH[notch],
     scareProgress: 0,
@@ -145,7 +156,7 @@ export function generateOffer(state: GameState, rng: () => number = Math.random)
   const notch = pickNotch(rng);
   const type = pickType(rng);
   if (type === 'delivery') return generateDelivery(state, notch, id, rng);
-  if (type === 'hatch') return generateHatch(notch, id, rng);
+  if (type === 'hatch') return generateHatch(state, notch, id, rng);
   return generateDefense(notch, id, rng);
 }
 

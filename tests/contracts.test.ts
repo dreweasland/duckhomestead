@@ -12,6 +12,7 @@ import {
   runContracts,
 } from '../src/game/contracts';
 import { runBreeding } from '../src/game/breeding';
+import { targetForTier } from '../src/game/prestige';
 import { prestigeReset } from '../src/game/prestige';
 import { deserialize, serialize, runOfflineCatchUp } from '../src/game/save';
 import { tick } from '../src/game/tick';
@@ -547,5 +548,37 @@ describe('guardrail: contracts never touch the sim', () => {
     expect(JSON.stringify(BALANCE.BREEDING)).toBe(breedingBefore);
     expect(JSON.stringify(BALANCE.PREDATORS)).toBe(predatorsBefore);
     expect(JSON.stringify(BALANCE.GENOME)).toBe(genomeBefore);
+  });
+});
+
+describe('type-priced rewards + tier-aligned hatch bounties (Grange retune)', () => {
+  it('rewards scale by TYPE on top of the notch band (defense-only is never optimal)', () => {
+    const s = initialState(0);
+    s.legacyTier = C.UNLOCK_TIER;
+    s.contracts.peakEggRate = 5;
+    for (let i = 0; i < 400; i++) {
+      const o = generateOffer(s, Math.random);
+      const band = C.REWARD_BY_NOTCH[o.notch];
+      const mult = C.TYPE_REWARD_MULT[o.type];
+      expect(o.reward.dust).toBeGreaterThanOrEqual(Math.round(band.dust[0] * mult));
+      expect(o.reward.dust).toBeLessThanOrEqual(Math.round(band.dust[1] * mult));
+      expect(o.reward.shards).toBeGreaterThanOrEqual(Math.round(band.shards[0] * mult));
+      expect(o.reward.shards).toBeLessThanOrEqual(Math.round(band.shards[1] * mult));
+    }
+  });
+
+  it('hatch specs are bounties ON the tier target: specified slots match it exactly', () => {
+    for (const tier of [C.UNLOCK_TIER, 2, 4]) {
+      const s = initialState(0);
+      s.legacyTier = tier;
+      const target = targetForTier(tier);
+      for (let i = 0; i < 200; i++) {
+        const o = generateOffer(s, Math.random);
+        if (o.type !== 'hatch') continue;
+        o.genePattern.forEach((g, slot) => {
+          if (g != null) expect(g).toBe(target[slot]);
+        });
+      }
+    }
   });
 });
