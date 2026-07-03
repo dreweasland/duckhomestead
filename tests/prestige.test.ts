@@ -132,6 +132,7 @@ describe('RESET VALIDITY (the highest-risk guarantee)', () => {
     expected.purchasedBoosts = { output: 3, eggValue: 1 };
     expected.legacyHall = [...s.legacyHall, championSnapshot(s, NOW)];
     expected.genomeTarget = targetForTier(3); // tracking starts on the new tier's puzzle
+    expected.pondTerrainTier = 3; // Phase 5 juice: the new tier's pond terrain also takes effect now
     const scrubGenomes = (st: GameState) => ({
       ...st,
       ducks: st.ducks.map((d) => ({ ...d, genome: d.genome.length })),

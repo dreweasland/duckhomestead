@@ -451,6 +451,13 @@ export interface GameState {
    *  freshness. Drives flock WELLNESS ONLY (provision → condition + wound timer);
    *  never income, never a nutrition axis. See game/pond.ts + game/water.ts. */
   pond: PondState;
+  /** Phase 5 juice (water assessment fix ③): which tier's terrain (blocked
+   *  rocks/reeds) applies to THIS run's pond canvas. Stamped at prestige, not
+   *  read live off `legacyTier` — so a save from before this field existed
+   *  (default 0 ⇒ the open canvas) never has its already-placed features
+   *  retroactively sit on a newly-blocked tile. See game/pond.ts's
+   *  terrainForTier(). */
+  pondTerrainTier: number;
 
   // ── Phase 4c: predators (the risk layer) ──
   /** Per-predator window/schedule state, keyed by predator id (defs in config). */
@@ -851,6 +858,7 @@ export function initialState(now: number): GameState {
     dexSeen: [],
     zones: initialZones(),
     pond: initialPond(),
+    pondTerrainTier: 0,
     predators: initialPredators(),
     deterrents: 0,
     deterrentIntegrity: 1,

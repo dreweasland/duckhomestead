@@ -11,8 +11,17 @@ import {
 } from '../src/game/water';
 import { waterSynergy, flockWaterSynergy } from '../src/game/genetics';
 import { unlockZone } from '../src/game/actions';
-import { placePondFeature, pondFeatureUpgradeCost, upgradePondFeature } from '../src/game/pond';
+import {
+  isTerrainBlocked,
+  placeFlowFeature,
+  placePondFeature,
+  pondFeatureUpgradeCost,
+  pondView,
+  terrainForTier,
+  upgradePondFeature,
+} from '../src/game/pond';
 import { runPredators } from '../src/game/predators';
+import { prestigeReset } from '../src/game/prestige';
 import { serialize, deserialize, runOfflineCatchUp } from '../src/game/save';
 import { setHens, stockAll, fullSetup, run } from './helpers';
 
@@ -245,5 +254,84 @@ describe('H-gene water synergy — a wellness reward, never a requirement change
     // Locked principle: synergy NEVER touches the water requirement or access ratio.
     expect(flockRequirement(hardy)).toBe(flockRequirement(plain));
     expect(waterAccess(hardy)).toBeCloseTo(waterAccess(plain), 10);
+  });
+});
+
+describe('pond terrain rotation (Phase 5 juice, water assessment fix ③)', () => {
+  it('T0 is the open canvas — nothing blocked pre-prestige', () => {
+    expect(terrainForTier(0)).toEqual([]);
+    const s = initialState(0);
+    expect(s.pondTerrainTier).toBe(0);
+    expect(isTerrainBlocked(s, 3, 2)).toBe(false);
+  });
+
+  it('cycles past the end, like targetForTier', () => {
+    const n = W.TERRAIN_BY_TIER.length;
+    expect(terrainForTier(n)).toEqual(terrainForTier(0));
+    expect(terrainForTier(n + 2)).toEqual(terrainForTier(2));
+  });
+
+  it('returns a fresh copy each call — a caller mutating it can’t corrupt the config', () => {
+    const a = terrainForTier(1);
+    a.push({ x: 99, y: 99 });
+    expect(terrainForTier(1)).not.toContainEqual({ x: 99, y: 99 });
+  });
+
+  it('placePondFeature rejects a blocked tile, and only that tile', () => {
+    const s = initialState(0);
+    s.zones.pond.unlocked = true;
+    s.resources.eggs = 1e6;
+    s.pondTerrainTier = 1; // T1: [{x:3,y:2}]
+    expect(isTerrainBlocked(s, 3, 2)).toBe(true);
+    const r = placePondFeature(s, 'bathingPool', 3, 2);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain('terrain');
+    expect(s.pond.features).toHaveLength(0);
+    // An adjacent, unblocked tile places fine.
+    expect(placePondFeature(s, 'bathingPool', 2, 2).ok).toBe(true);
+  });
+
+  it('placeFlowFeature rejects a blocked tile the same way', () => {
+    const s = initialState(0);
+    s.zones.backPasture.unlocked = true; // Waterworks
+    s.resources.eggs = 1e6;
+    s.pondTerrainTier = 1;
+    const r = placeFlowFeature(s, 'fountain', 3, 2);
+    expect(r.ok).toBe(false);
+    expect(s.pond.flow).toHaveLength(0);
+    expect(placeFlowFeature(s, 'fountain', 2, 2).ok).toBe(true);
+  });
+
+  it('pondView surfaces the current terrain for rendering', () => {
+    const s = initialState(0);
+    s.pondTerrainTier = 2; // T2: two tiles
+    const view = pondView(s);
+    expect(view.terrain).toEqual(terrainForTier(2));
+  });
+
+  it('a pre-terrain save (missing the field) defaults to 0 — NOT legacyTier — so an existing feature never retroactively sits on a newly-blocked tile', () => {
+    const s = initialState(0);
+    s.zones.pond.unlocked = true;
+    s.legacyTier = 3; // T3 blocks (3,0) and (3,4)
+    s.resources.eggs = 1e6;
+    placePondFeature(s, 'bathingPool', 3, 0); // fine — pondTerrainTier is still 0 pre-migration
+    const raw = serialize(s);
+    const parsed = JSON.parse(raw);
+    delete parsed.pondTerrainTier; // simulate a save from before this field existed
+    const r = deserialize(JSON.stringify(parsed), 0);
+    expect(r.pondTerrainTier).toBe(0);
+    expect(r.pond.features).toHaveLength(1); // untouched — deserialize never re-validates placement
+  });
+
+  it('prestigeReset stamps pondTerrainTier to the NEW tier — safe because fresh.pond.features is already empty', () => {
+    const s = initialState(0);
+    s.legacyTier = 0;
+    s.zones.pond.unlocked = true;
+    s.resources.eggs = 1e6;
+    placePondFeature(s, 'bathingPool', 0, 0);
+    const reset = prestigeReset(s, 0);
+    expect(reset.legacyTier).toBe(1);
+    expect(reset.pondTerrainTier).toBe(1);
+    expect(reset.pond.features).toHaveLength(0); // clean slate — no stale feature to conflict
   });
 });

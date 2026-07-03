@@ -132,6 +132,11 @@ export function deserialize(raw: string, now: number): GameState {
         flow: parsed.pond?.flow ?? [],
         freshness: parsed.pond?.freshness ?? {},
       },
+      // Phase 5 juice: pre-terrain saves default to 0 (the open canvas) — NOT
+      // parsed.legacyTier — so a returning player's already-placed features
+      // never retroactively sit on a newly-blocked tile. Only prestige (which
+      // also wipes pond.features) ever advances this.
+      pondTerrainTier: parsed.pondTerrainTier ?? 0,
       // Phase 4c predators: pre-4c saves load with no windows in flight, no
       // deterrents, and no secure coops. Merge so a partial saved map still has
       // every known predator present; drop any stale transient events and any

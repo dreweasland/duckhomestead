@@ -209,6 +209,11 @@ export function prestigeReset(state: GameState, now: number): GameState {
   // Start the tracking target on the NEW tier's puzzle (the player can retune it;
   // the gate reads targetForTier regardless).
   fresh.genomeTarget = targetForTier(fresh.legacyTier);
+  // The new tier's pond terrain (Phase 5 juice) — safe to stamp here because
+  // `fresh` was just composed from a clean initialState() (pond.features is
+  // already empty), so no existing feature can ever land on a newly-blocked
+  // tile at the moment this takes effect.
+  fresh.pondTerrainTier = fresh.legacyTier;
   return fresh;
 }
 

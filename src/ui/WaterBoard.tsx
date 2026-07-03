@@ -317,8 +317,10 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
   // while the board is open and growing with pond size.
   const featByKey = new Map(view.features.map((f) => [cellKey(f.x, f.y), f]));
   const flowByKey = new Map(view.flow.map((f) => [cellKey(f.x, f.y), f]));
+  const terrainByKey = new Set(view.terrain.map((t) => cellKey(t.x, t.y)));
   const featAt = (x: number, y: number) => featByKey.get(cellKey(x, y));
   const flowAt = (x: number, y: number) => flowByKey.get(cellKey(x, y));
+  const terrainAt = (x: number, y: number) => terrainByKey.has(cellKey(x, y));
 
   const provision = waterProvision(state);
   const requirement = flockRequirement(state);
@@ -465,8 +467,13 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
             const live = flow && view.liveKeys.has(key);
             const meta = feat ? FEAT_META[feat.type] : null;
             const fmeta = flow ? FLOW_META[flow.type] : null;
+            const blocked = terrainAt(x, y);
             return (
-              <g key={key} onClick={() => onCell(x, y)} style={{ cursor: 'pointer' }}>
+              <g
+                key={key}
+                onClick={blocked ? undefined : () => onCell(x, y)}
+                style={{ cursor: blocked ? 'default' : 'pointer' }}
+              >
                 <rect
                   x={px + 1}
                   y={py + 1}
@@ -475,6 +482,24 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
                   rx={4}
                   fill={covered.has(key) ? '#1d4a55' : (x + y) % 2 ? '#1a3a4c' : '#173443'}
                 />
+                {/* Terrain (Phase 5 juice, water assessment fix ③): a blocked
+                    tile — rock or reeds, alternating for variety — never
+                    placeable, drawn as scenery over the base tile. */}
+                {blocked &&
+                  ((x + y) % 2 === 0 ? (
+                    <g>
+                      <ellipse cx={px + TILE / 2} cy={py + TILE / 2 + 4} rx={16} ry={9} fill="#3a4248" />
+                      <ellipse cx={px + TILE / 2 - 5} cy={py + TILE / 2 - 2} rx={11} ry={8} fill="#5a6268" />
+                      <ellipse cx={px + TILE / 2 + 7} cy={py + TILE / 2 + 1} rx={7} ry={5} fill="#4a5258" />
+                      <ellipse cx={px + TILE / 2 - 8} cy={py + TILE / 2 - 5} rx={3} ry={2} fill="#7a828a" opacity={0.7} />
+                    </g>
+                  ) : (
+                    <g stroke="#4a7a5a" strokeWidth={2.5} strokeLinecap="round" fill="none">
+                      <path d={`M ${px + TILE / 2 - 8} ${py + TILE - 10} Q ${px + TILE / 2 - 12} ${py + 12} ${px + TILE / 2 - 6} ${py + 8}`} />
+                      <path d={`M ${px + TILE / 2} ${py + TILE - 8} Q ${px + TILE / 2 - 2} ${py + 8} ${px + TILE / 2 + 4} ${py + 6}`} />
+                      <path d={`M ${px + TILE / 2 + 9} ${py + TILE - 10} Q ${px + TILE / 2 + 14} ${py + 14} ${px + TILE / 2 + 8} ${py + 10}`} />
+                    </g>
+                  ))}
                 {/* provision feature (faded in circulation mode — context only) */}
                 {feat && meta && (
                   <g opacity={isFlow ? 0.45 : 1}>

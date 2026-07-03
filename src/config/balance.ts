@@ -365,6 +365,25 @@ export const BALANCE = {
     CONDITION_REGEN_AT_DOUBLE: 1.4, // condition-regen mult at access 2.0 (bounded reward)
     WOUND_TIMER_AT_HALF: 0.7, // wound-timer mult at access 0.5 (less time)
     WOUND_TIMER_AT_DOUBLE: 1.5, // wound-timer mult at access 2.0 (more time to treat)
+
+    /**
+     * Phase 5 juice (water assessment fix ③) — per-tier blocked canvas tiles
+     * (rocks/reeds), the 6a rotation move applied to water: each prestige
+     * re-poses BOTH the adjacency optimum (layout) and the circuit routing
+     * (circulation) on the same fixed canvas. Hand-authored, escalating, and
+     * cycling past the end — mirrors GENOME.TARGETS_BY_TIER exactly. T0 is
+     * empty (today's open canvas; a fresh game never sees a blocked tile).
+     * Applied via state.pondTerrainTier, NOT legacyTier directly — see
+     * game/pond.ts's terrainForTier() and state.ts's field doc for why.
+     */
+    TERRAIN_BY_TIER: [
+      [], // T0: the open canvas — nothing changes pre-prestige
+      [{ x: 3, y: 2 }], // T1: one rock dead-center — breaks the default spring-in-the-middle cluster
+      [{ x: 1, y: 1 }, { x: 5, y: 3 }], // T2: a diagonal pair, pinching opposite corners
+      [{ x: 3, y: 0 }, { x: 3, y: 4 }], // T3: a reed line top + bottom — splits the canvas into two lobes
+      [{ x: 1, y: 2 }, { x: 3, y: 2 }, { x: 5, y: 2 }], // T4: three rocks across the middle row
+      [{ x: 0, y: 0 }, { x: 6, y: 0 }, { x: 0, y: 4 }, { x: 6, y: 4 }], // T5: all four corners — forces a central layout
+    ] as readonly (readonly { x: number; y: number }[])[],
   },
 
   // ── Phase 4c: predators (the risk layer) ────────────────────────────

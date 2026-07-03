@@ -43,6 +43,24 @@ const inBounds = (x: number, y: number) => x >= 0 && y >= 0 && x < GRID.width &&
 const cheb = (ax: number, ay: number, bx: number, by: number) =>
   Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
+// ── Terrain (Phase 5 juice, water assessment fix ③) ───────────────────
+
+/** This RUN's blocked tiles (rocks/reeds) — a fresh copy (callers may hold it).
+ *  Reads `pondTerrainTier`, NOT `legacyTier` directly: the tier only advances
+ *  at prestige (which also wipes state.pond.features), so a save from before
+ *  this field existed defaults to 0 (the open canvas) and never has an
+ *  already-placed feature retroactively sit on a newly-blocked tile. */
+export function terrainForTier(tier: number): { x: number; y: number }[] {
+  const terrain = W.TERRAIN_BY_TIER;
+  return terrain[tier % terrain.length].map((t) => ({ ...t }));
+}
+
+export function isTerrainBlocked(state: GameState, x: number, y: number): boolean {
+  const terrain = W.TERRAIN_BY_TIER;
+  const tiles = terrain[state.pondTerrainTier % terrain.length];
+  return tiles.some((t) => t.x === x && t.y === y);
+}
+
 export type PondResult = { ok: true } | { ok: false; reason: string };
 const ok = (): PondResult => ({ ok: true });
 const fail = (reason: string): PondResult => ({ ok: false, reason });
@@ -206,6 +224,7 @@ export function placePondFeature(
 ): PondResult {
   if (!zoneUnlocked(state, POND_ZONE)) return fail('Unlock the Pond first');
   if (!inBounds(x, y)) return fail('Out of bounds');
+  if (isTerrainBlocked(state, x, y)) return fail('Blocked by terrain');
   if (featAt(state, x, y)) return fail('Tile occupied');
   const cost = F[type].costEggs;
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
@@ -256,6 +275,7 @@ export function placeFlowFeature(
 ): PondResult {
   if (!zoneUnlocked(state, WORKS_ZONE)) return fail('Unlock Waterworks first');
   if (!inBounds(x, y)) return fail('Out of bounds');
+  if (isTerrainBlocked(state, x, y)) return fail('Blocked by terrain');
   if (flowAt(state, x, y)) return fail('Tile occupied');
   const cost = W.FLOW[type].costEggs;
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
@@ -288,6 +308,8 @@ export interface PondView {
   /** Keys "x,y" of the LIVE fountains (connected intake↔outflow). */
   liveKeys: Set<string>;
   worksUnlocked: boolean;
+  /** This run's blocked terrain tiles (Phase 5 juice) — render as scenery. */
+  terrain: { x: number; y: number }[];
 }
 
 export function pondView(state: GameState): PondView {
@@ -311,5 +333,6 @@ export function pondView(state: GameState): PondView {
     flow: state.pond.flow,
     liveKeys,
     worksUnlocked,
+    terrain: terrainForTier(state.pondTerrainTier),
   };
 }
