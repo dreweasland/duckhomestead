@@ -18,7 +18,12 @@ export function AlmanacCard({
   const Icon = def.icon;
   const danger = def.tone === 'danger';
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[55] flex justify-center px-4">
+    // Top-center, tucked under the NotifyRail's territory (top-3 + toast stack):
+    // every other beat in the game (DINGs, loot, toasts) arrives top-center, so
+    // that's where the player's eyes are trained — the Almanac joins them instead
+    // of whispering from the bottom edge. z-[45] keeps live toasts/banners (z-50)
+    // stacking above an open page.
+    <div className="pointer-events-none fixed inset-x-0 top-16 z-[45] flex justify-center px-4">
       <div
         className={`pointer-events-auto w-full max-w-sm rounded-xl p-4 text-center shadow-xl ring-2 ${
           danger ? 'bg-[#2a1818] ring-[#5a2a2a]' : 'bg-[#2a2018] ring-[#3a2e22]'
