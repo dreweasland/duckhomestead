@@ -6,7 +6,7 @@
  * char `x` -> `currentColor` so they inherit the surrounding text color.
  */
 
-interface PixProps {
+export interface PixProps {
   size?: number;
   className?: string;
   title?: string;

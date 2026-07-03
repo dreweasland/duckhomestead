@@ -226,17 +226,22 @@ function WaterCard({ state }: { state: GameState }) {
   );
 }
 
+export type NutritionTab = 'layers' | 'ducklings' | 'drakes' | 'winter';
+
 export function NutritionPanel({
   engine,
   state,
   onClose,
+  initialTab,
 }: {
   engine: GameEngine;
   state: GameState;
   onClose: () => void;
+  /** The Almanac's Nutrition CTAs land on a specific sub-tab (e.g. Ducklings). */
+  initialTab?: NutritionTab;
 }) {
   useEscapeKey(onClose);
-  const [tab, setTab] = useState<'layers' | 'ducklings' | 'drakes' | 'winter'>('layers');
+  const [tab, setTab] = useState<NutritionTab>(initialTab ?? 'layers');
   const n = state.nutrition;
   const coops = state.stations.filter((s) => s.type === 'coop');
   const debuffed = state.ducks.filter((d) => d.debuffed).length;

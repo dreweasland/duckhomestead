@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   playAttack,
   playCollect,
@@ -11,6 +11,9 @@ import {
   playUpgrade,
 } from './audio/sfx';
 import { BALANCE, zoneDef, type StationType } from './config/balance';
+import { resetAllGuides, type GuideDef } from './config/guides';
+import { AlmanacCard } from './ui/AlmanacCard';
+import { useAlmanac } from './ui/useAlmanac';
 import { WaterBoard } from './ui/WaterBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
@@ -38,15 +41,9 @@ import { TendIcon } from './ui/icons';
 import { LootBanner } from './ui/LootBanner';
 import { ModulesPanel } from './ui/ModulesPanel';
 import { NotifyRail } from './ui/NotifyRail';
-import { NutritionPanel, nutritionNeedsAttention } from './ui/NutritionPanel';
+import { NutritionPanel, nutritionNeedsAttention, type NutritionTab } from './ui/NutritionPanel';
 import { OwlAttack } from './ui/OwlAttack';
 import { StationBar } from './ui/StationBar';
-
-/** Per-browser flag: the first-run welcome pop-up shows once, then never again. */
-const WELCOME_SEEN_KEY = 'duck-homestead-welcome-seen';
-/** One-time teaching moment: the first time a threat telegraphs while the player
- *  is actively playing (defenses suppressed). Shows once, then never again. */
-const DEFENSES_DOWN_SEEN_KEY = 'duck-homestead-defenses-down-seen';
 
 /** Combined width of the two columns at desktop: board box (MAX_BOARD_WIDTH +
  *  p-2) + the gap-4 + the 300px side panel. The bottom build row / footer are
@@ -225,36 +222,7 @@ export default function App() {
   const [watchOpen, setWatchOpen] = useState(false);
   const [legacyOpen, setLegacyOpen] = useState(false);
   const [grangeOpen, setGrangeOpen] = useState(false);
-  const [welcomeSeen, setWelcomeSeen] = useState(() => {
-    try {
-      return !!localStorage.getItem(WELCOME_SEEN_KEY);
-    } catch {
-      return true; // storage unavailable → don't nag
-    }
-  });
-  const dismissWelcome = () => {
-    try {
-      localStorage.setItem(WELCOME_SEEN_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-    setWelcomeSeen(true);
-  };
-  const [defensesDownSeen, setDefensesDownSeen] = useState(() => {
-    try {
-      return !!localStorage.getItem(DEFENSES_DOWN_SEEN_KEY);
-    } catch {
-      return true;
-    }
-  });
-  const dismissDefensesDown = () => {
-    try {
-      localStorage.setItem(DEFENSES_DOWN_SEEN_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-    setDefensesDownSeen(true);
-  };
+  const [nutritionTab, setNutritionTab] = useState<NutritionTab>('layers');
 
   const state = engine.state;
   // Hoist the predator reads — used by the spacer, the NotifyRail offset, the
@@ -284,23 +252,53 @@ export default function App() {
     ? state.stations.filter((s) => s.tendCooldownRemaining === 0).length
     : 0;
 
-  // Onboarding for the pre-placed starter: the Coop is already laying but short
-  // on protein + calcium. Surfaced as a one-time welcome pop-up (first run only,
-  // per-browser) rather than an inline note hogging board space.
-  // Present station types in one pass — several checks below (and the coop-gated
+  // Present station types in one pass — several checks below (the coop-gated
   // Nutrition button in the side panel) each used their own `stations.some(...)` scan.
   const stationTypes = new Set(state.stations.map((s) => s.type));
   const hasCoop = stationTypes.has('coop');
-  const missingProducers = [
-    !stationTypes.has('mealwormFarm') && 'a Mealworm Farm (protein)',
-    !stationTypes.has('oysterSource') && 'an Oyster Source (calcium)',
-  ].filter(Boolean) as string[];
-  const showWelcome = !welcomeSeen && hasCoop && missingProducers.length > 0;
-  // Fire the "defenses down" lesson when a threat first telegraphs while the player
-  // is active (the floor is suppressed) — a heads-up before the dives land. Not
-  // during the welcome, so the two never stack.
-  const showDefensesDown =
-    !defensesDownSeen && !showWelcome && predActive && state.activeRemaining > 0 && threat != null;
+
+  // THE ALMANAC (Phase 7): one data-driven guide book replaces the old ad-hoc
+  // welcome/defenses-down flags. The reader skips entirely while any other
+  // overlay is up — the away modal, a DING/loot/dex banner, an in-flight
+  // predator dive, or any open panel — so a guide never fights a moment.
+  const anyPanelOpen =
+    nutritionOpen || modulesOpen || flockOpen || watchOpen || legacyOpen || grangeOpen;
+  const predatorDiving = Object.values(state.predators).some((p) => p.strike != null);
+  const guideBlocked =
+    (engine.away != null && awayOpen) ||
+    ding != null ||
+    loot != null ||
+    dex != null ||
+    anyPanelOpen ||
+    predatorDiving;
+  const { active: guide, dismiss: dismissGuide } = useAlmanac(state, guideBlocked);
+  const backupRef = useRef<HTMLDivElement>(null);
+  const openGuideCta = useCallback((cta: NonNullable<GuideDef['cta']>) => {
+    switch (cta.open) {
+      case 'nutrition':
+        if (cta.tab) setNutritionTab(cta.tab);
+        setNutritionOpen(true);
+        break;
+      case 'flock':
+        setFlockOpen(true);
+        break;
+      case 'modules':
+        setModulesOpen(true);
+        break;
+      case 'watch':
+        setWatchOpen(true);
+        break;
+      case 'legacy':
+        setLegacyOpen(true);
+        break;
+      case 'grange':
+        setGrangeOpen(true);
+        break;
+      case 'backup':
+        backupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        break;
+    }
+  }, []);
 
   const onTileClick = useCallback(
     (x: number, y: number) => {
@@ -412,7 +410,12 @@ export default function App() {
       )}
 
       {nutritionOpen && (
-        <NutritionPanel engine={engine} state={state} onClose={() => setNutritionOpen(false)} />
+        <NutritionPanel
+          engine={engine}
+          state={state}
+          onClose={() => setNutritionOpen(false)}
+          initialTab={nutritionTab}
+        />
       )}
       {modulesOpen && (
         <ModulesPanel engine={engine} state={state} onClose={() => setModulesOpen(false)} />
@@ -422,75 +425,22 @@ export default function App() {
       {legacyOpen && <LegacyPanel engine={engine} state={state} onClose={() => setLegacyOpen(false)} />}
       {grangeOpen && <GrangePanel engine={engine} state={state} onClose={() => setGrangeOpen(false)} />}
 
-      {/* First-run welcome — shown once per browser instead of an inline note. */}
-      {showWelcome && (
-        <div
-          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 p-4"
-          onClick={dismissWelcome}
-        >
-          <div
-            className="w-full max-w-sm rounded-xl bg-[#2a2018] p-5 text-center ring-2 ring-[#3a2e22]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-2 inline-flex items-center justify-center gap-2 text-lg font-black text-[#ffe9a8]">
-              <DuckIcon size={22} /> Welcome to your homestead!
-            </div>
-            <p className="mb-4 text-xs leading-relaxed text-[#c9b88f]">
-              It&rsquo;s already running — the Coop is laying. The flock is short on protein and
-              calcium, so build {missingProducers.join(' and ')} from the build palette below (you
-              have {Math.round(state.resources.eggs)} eggs), then open Nutrition to balance the
-              ration.
-            </p>
-            <div className="flex justify-center gap-2">
-              <button
-                onClick={() => {
-                  dismissWelcome();
-                  setNutritionOpen(true);
-                }}
-                className="rounded-md bg-[#2e3a26] px-3 py-2 text-sm font-bold text-[#bfe8a8] transition hover:bg-[#36422c]"
-              >
-                Open Nutrition
-              </button>
-              <button
-                onClick={dismissWelcome}
-                className="rounded-md bg-[#6b4f9e] px-4 py-2 text-sm font-bold text-[#fff4d6] transition hover:bg-[#7a5cae]"
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* First-time "defenses down" lesson — the active-mode shift, taught once. */}
-      {showDefensesDown && (
-        <div
-          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 p-4"
-          onClick={dismissDefensesDown}
-        >
-          <div
-            className="w-full max-w-sm rounded-xl bg-[#2a1818] p-5 text-center ring-2 ring-[#5a2a2a]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-2 inline-flex items-center justify-center gap-2 text-lg font-black text-[#ffd9d9]">
-              <OwlIcon size={22} /> Defenses down!
-            </div>
-            <p className="mb-4 text-xs leading-relaxed text-[#c9a0a0]">
-              The owl knows you&rsquo;re at the keyboard. While you&rsquo;re actively playing it{' '}
-              <span className="font-bold text-[#ff9a9a]">ignores your built deterrents</span> — your
-              only defense is to <span className="font-bold text-[#bfe8a8]">scare each dive</span> (tap
-              the swooping owl). Miss one and a duck takes an injury. Step away a couple minutes and
-              your deterrents take guard again. It also dives faster and feints more as your rank
-              climbs — secure prize breeders to keep them off the menu entirely.
-            </p>
-            <button
-              onClick={dismissDefensesDown}
-              className="rounded-md bg-[#6e1414] px-4 py-2 text-sm font-bold text-[#ffe2e2] transition hover:bg-[#7e1c1c]"
-            >
-              Got it — I&rsquo;ll scare them off
-            </button>
-          </div>
-        </div>
+      {/* THE ALMANAC (Phase 7): one guide card at a time, non-modal — the
+          homestead stays visible and playable behind it. */}
+      {guide && (
+        <AlmanacCard
+          def={guide}
+          onDismiss={dismissGuide}
+          onCta={
+            guide.cta
+              ? () => {
+                  const cta = guide.cta!;
+                  dismissGuide();
+                  openGuideCta(cta);
+                }
+              : undefined
+          }
+        />
       )}
 
 
@@ -794,19 +744,30 @@ export default function App() {
 
         {/* Dev tools + backup/reset sit at the very bottom, under the build palette. */}
         {import.meta.env.DEV && <DevPanel engine={engine} state={state} />}
-        <BackupControls engine={engine} />
-        <button
-          onClick={() => {
-            if (window.confirm('Wipe this homestead and start over?')) {
-              engine.reset();
-              setSelectedId(null);
-              setBuildType(null);
-            }
-          }}
-          className="self-start text-[10px] text-[#6a5a3a] underline hover:text-[#9a8a6a]"
-        >
-          New homestead (reset save)
-        </button>
+        <div ref={backupRef}>
+          <BackupControls engine={engine} />
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (window.confirm('Wipe this homestead and start over?')) {
+                engine.reset();
+                setSelectedId(null);
+                setBuildType(null);
+              }
+            }}
+            className="self-start text-[10px] text-[#6a5a3a] underline hover:text-[#9a8a6a]"
+          >
+            New homestead (reset save)
+          </button>
+          <button
+            onClick={resetAllGuides}
+            className="self-start text-[10px] text-[#6a5a3a] underline hover:text-[#9a8a6a]"
+            title="Re-arm every Almanac page for this browser — handy for testing or handing the homestead to someone new"
+          >
+            Re-show all tips
+          </button>
+        </div>
       </div>
     </div>
   );
