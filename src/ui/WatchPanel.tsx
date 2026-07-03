@@ -308,7 +308,10 @@ export function WatchPanel({
               <span className="flex-1">
                 <span className="font-bold">Secure Coop</span>
                 <span className="block text-[10px] opacity-80">
-                  +{P.SECURE_SLOTS_PER_COOP} secure slots — mark prize breeders safe in the Flock panel
+                  {/* Diminishing by design: the FIRST coop adds the full set, each
+                      additional adds fewer — show the NEXT purchase's real slots. */}
+                  +{state.secureCoops === 0 ? P.SECURE_SLOTS_PER_COOP : P.SECURE_SLOTS_ADDITIONAL} secure
+                  slots — mark prize breeders safe in the Flock panel
                 </span>
               </span>
               <span className="inline-flex items-center gap-1 font-bold text-[#ffe9a8]">
