@@ -108,6 +108,9 @@ export default function App() {
   );
 
   // Predators: the telegraph hoot (window incoming/open) and the attack screech.
+  // NAMED victims additionally get a story toast — an anonymous duck is ambient
+  // sound; a named one is news. (Naming is what buys the difference.)
+  const [duckNews, setDuckNews] = useState<{ id: number; text: string; grave: boolean } | null>(null);
   useEffect(
     () =>
       engine.onPredator((e) => {
@@ -115,10 +118,28 @@ export default function App() {
         if (e.kind === 'scared') return; // the scare's own whoosh plays at the click
         if (e.kind === 'winding' || e.kind === 'feint') playDive(); // a dive (re)commits — scare it!
         else if (e.kind === 'incoming' || e.kind === 'open') playThreat();
-        else playAttack(); // wound / snatched / escalated / crowdInjury — a duck got hurt
+        else {
+          playAttack(); // wound / snatched / escalated / crowdInjury — a duck got hurt
+          if ('duckName' in e && e.duckName) {
+            const text =
+              e.kind === 'wound'
+                ? `${e.duckName} was wounded — infirmary, quick!`
+                : e.kind === 'crowdInjury'
+                  ? `${e.duckName} was hurt in the crush — treat the wound, then cull the extra drakes`
+                  : e.kind === 'snatched'
+                    ? `${e.duckName} was taken…`
+                    : `${e.duckName} didn’t make it…`;
+            setDuckNews({ id: Date.now(), text, grave: e.kind !== 'wound' && e.kind !== 'crowdInjury' });
+          }
+        }
       }),
     [engine],
   );
+  useEffect(() => {
+    if (!duckNews) return;
+    const t = window.setTimeout(() => setDuckNews(null), duckNews.grave ? 4000 : 2500);
+    return () => clearTimeout(t);
+  }, [duckNews]);
 
   // A tend drop that couldn't improve the rack auto-salvages to dust — a quiet
   // beat (soft chime + brief toast), distinct from the loot banner for keepers.
@@ -340,6 +361,18 @@ export default function App() {
           >
             Contract claimed · +{grangeClaim.dust} dust · +{grangeClaim.shards} shards
             {grangeClaim.module ? ' · +module' : ''}
+          </span>
+        )}
+        {duckNews && (
+          <span
+            key={duckNews.id}
+            className={`salvage-toast rounded-full px-3 py-1 text-xs font-bold shadow ring-1 ${
+              duckNews.grave
+                ? 'bg-[#2a1420] text-[#e8a3c8] ring-[#5a2a44]'
+                : 'bg-[#2a1818] text-[#e8a3a3] ring-[#5a2a2a]'
+            }`}
+          >
+            {duckNews.text}
           </span>
         )}
         {grangeExpired && (

@@ -42,6 +42,20 @@ export function AwayModal({ away, onClose }: { away: AwaySummary; onClose: () =>
           )}
         </div>
 
+        {away.names && (away.names.lost.length > 0 || away.names.wounded.length > 0) && (
+          <div className="mt-3 rounded-md bg-[#2a1a24] px-3 py-2 text-xs ring-1 ring-[#5a2a44]">
+            {away.names.lost.length > 0 && (
+              <div className="font-bold text-[#e8a3c8]">
+                Lost in the night: {away.names.lost.join(', ')}
+              </div>
+            )}
+            {away.names.wounded.length > 0 && (
+              <div className="mt-0.5 text-[#c9a0b8]">
+                Wounded, waiting on you: {away.names.wounded.join(', ')}
+              </div>
+            )}
+          </div>
+        )}
         {away.predator && (away.predator.wounded > 0 || away.predator.lost > 0) && (
           <div className="mt-3 rounded-md bg-[#2a1818] px-3 py-2 text-xs ring-1 ring-[#5a2a2a]">
             <div className="flex items-center gap-1.5 font-bold text-[#e8a3a3]">

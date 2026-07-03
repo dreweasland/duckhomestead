@@ -645,6 +645,19 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
   return done(true);
 }
 
+// ── Naming (opt-in — the emotional layer for the ducks that matter) ───
+/** Name (or, with an empty string, un-name) a duck. Trimmed, capped at 16
+ *  chars. Named ducks toast their harm events by name and appear by name in
+ *  the away summary — naming is what turns a statistic into a story. */
+export function setDuckName(state: GameState, duckId: string, name: string): ActionResult<unknown> {
+  const d = state.ducks.find((x) => x.id === duckId);
+  if (!d) return fail('No such duck');
+  const clean = name.trim().slice(0, 16);
+  if (clean.length === 0) delete d.name;
+  else d.name = clean;
+  return done(true);
+}
+
 // ── Tracking target (the player's breeding-workbench goal) ────────────
 /**
  * Set the TRACKING target the flock browser/pair-preview measures against — a

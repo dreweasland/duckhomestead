@@ -7,7 +7,7 @@ import { targetForTier } from '../game/prestige';
 import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
-import { CloseIcon, HealIcon, ShieldIcon, SnowflakeIcon, WoundIcon } from './icons';
+import { CloseIcon, HealIcon, PencilIcon, ShieldIcon, SnowflakeIcon, WoundIcon } from './icons';
 import { useEscapeKey } from './useEscapeKey';
 
 export const COLOR_META: Record<Color, { label: string; swatch: string }> = {
@@ -443,10 +443,12 @@ function Breeding({
               >
                 <span className="w-2 shrink-0 text-[#7a6a4a]">{isOpen ? '▾' : '▸'}</span>
                 <ColorSwatch color={phenotype(dr.genotype)} size={11} />
+                {dr.name && <span className="max-w-16 truncate font-bold text-[#f5ecd8]">{dr.name}</span>}
                 {!dr.genomeKnown && <PhenoBands genome={dr.genome} width={16} />}
                 <GenomeTiles duck={dr} target={target} size={12} />
                 <span className="text-[#5a4d3a]">·</span>
                 <ColorSwatch color={phenotype(he.genotype)} size={11} />
+                {he.name && <span className="max-w-16 truncate font-bold text-[#f5ecd8]">{he.name}</span>}
                 {!he.genomeKnown && <PhenoBands genome={he.genome} width={16} />}
                 <GenomeTiles duck={he} target={target} size={12} />
               </button>
@@ -576,6 +578,9 @@ export function FlockPanel({
 }) {
   useEscapeKey(onClose);
   const [armedCull, setArmedCull] = useState<string | null>(null);
+  // Opt-in naming: which duck's name is being edited + the draft text.
+  const [namingId, setNamingId] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
   // New-pair selection: drake + hen are picked by tapping rows in the list below.
   const [mateDrakeId, setMateDrakeId] = useState('');
   const [mateHenId, setMateHenId] = useState('');
@@ -905,6 +910,49 @@ export function FlockPanel({
                       }`}
                     >
                       <ColorSwatch color={phenotype(d.genotype)} size={10} />
+                      {namingId === d.id ? (
+                        <input
+                          autoFocus
+                          value={nameDraft}
+                          maxLength={16}
+                          onChange={(e) => setNameDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            e.stopPropagation(); // Escape must not close the panel
+                            if (e.key === 'Enter') {
+                              engine.nameDuck(d.id, nameDraft);
+                              setNamingId(null);
+                            } else if (e.key === 'Escape') setNamingId(null);
+                          }}
+                          onBlur={() => {
+                            engine.nameDuck(d.id, nameDraft);
+                            setNamingId(null);
+                          }}
+                          className="w-20 rounded bg-[#0f0b07] px-1 py-0.5 text-[11px] font-bold text-[#f5ecd8] outline-none ring-1 ring-[#5a4a32]"
+                          placeholder="name her…"
+                        />
+                      ) : d.name ? (
+                        <button
+                          onClick={() => {
+                            setNamingId(d.id);
+                            setNameDraft(d.name ?? '');
+                          }}
+                          className="max-w-20 truncate font-bold text-[#f5ecd8] hover:text-[#ffe9a8]"
+                          title={`${d.name} — click to rename`}
+                        >
+                          {d.name}
+                        </button>
+                      ) : d.stage === 'adult' ? (
+                        <button
+                          onClick={() => {
+                            setNamingId(d.id);
+                            setNameDraft('');
+                          }}
+                          className="inline-flex items-center rounded px-0.5 text-[#4a3f30] hover:bg-[#33271c] hover:text-[#9a8a6a]"
+                          title="Name this duck — named ducks tell their own stories (toasts + the away summary)"
+                        >
+                          <PencilIcon size={10} />
+                        </button>
+                      ) : null}
                       <span className="w-9 text-[#c9b88f]">{d.sex}</span>
                       <span className="w-16 text-[#9a8a6a]">
                         {STAGE_LABEL[d.stage]}

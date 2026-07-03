@@ -221,7 +221,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   // Brutality dial: a rare landed attack may skip the wound and take the duck
   // outright. Default OFF — every death otherwise passes through a wound.
   if (P.ALLOW_INSTANT_SNATCH && rng() < P.INSTANT_SNATCH_CHANCE && permitPermanentLoss(opts)) {
-    emit(state, { kind: 'snatched', predatorId: def.id, duckId: target.id });
+    emit(state, { kind: 'snatched', predatorId: def.id, duckId: target.id, duckName: target.name });
     removeDuck(state, target.id);
     drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.loss); // a taken duck rattles the flock
     return;
@@ -235,7 +235,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   target.woundSource = 'predator';
   target.woundElapsed = 0;
   target.severity = rollWoundSeverity(!!opts.activeDefense, target.genome, rng);
-  emit(state, { kind: 'wound', predatorId: def.id, duckId: target.id });
+  emit(state, { kind: 'wound', predatorId: def.id, duckId: target.id, duckName: target.name });
   // Condition stress: a landed hit rattles the whole flock (a blip alone; a bad
   // night compounds into a real dent to nurse back). A shrugged-off hit doesn't.
   drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.wound);
@@ -588,7 +588,7 @@ function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void 
     d.woundElapsed = (d.woundElapsed ?? 0) + dt;
     if (d.woundElapsed < threshold) continue;
     if (permitPermanentLoss(opts)) {
-      emit(state, { kind: 'escalated', duckId: d.id, source: d.woundSource ?? 'predator' });
+      emit(state, { kind: 'escalated', duckId: d.id, source: d.woundSource ?? 'predator', duckName: d.name });
       drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.loss); // losing one rattles the rest
       (lost ??= []).push(d.id);
     } else {

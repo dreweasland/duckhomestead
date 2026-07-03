@@ -219,6 +219,10 @@ export interface Duck {
   /** Injury severity, rolled when the wound lands — drives recovery time (worse when
    *  the hit landed with defenses down; milder for Hardy ducks). */
   severity?: WoundSeverity;
+  /** A player-given name (opt-in, adults you care about — breeders, truebreds).
+   *  Named ducks get STORIES: their harm events toast by name, and the away
+   *  summary lists them. Unnamed ducks stay compact rows. Max ~16 chars. */
+  name?: string;
   /** Phase 6d: where this duck lives. Absent/'home' = the main homestead;
    *  'winter' = assigned to Winterstead — it then feeds/lays via the WINTER pool
    *  and is ELSEWHERE for every home system (predators, overcrowding, water,
@@ -592,10 +596,12 @@ export type PredatorEvent =
   // The player scared the owl off mid-dive: the strike was foiled (no wound).
   | { kind: 'scared'; predatorId: string; duckId: string }
   // An over-drake flock injured one of its own (overcrowding — not a predator).
-  | { kind: 'crowdInjury'; duckId: string }
-  | { kind: 'wound'; predatorId: string; duckId: string }
-  | { kind: 'snatched'; predatorId: string; duckId: string }
-  | { kind: 'escalated'; duckId: string; source?: 'predator' | 'overcrowd' }
+  // duckName rides along when the victim is player-named (captured at emit time —
+  // a lost duck is removed from state before the engine drains the event).
+  | { kind: 'crowdInjury'; duckId: string; duckName?: string }
+  | { kind: 'wound'; predatorId: string; duckId: string; duckName?: string }
+  | { kind: 'snatched'; predatorId: string; duckId: string; duckName?: string }
+  | { kind: 'escalated'; duckId: string; source?: 'predator' | 'overcrowd'; duckName?: string }
   // Phase 6c: a jackpot-eligible siege window closed flawless (≥1 committed
   // dive, zero landed) — grantModule already ran sim-side; the engine drain
   // surfaces this as the loot banner (the module is already in state.inventory).

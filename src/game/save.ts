@@ -52,6 +52,9 @@ export interface AwaySummary {
   /** Ducks limping from a niacin shortfall on return (laying at half) — the third
    *  flock toll, so the summary surfaces every offline loss, not just predators. */
   debuffed?: number;
+  /** Player-NAMED victims of this catch-up, by name — a named duck's fate is a
+   *  story, not a statistic. Wounded = survivors you can still save. */
+  names?: { wounded: string[]; lost: string[] };
 }
 
 export function serialize(state: GameState): string {
@@ -356,6 +359,14 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
   const woundedDucks = state.ducks.filter((d) => d.wounded && !preWounded.has(d.id));
   const predatorWounded = woundedDucks.filter((d) => d.woundSource !== 'overcrowd').length;
   const overcrowdWounded = woundedDucks.filter((d) => d.woundSource === 'overcrowd').length;
+  // Named victims by NAME — events carry duckName captured at emit time (a lost
+  // duck is long gone from state by now), wounded survivors read theirs live.
+  const namedLost = events
+    .filter((e) => (e.kind === 'snatched' || e.kind === 'escalated') && e.duckName)
+    .map((e) => (e as { duckName: string }).duckName);
+  const namedWounded = woundedDucks.filter((d) => d.name).map((d) => d.name!);
+  const names =
+    namedLost.length > 0 || namedWounded.length > 0 ? { wounded: namedWounded, lost: namedLost } : undefined;
   state.pendingPredatorEvents = [];
   // Offline hatches still record colors (dexSeen) and create truebred ducks, but
   // the live DING queues must not fire on load — an offline event isn't a live
@@ -380,6 +391,7 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     predator,
     overcrowd,
     debuffed,
+    names,
   };
 }
 

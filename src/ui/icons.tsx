@@ -78,6 +78,21 @@ export const SunflowerIcon = (p: PixProps) => (
   />
 );
 
+/** A tiny pencil — the rename affordance. */
+export const PencilIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor' }}
+    rows={[
+      '...xx',
+      '..x.x',
+      '.x.x.',
+      'x.x..',
+      'xx...',
+    ]}
+  />
+);
+
 /** Phase 6d: snowflake — the Winterstead assign/recall glyph. */
 export const SnowflakeIcon = (p: PixProps) => (
   <Pix

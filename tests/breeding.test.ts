@@ -10,8 +10,9 @@ import {
   type Genotype,
 } from '../src/game/state';
 import { AXES } from '../src/game/state';
-import { buildGeneReader, createPair, placeStation, setGenomeTarget } from '../src/game/actions';
+import { buildGeneReader, createPair, placeStation, setDuckName, setGenomeTarget } from '../src/game/actions';
 import { runBreeding } from '../src/game/breeding';
+import { runPredators } from '../src/game/predators';
 import { serialize, deserialize } from '../src/game/save';
 import { layMult, targetMatch } from '../src/game/genetics';
 import type { Duck, GameState } from '../src/game/state';
@@ -231,5 +232,42 @@ describe('save round-trip', () => {
     });
     const r = deserialize(legacy, 0);
     expect(r.ducks.length).toBeGreaterThan(0);
+  });
+});
+
+describe('duck naming (opt-in — the emotional layer)', () => {
+  it('setDuckName trims, caps at 16, and an empty string clears', () => {
+    const s = fullSetup();
+    setHens(s, 1);
+    const id = s.ducks[0].id;
+    expect(setDuckName(s, id, '  Petunia  ').ok).toBe(true);
+    expect(s.ducks[0].name).toBe('Petunia');
+    expect(setDuckName(s, id, 'A'.repeat(40)).ok).toBe(true);
+    expect(s.ducks[0].name).toHaveLength(16);
+    expect(setDuckName(s, id, '   ').ok).toBe(true);
+    expect(s.ducks[0].name).toBeUndefined();
+    expect(setDuckName(s, 'nope', 'X').ok).toBe(false);
+  });
+
+  it('names round-trip through save', () => {
+    const s = fullSetup();
+    setHens(s, 1);
+    setDuckName(s, s.ducks[0].id, 'Petunia');
+    expect(deserialize(serialize(s), 0).ducks[0].name).toBe('Petunia');
+  });
+
+  it('harm events carry the victim’s name (captured at emit — she may be gone by drain time)', () => {
+    const s = fullSetup();
+    setHens(s, 2);
+    setDuckName(s, s.ducks[0].id, 'Petunia');
+    const d = s.ducks[0];
+    d.wounded = true;
+    d.woundSource = 'predator';
+    d.severity = 'minor';
+    d.woundElapsed = 99999; // far past any escalation window
+    runPredators(s, 1, { mode: 'online', rng: () => 1 });
+    const e = (s.pendingPredatorEvents ?? []).find((x) => x.kind === 'escalated');
+    expect(e && 'duckName' in e ? e.duckName : undefined).toBe('Petunia');
+    expect(s.ducks.find((x) => x.name === 'Petunia')).toBeUndefined(); // she's gone — the event remembers
   });
 });

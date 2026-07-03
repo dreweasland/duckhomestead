@@ -58,7 +58,7 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
     victim.woundElapsed = 0;
     victim.severity = rollWoundSeverity(false, victim.genome, rng); // harassment, not a strike
     drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.crowdInjury); // self-inflicted stress
-    (state.pendingPredatorEvents ??= []).push({ kind: 'crowdInjury', duckId: victim.id });
+    (state.pendingPredatorEvents ??= []).push({ kind: 'crowdInjury', duckId: victim.id, duckName: victim.name });
   }
 }
 

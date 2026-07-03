@@ -21,6 +21,7 @@ import {
   removePair,
   moveStation,
   placeStation,
+  setDuckName,
   setGenomeTarget,
   rerollModule,
   removeStation,
@@ -640,6 +641,12 @@ export class GameEngine {
   /** Set the Standard profile (drives quality readouts + the DING). */
   setGenomeTarget(target: Gene[]): ActionResult<unknown> {
     const r = setGenomeTarget(this.state, target);
+    this.notify();
+    return r;
+  }
+  /** Name (or clear the name of) a duck — the opt-in emotional layer. */
+  nameDuck(duckId: string, name: string): ActionResult<unknown> {
+    const r = setDuckName(this.state, duckId, name);
     this.notify();
     return r;
   }
