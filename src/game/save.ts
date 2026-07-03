@@ -112,7 +112,7 @@ export function deserialize(raw: string, now: number): GameState {
       nextDuckId: parsed.nextDuckId ?? 1,
       breedingPairs: parsed.breedingPairs ?? [],
       nextPairId: parsed.nextPairId ?? 1,
-      // Breeding rework: the god-clone target + the gene-reader flag.
+      // Breeding rework: the Standard + the gene-reader flag.
       genomeTarget: validGenome(parsed.genomeTarget) ? parsed.genomeTarget : [...base.genomeTarget],
       geneReader: parsed.geneReader ?? false,
       dexSeen: parsed.dexSeen ?? [],
@@ -357,13 +357,13 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
   const predatorWounded = woundedDucks.filter((d) => d.woundSource !== 'overcrowd').length;
   const overcrowdWounded = woundedDucks.filter((d) => d.woundSource === 'overcrowd').length;
   state.pendingPredatorEvents = [];
-  // Offline hatches still record colors (dexSeen) and create god-clone ducks, but
+  // Offline hatches still record colors (dexSeen) and create truebred ducks, but
   // the live DING queues must not fire on load — an offline event isn't a live
-  // moment, and a god-clone fanfare right after the Away modal reads as a bug.
+  // moment, and a truebred fanfare right after the Away modal reads as a bug.
   // (Same treatment as the predator events above; the achievements persist in
   // dexSeen / the flock.)
   state.pendingDex = [];
-  state.pendingGodClone = 0;
+  state.pendingTruebred = 0;
   const predator =
     predatorLost > 0 || predatorWounded > 0 ? { wounded: predatorWounded, lost: predatorLost } : undefined;
   const overcrowd =

@@ -9,7 +9,7 @@ import {
   geneProfile,
   goodGeneCount,
   inheritAllele,
-  isGodClone,
+  isTruebred,
   layMult,
   maturationMult,
   recordColor,
@@ -120,12 +120,12 @@ describe('colorOdds — analytic crossbreed preview (must mirror breedGenotype a
   });
 });
 
-describe('isGodClone + geneProfile', () => {
+describe('isTruebred + geneProfile', () => {
   const target = g('LLVHDL');
-  it('isGodClone is true only for an exact, same-length match to the target', () => {
-    expect(isGodClone(g('LLVHDL'), target)).toBe(true);
-    expect(isGodClone(g('LLVHDD'), target)).toBe(false); // one slot off
-    expect(isGodClone(g('LLVHD'), target)).toBe(false); // too short — never a clone
+  it('isTruebred is true only for an exact, same-length match to the target', () => {
+    expect(isTruebred(g('LLVHDL'), target)).toBe(true);
+    expect(isTruebred(g('LLVHDD'), target)).toBe(false); // one slot off
+    expect(isTruebred(g('LLVHD'), target)).toBe(false); // too short — never a clone
   });
   it('geneProfile tallies each gene in the genome', () => {
     expect(geneProfile(g('LLVHDD'))).toEqual({ L: 2, V: 1, H: 1, D: 2, P: 0 });
@@ -270,14 +270,14 @@ describe('phenotype band (free, coarse, intrinsic — the phone-it-in floor)', (
 describe('the Prime gene — mutation-only, tier-gated wildcard (Phase 6c)', () => {
   const G = BALANCE.GENOME;
 
-  it('is a wildcard: matches ANY target gene in targetMatch/isGodClone/slotMatches', () => {
+  it('is a wildcard: matches ANY target gene in targetMatch/isTruebred/slotMatches', () => {
     expect(slotMatches('P', 'L')).toBe(true);
     expect(slotMatches('L', 'L')).toBe(true);
     expect(slotMatches('D', 'L')).toBe(false);
     expect(targetMatch(g('PPPPPP'), g('LLLLLL'))).toBe(6); // all-wildcard = a perfect match to ANY target
     expect(targetMatch(g('PLVHDP'), g('LLLLLL'))).toBe(3); // the 2 P's + the 1 real L
-    expect(isGodClone(g('PPPPPP'), g('LLLLLL'))).toBe(true);
-    expect(isGodClone(g('PPPPPD'), g('LLLLLL'))).toBe(false); // one real Dud still breaks it
+    expect(isTruebred(g('PPPPPP'), g('LLLLLL'))).toBe(true);
+    expect(isTruebred(g('PPPPPD'), g('LLLLLL'))).toBe(false); // one real Dud still breaks it
   });
 
   it('is strictly a GENERALIST: every P stat stays below its axis specialist', () => {

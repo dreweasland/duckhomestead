@@ -425,14 +425,14 @@ export interface GameState {
   /** Monotonic id counter for pairs. */
   nextPairId: number;
   /** The player's TRACKING target (length GENOME.SLOTS) — a browser/sort/preview
-   *  aid only. The champion gate, currency, and god-clone DING read the
+   *  aid only. The champion gate, currency, and truebred DING read the
    *  tier-authoritative targetForTier() instead (see prestige.ts), so pointing
    *  this at the flock's existing profile can't game the gate. */
   genomeTarget: Genome;
   /** Whether the gene-reader is built (reveals genomes passively/in bulk). */
   geneReader: boolean;
-  /** Transient: god-clone hatches this tick (drained by the engine for DINGs). */
-  pendingGodClone?: number;
+  /** Transient: truebred hatches this tick (drained by the engine for DINGs). */
+  pendingTruebred?: number;
   /** Colors ever produced (the dex) — drives first-of-color DINGs. */
   dexSeen: Color[];
   /** Transient: colors discovered this tick, drained by the engine for DINGs. */

@@ -748,7 +748,7 @@ export const BALANCE = {
     DOMINANCE: { L: 3, V: 3, H: 3, D: 1, P: 4 } as Record<string, number>,
     /** Per-slot chance the inherited gene is replaced by a uniformly-random gene
      *  (the occasional upgrade / escape from two-Dud parents). Balance review:
-     *  at 0.04 the sweat policy hit a god clone in ~3 program-generations (~30
+     *  at 0.04 the sweat policy hit a truebred in ~3 program-generations (~30
      *  min — a first-session accident); 0.02 roughly doubles the chase AND
      *  preserves the gene-reader's edge on positional targets (high mutation
      *  lets band-only play just get lucky). Don't go below 0.02 — the casual
@@ -768,11 +768,11 @@ export const BALANCE = {
      *  bulk (the whole flock at build time, then every new duck auto-reads on
      *  arrival) — NEVER a per-duck click. */
     READER_COST_EGGS: 1500,
-    // ── god clone (Step 5) ──
-    /** Default target profile a player steers toward (all-Lay god clone). */
+    // ── truebred (Step 5) ──
+    /** Default target profile a player steers toward (all-Lay truebred). */
     DEFAULT_TARGET: ['L', 'L', 'L', 'L', 'L', 'L'] as const,
     /** Seed-flock genomes: per-slot gene weights (Dud-leaning so a fresh flock is
-     *  middling — accessible floor, real room to breed up toward a god clone). */
+     *  middling — accessible floor, real room to breed up toward a truebred). */
     SEED_GENE_WEIGHTS: { L: 1, V: 1, H: 1, D: 2 } as Record<string, number>,
   },
 
@@ -802,11 +802,11 @@ export const BALANCE = {
   // headcount and the player can read exactly what's left:
   //   1. all colours bred (collection mastery),
   //   2. average flock GENOME QUALITY ≥ the tier's gate (breeding mastery — the
-  //      mean number of slots matching the god-clone target, 0..6; needs real
+  //      mean number of slots matching the Standard, 0..6; needs real
   //      selective crossbreeding + culling, and the gate RISES each prestige),
   //   3. flock size ≥ the tier's target (which scales each prestige).
   PRESTIGE: {
-    /** Required average flock GENOME QUALITY = mean slots matching the god-clone
+    /** Required average flock GENOME QUALITY = mean slots matching the truebred
      *  target (range 0..GENOME.SLOTS; a fresh flock ≈ 2). A mastery bar that
      *  RISES each tier: gate(tier) = min(MAX, BASE + PER_TIER·tier). Capped below
      *  the 6-slot perfect so it always stays reachable. */
@@ -838,7 +838,7 @@ export const BALANCE = {
      * inheritance is position-linked. Tier 0 matches GENOME.DEFAULT_TARGET.
      */
     TARGETS_BY_TIER: [
-      ['L', 'L', 'L', 'L', 'L', 'L'], // T0: the classic lay god-clone
+      ['L', 'L', 'L', 'L', 'L', 'L'], // T0: the classic all-Lay Standard
       ['L', 'L', 'V', 'V', 'H', 'H'], // T1: the generalist — three lines at once
       ['H', 'H', 'H', 'H', 'H', 'H'], // T2: the tank (pairs with 6c siege predators)
       ['V', 'V', 'V', 'V', 'L', 'L'], // T3: growth-heavy
@@ -947,7 +947,7 @@ export const BALANCE = {
      *  Makes LLLHHH out-earn all-L HERE and only here (the 6d thesis). Balance
      *  review: at 0.15 the best mix beat all-L by only ~15% — a shrug next to
      *  the 2.5× premium ANY hen earns here, so the lazy play was parking spare
-     *  god-clones. At 0.2 the optimum (L2H4 ≈ 2.23 vs all-L 1.72) is +30%:
+     *  truebreds. At 0.2 the optimum (L2H4 ≈ 2.23 vs all-L 1.72) is +30%:
      *  breeding the H-line is now clearly the right play for the boutique
      *  slots, without moving total winter income much. */
     HARDINESS_PER_H: 0.2,

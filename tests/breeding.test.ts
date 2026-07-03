@@ -140,7 +140,7 @@ describe('gene reader: reveals genomes passively / in bulk (never per-duck)', ()
   });
 });
 
-describe('god-clone target + DING', () => {
+describe('Standard + DING', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('setGenomeTarget validates length + gene set', () => {
@@ -152,10 +152,10 @@ describe('god-clone target + DING', () => {
     expect(s.genomeTarget).toEqual(genome('HHHHHH')); // unchanged by a rejected set
   });
 
-  it('queues a god-clone DING when a hatch first perfectly matches the target', () => {
+  it('queues a truebred DING when a hatch first perfectly matches the target', () => {
     const s = build({ coop: 1 }); // cap 4
     s.genomeTarget = genome('LLLLLL');
-    // Complementary parents (each only half-matches → no god clone in the flock yet).
+    // Complementary parents (each only half-matches → no truebred in the flock yet).
     const drake: Duck = { id: 'D', genotype: ['Bl', 'bl'], genome: genome('LLLDDD'), genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 };
     const hen: Duck = { id: 'H', genotype: ['Bl', 'bl'], genome: genome('DDDLLL'), genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
     s.ducks = [drake, hen];
@@ -165,8 +165,8 @@ describe('god-clone target + DING', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     runBreeding(s, 1); // the egg hatches this step
     const child = s.ducks.find((d) => d.id !== 'D' && d.id !== 'H')!;
-    expect(targetMatch(child.genome, s.genomeTarget)).toBe(BALANCE.GENOME.SLOTS); // a god clone
-    expect(s.pendingGodClone).toBe(1); // the DING was queued
+    expect(targetMatch(child.genome, s.genomeTarget)).toBe(BALANCE.GENOME.SLOTS); // a truebred
+    expect(s.pendingTruebred).toBe(1); // the DING was queued
   });
 });
 

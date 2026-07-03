@@ -204,7 +204,7 @@ export function LegacyPanel({
             met={goal.quality.met}
             hint={
               <span className="inline-flex items-center gap-1.5 text-[#7a6a4a]">
-                <span>tier target</span>
+                <span>the Standard</span>
                 <TargetPips target={gateTarget} size={12} />
                 {!goal.quality.met && <span>— crossbreed toward it + cull the weak</span>}
               </span>
@@ -249,7 +249,7 @@ export function LegacyPanel({
         )}
         {/* The next tier's puzzle — the reason to prestige beyond the numbers. */}
         <div className="mb-1 flex items-center justify-center gap-1.5 text-center text-[10px] text-[#9a8a6a]">
-          <span>Next legacy demands</span>
+          <span>Next legacy’s Standard</span>
           <TargetPips target={nextTarget} size={12} />
           <span>— a new breeding puzzle</span>
         </div>

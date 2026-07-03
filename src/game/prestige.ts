@@ -35,7 +35,7 @@ export const BOOST_IDS: BoostId[] = [
 // ── The champion goal: three concrete requirements ───────────────────
 /**
  * The tier-authoritative champion target. The gate, currency, snapshot, and
- * god-clone DING all read THIS — never the player-set tracking target (which
+ * truebred DING all read THIS — never the player-set tracking target (which
  * would let you point the gate at whatever the flock already is). Rotates
  * through hand-authored profiles so each tier is a NEW breeding puzzle, then
  * cycles. Returns a fresh copy (callers may hold/mutate it).

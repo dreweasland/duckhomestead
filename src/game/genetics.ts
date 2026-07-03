@@ -29,7 +29,7 @@ export function geneProfile(genome: Genome): Record<Gene, number> {
 /**
  * A duck's egg-output multiplier — REPLACES the old vigor scalar in the per-duck
  * output chain (nutrition.ts). L drives most of it; V adds a smaller bump; H/D
- * add nothing. A genome of all-Dud lays at the ×1.0 floor; an all-Lay god clone
+ * add nothing. A genome of all-Dud lays at the ×1.0 floor; an all-Lay truebred
  * lays far above it. Throughput-only.
  */
 export function layMult(genome: Genome): number {
@@ -122,17 +122,17 @@ export function slotMatches(gene: Gene, want: Gene): boolean {
   return gene === 'P' || gene === want;
 }
 
-/** Slots matching the target profile (0..SLOTS) — distance-to-god-clone,
+/** Slots matching the target profile (0..SLOTS) — distance-to-truebred,
  *  inverted. A Prime slot counts as a match against ANY target gene (the
- *  wildcard) — meanQuality/isGodClone inherit this for free. */
+ *  wildcard) — meanQuality/isTruebred inherit this for free. */
 export function targetMatch(genome: Genome, target: Genome): number {
   let n = 0;
   for (let i = 0; i < genome.length; i++) if (slotMatches(genome[i], target[i])) n += 1;
   return n;
 }
 
-/** True iff this genome exactly matches the target (a god clone). */
-export function isGodClone(genome: Genome, target: Genome): boolean {
+/** True iff this genome exactly matches the target (a truebred). */
+export function isTruebred(genome: Genome, target: Genome): boolean {
   return genome.length === target.length && targetMatch(genome, target) === target.length;
 }
 
@@ -140,7 +140,7 @@ export function isGodClone(genome: Genome, target: Genome): boolean {
 /**
  * Cross two genomes into an offspring genome — the assembly puzzle. Three rules:
  *   1. POSITION-LINKED: offspring slot i inherits from one parent's slot i (never
- *      a reshuffle), so you build a god clone by pairing parents each strong in
+ *      a reshuffle), so you build a truebred by pairing parents each strong in
  *      DIFFERENT slots.
  *   2. DOMINANCE-WEIGHTED: which parent wins slot i is a weighted coin — a good
  *      gene (DOMINANCE) is likelier to pass than a Dud, so the cross is plannable

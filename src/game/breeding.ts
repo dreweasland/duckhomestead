@@ -1,6 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { onHatch } from './contracts';
-import { breedGenome, breedGenotype, isGodClone, maturationMult, recordColor } from './genetics';
+import { breedGenome, breedGenotype, isTruebred, maturationMult, recordColor } from './genetics';
 import { targetForTier } from './prestige';
 import { rollWoundSeverity } from './predators';
 import { breedingEstablished, coopCapacity, drainCondition, flockRatio, phenotype, type Duck, type GameState } from './state';
@@ -86,9 +86,9 @@ export function runBreeding(
   // block a hatch here. Track the count live as ducklings push mid-loop.
   let homeCount = 0;
   for (const d of state.ducks) if (d.site !== 'winter') homeCount++;
-  // The god-clone DING is judged against the TIER's champion target (the same one
+  // The truebred DING is judged against the TIER's champion target (the same one
   // the prestige gate reads), not the player's tracking target.
-  const godTarget = targetForTier(state.legacyTier);
+  const standardTarget = targetForTier(state.legacyTier);
   // Index ducks by id once so pair-parent lookups are O(1) — this ran two
   // `state.ducks.find` per pair every tick (O(pairs × ducks)). Ducklings pushed
   // mid-loop are never pair parents, so the up-front map stays valid.
@@ -131,9 +131,9 @@ export function runBreeding(
       const genotype = breedGenotype(drake.genotype, hen.genotype);
       const primeEligible = state.legacyTier >= BALANCE.GENOME.PRIME_MIN_TIER;
       const genome = breedGenome(drake.genome, hen.genome, Math.random, primeEligible);
-      // God-clone DING fires when a hatch first achieves the target and the flock
-      // had none — so it re-fires if you lose every god clone and rebreed one.
-      const hadGodClone = state.ducks.some((d) => isGodClone(d.genome, godTarget));
+      // Truebred DING fires when a hatch first achieves the target and the flock
+      // had none — so it re-fires if you lose every truebred and rebreed one.
+      const hadTruebred = state.ducks.some((d) => isTruebred(d.genome, standardTarget));
       const duckling: Duck = {
         id: `d${state.nextDuckId++}`,
         genotype,
@@ -151,8 +151,8 @@ export function runBreeding(
       if (recordColor(state, phenotype(genotype))) {
         (state.pendingDex ??= []).push(phenotype(genotype));
       }
-      if (!hadGodClone && isGodClone(genome, godTarget)) {
-        state.pendingGodClone = (state.pendingGodClone ?? 0) + 1;
+      if (!hadTruebred && isTruebred(genome, standardTarget)) {
+        state.pendingTruebred = (state.pendingTruebred ?? 0) + 1;
       }
       // The Grange (Phase 6b): only an ONLINE hatch may complete a hatch-spec
       // contract — offline catch-up hatches never count (the online-only law).

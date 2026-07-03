@@ -594,7 +594,7 @@ export function rerollModule(
 /**
  * Release a duck from the flock — the selection lever. Removing weak-genome birds
  * frees housing AND raises the live mean genome quality, which is what the player
- * steers toward the god-clone target. Also drops any pair the duck belonged to.
+ * steers toward the Standard. Also drops any pair the duck belonged to.
  */
 export function cullDuck(state: GameState, duckId: string): ActionResult<unknown> {
   const idx = state.ducks.findIndex((d) => d.id === duckId);
@@ -648,7 +648,7 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
 // ── Tracking target (the player's breeding-workbench goal) ────────────
 /**
  * Set the TRACKING target the flock browser/pair-preview measures against — a
- * planning aid only. The champion gate, currency, and god-clone DING read the
+ * planning aid only. The champion gate, currency, and truebred DING read the
  * tier-authoritative targetForTier() (prestige.ts), never this. Validated to
  * GENOME.SLOTS good genes; rejected otherwise — a target slot is never D (an
  * untargetable filler, same convention as hatch specs) nor P (the wildcard).
@@ -908,7 +908,7 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
     // attributed to this coop — the full per-hen chain (genome layMult ×
     // nutrition throttle × debuff/wound × rack eggOutput × legacy eggValue),
     // never the raw station base. The old base-rate burst minted full eggs from
-    // an empty or starving flock, feed-free (one tended L8 coop ≈ 3 god-clone
+    // an empty or starving flock, feed-free (one tended L8 coop ≈ 3 truebred
     // hens). Winter coops mirror it from the winter pool, which already folds
     // in warmth × waterer support × hardiness × the premium. Empty flock/site
     // ⇒ 0 eggs; XP is still granted (the reward is for the action).

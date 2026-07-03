@@ -166,15 +166,15 @@ describe('culling = the selection lever (live mean genome quality)', () => {
 });
 
 describe('offline catch-up suppresses live DING queues (they happened away, not now)', () => {
-  it('clears pendingDex + pendingGodClone so they do not fire on load', () => {
+  it('clears pendingDex + pendingTruebred so they do not fire on load', () => {
     const s = stockAll(build({ coop: 2 }));
     s.rank = 5;
     s.lastSeen = -1 * 3600 * 1000; // 1h ago
     // Stand in for offline-queued achievements (as an offline hatch would).
     s.pendingDex = ['splash'] as Color[];
-    s.pendingGodClone = 1;
+    s.pendingTruebred = 1;
     runOfflineCatchUp(s, 0);
     expect(s.pendingDex).toEqual([]);
-    expect(s.pendingGodClone).toBe(0);
+    expect(s.pendingTruebred).toBe(0);
   });
 });

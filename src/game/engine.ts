@@ -317,21 +317,21 @@ export class GameEngine {
     for (const color of pending) this.emitDex({ color });
     this.state.pendingDex = [];
   }
-  /** Promote any god-clone hatch (a duck perfectly matching the target) to a
+  /** Promote any truebred hatch (a duck perfectly matching the target) to a
    *  can't-miss milestone DING — the payoff of the whole min/max grind. */
-  private drainGodClone() {
-    const n = this.state.pendingGodClone ?? 0;
+  private drainTruebred() {
+    const n = this.state.pendingTruebred ?? 0;
     if (n <= 0) return;
-    this.state.pendingGodClone = 0;
+    this.state.pendingTruebred = 0;
     this.emitDing({
       newRank: this.state.rank,
       levelsGained: 0,
       milestones: [
         {
           rank: this.state.rank,
-          title: 'God clone!',
+          title: 'A Truebred!',
           description:
-            'A duckling hatched with a genome that PERFECTLY matches your god-clone target. The crown of the breeding grind — protect it (secure it) and breed from it.',
+            'A duckling hatched with a genome that PERFECTLY matches your Standard. The crown of the breeding grind — protect it (secure it) and breed from it.',
           kind: 'breeding',
         },
       ],
@@ -401,7 +401,7 @@ export class GameEngine {
         this.accumulator -= this.stepMs;
       }
       this.drainDex(); // fire DINGs for any first-of-color hatches this frame
-      this.drainGodClone(); // fire the god-clone DING for a perfect-target hatch
+      this.drainTruebred(); // fire the truebred DING for a perfect-target hatch
       this.drainPredatorEvents(); // telegraph / attack / loss feedback this frame
       this.drainContractExpiry(); // a deadline lapse gets a toast, never silence
       this.drainWoundSaved(); // water attribution ①: an admission that beat the clock
@@ -637,7 +637,7 @@ export class GameEngine {
     this.notify();
     return r;
   }
-  /** Set the god-clone target profile (drives quality readouts + the DING). */
+  /** Set the Standard profile (drives quality readouts + the DING). */
   setGenomeTarget(target: Gene[]): ActionResult<unknown> {
     const r = setGenomeTarget(this.state, target);
     this.notify();

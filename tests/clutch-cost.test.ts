@@ -67,7 +67,7 @@ describe('the clutch egg cost (spend-vs-grow, restored)', () => {
     expect(clutchCost(s)).toBe(B.CLUTCH_COST_MIN); // cold start: the floor
     s.contracts.peakEggRate = 8; // a mid-game economy (~8 eggs/s at peak)
     expect(clutchCost(s)).toBe(Math.round(8 * B.CLUTCH_COST_PEAK_SECONDS));
-    s.contracts.peakEggRate = 80; // god-clone scale
+    s.contracts.peakEggRate = 80; // truebred scale
     expect(clutchCost(s)).toBe(Math.round(80 * B.CLUTCH_COST_PEAK_SECONDS));
     // The invariant that makes it scale-proof: cost/income stays constant.
     const fracAt = (peak: number) => {

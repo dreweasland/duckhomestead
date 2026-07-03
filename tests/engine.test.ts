@@ -10,7 +10,7 @@ import { BALANCE } from '../src/config/balance';
 const P = BALANCE.PRESTIGE;
 
 /** Force a champion flock exactly meeting the tier-0 goal: every colour dexed, plus
- *  SIZE_BASE god-clone hens (each genome == the target, so meanQuality == SLOTS,
+ *  SIZE_BASE truebred hens (each genome == the target, so meanQuality == SLOTS,
  *  comfortably over the quality gate). */
 function makeChampion(eng: GameEngine): void {
   eng.state.dexSeen = [...COLORS];

@@ -35,7 +35,7 @@ Knobs (env vars):
   L/H-split sweep (`layMult × hardinessMult`). The 6d thesis check.
 - **C. Breeding progression** — generations (and est. wall-clock at the
   current clutch/incubate/mature timers) from a seed flock to the tier-0
-  quality gate (4.5) and to a god clone, `sweat` (gene-reader + odds
+  quality gate (4.5) and to a truebred, `sweat` (gene-reader + odds
   calculator) vs `casual` (phenotype bands only), swept over
   `DOMINANCE ∈ {2,3,4}` × `MUTATION_CHANCE ∈ {0.01..0.08}`, for the T0
   (`LLLLLL`) and T4 (`LHLHLH`, positional) targets. `(n✗)` = runs that

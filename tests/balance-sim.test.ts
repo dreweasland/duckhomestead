@@ -14,7 +14,7 @@ import { tick } from '../src/game/tick';
 import {
   axisTier,
   breedGenome,
-  isGodClone,
+  isTruebred,
   layMult,
   hardinessMult,
   slotOdds,
@@ -37,7 +37,7 @@ import { waterAccess } from '../src/game/water';
  *      H-heavy flock win on long-run output? (The genome-collapse question.)
  *   B. WINTERSTEAD — where H is *supposed* to pay: premium lay per genome mix.
  *   C. BREEDING PROGRESSION — generations (and est. wall-clock) from a seed
- *      flock to the quality gate and to a god clone, under a min/max policy vs
+ *      flock to the quality gate and to a truebred, under a min/max policy vs
  *      a phenotype-band-only casual policy, swept over DOMINANCE × MUTATION.
  *
  * Everything reads BALANCE at call time, so it tracks tuning changes. The
@@ -298,7 +298,7 @@ function homeEggs(genome: Genome, hens = 8): number {
 // ── C. Breeding progression (pure genetics — no tick) ────────────────
 interface BreedRun {
   gensToGate: number; // mean program quality ≥ QUALITY_GATE_BASE (-1 = never)
-  gensToGod: number; // first god clone (-1 = never)
+  gensToGod: number; // first truebred (-1 = never)
   finalMean: number;
 }
 
@@ -394,7 +394,7 @@ function breedingRun(
       .slice(0, POP);
     const mean = pop.reduce((a, gm) => a + targetMatch(gm, target), 0) / POP;
     if (gensToGate < 0 && mean >= gate) gensToGate = gen;
-    if (gensToGod < 0 && pop.some((gm) => isGodClone(gm, target))) gensToGod = gen;
+    if (gensToGod < 0 && pop.some((gm) => isTruebred(gm, target))) gensToGod = gen;
     if (gensToGate >= 0 && gensToGod >= 0) return { gensToGate, gensToGod, finalMean: mean };
   }
   const mean = pop.reduce((a, gm) => a + targetMatch(gm, target), 0) / POP;
@@ -415,7 +415,7 @@ describe('genome economy invariants', () => {
     expect(layMult(g('LLVVHH'))).toBeGreaterThan(layMult(g('HHHHHH')));
   });
 
-  it('Winterstead: a mixed L/H genome out-earns the all-L god clone THERE (the 6d thesis)', () => {
+  it('Winterstead: a mixed L/H genome out-earns the all-L truebred THERE (the 6d thesis)', () => {
     const allL = winterEggs(g('LLLLLL'));
     const mixed = winterEggs(g('LLLHHH'));
     const lh24 = winterEggs(g('LLHHHH'));
@@ -504,7 +504,7 @@ describe.runIf(SIM)('balance-sim report', () => {
     const targetT4 = g('LHLHLH');
     const runs = 6; // averaged runs per cell
     try {
-      console.log('\n═══ C. BREEDING PROGRESSION (pop 24, avg of 6 runs; gens to mean-quality gate 4.5 / to first god clone) ═══');
+      console.log('\n═══ C. BREEDING PROGRESSION (pop 24, avg of 6 runs; gens to mean-quality gate 4.5 / to first truebred) ═══');
       console.log('dom  mut    policy  target    gens→gate  gens→god   est-hours→god  final-mean');
       for (const dom of [2, 3, 4]) {
         for (const mut of [0.01, 0.02, 0.04, 0.08]) {

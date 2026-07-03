@@ -307,7 +307,7 @@ describe('hardiness pays at Winterstead — and only there (the 6d thesis)', () 
     expect(hardinessMult(genome('PPPPPP'))).toBe(1);
   });
 
-  it('LLLHHH out-earns the all-L god clone AT WINTERSTEAD…', () => {
+  it('LLLHHH out-earns the all-L truebred AT WINTERSTEAD…', () => {
     const mk = (g: Genome) => {
       const s = winterSite(1);
       s.ducks = [duck('w', g)];

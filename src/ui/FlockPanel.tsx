@@ -28,7 +28,7 @@ export const GENE_META: Record<Gene, { label: string; color: string }> = {
 
 /**
  * The 6-slot genome as a strip of gene tiles. Hidden ("?") until the duck's
- * genome has been read; a slot matching the god-clone target gets a ring.
+ * genome has been read; a slot matching the Standard gets a ring.
  */
 export function GenomeTiles({
   duck,
@@ -304,7 +304,7 @@ function FlockHealth({ engine, state }: { engine: GameEngine; state: GameState }
   );
 }
 
-/** The breeding controls: god-clone target, existing pairs, and a new-pair builder over
+/** The breeding controls: Standard, existing pairs, and a new-pair builder over
  *  the flock list below (selection lives in FlockPanel and is passed in here). */
 function Breeding({
   engine,
@@ -371,7 +371,7 @@ function Breeding({
       </div>
 
       {/* TRACKING target: the workbench profile the browser/previews measure
-          against — a planning aid. The legacy gate + god-clone DING judge against
+          against — a planning aid. The legacy gate + truebred DING judge against
           the TIER's authoritative target (prestige.ts targetForTier); the ⌂ button
           snaps tracking back to it. Click a slot to cycle its gene. */}
       {(() => {
@@ -389,7 +389,7 @@ function Breeding({
           <div className="mb-1.5 flex items-center gap-1.5 rounded bg-[#171009] px-2 py-1.5">
             <span
               className="text-[9px] font-bold uppercase tracking-wider text-[#7a6a4a]"
-              title="Your workbench target — sorting/previews measure against it. The Legacy gate judges the tier's own target."
+              title="Your workbench target — sorting/previews measure against it. The Legacy gate judges against the tier's STANDARD."
             >
               Tracking
             </span>
@@ -409,16 +409,16 @@ function Breeding({
             {!onLegacy && (
               <button
                 onClick={() => engine.setGenomeTarget(legacyTarget)}
-                title="Snap tracking back to this tier's Legacy gate target"
+                title="Snap tracking back to this tier's Standard (the Legacy gate's target)"
                 className="rounded bg-[#3a2e22] px-1.5 py-0.5 text-[9px] font-bold text-[#ffe9a8] hover:bg-[#4a3a2a]"
               >
-                → legacy
+                → Standard
               </button>
             )}
             <span className="ml-auto text-[10px] text-[#9a8a6a]" title="Best match in the flock toward the tracking target">
               best <span className="tabular-nums text-[#ffe9a8]">{best}/{SLOTS}</span>
               {clones > 0 && (
-                <span className="ml-1 text-[#8fe388]">· {clones} god clone{clones > 1 ? 's' : ''}</span>
+                <span className="ml-1 text-[#8fe388]">· {clones} truebred{clones > 1 ? 's' : ''}</span>
               )}
             </span>
           </div>
@@ -620,7 +620,7 @@ export function FlockPanel({
   // Bulk-release cutoff: release READ ducks whose match-to-target is below this
   // (an unread duck is never bulk-culled — you can't judge a "?"). Defaults to the
   // BEST match currently in the flock, so it pre-selects "keep only my top tier"
-  // (with a perfect god clone present, that's SLOTS/SLOTS — cull everything that
+  // (with a perfect truebred present, that's SLOTS/SLOTS — cull everything that
   // isn't a perfect clone). Two-click confirm via armedBulk.
   const SLOTS = target.length;
   const [cullQuality, setCullQuality] = useState<number>(() =>

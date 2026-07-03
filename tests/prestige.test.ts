@@ -31,7 +31,7 @@ import { build, fullSetup, stockAll, setHens, run, FLAT_GENOME } from './helpers
 
 const NOW = 1_700_000_000_000;
 /**
- * A test duck whose genome matches the default (all-Lay) god-clone target in `q`
+ * A test duck whose genome matches the default (all-Lay) Standard in `q`
  * of its 6 slots — so meanQuality of a flock of duck(_, q) is exactly q.
  */
 const duck = (id: string, q: number, o: Partial<Duck> = {}): Duck => {
@@ -300,7 +300,7 @@ describe('Phase 6a: the gate target is tier-authoritative and ROTATES', () => {
   it('quality is judged per-tier: a lay flock aces T0 (all-L) but flunks T2 (all-H)', () => {
     const mk = (tier: number) => {
       const s = { ...initialState(0), legacyTier: tier };
-      s.ducks = Array.from({ length: 10 }, (_, i) => duck(`q${i}`, 6)); // all-L god clones
+      s.ducks = Array.from({ length: 10 }, (_, i) => duck(`q${i}`, 6)); // all-L truebreds
       return s;
     };
     expect(meanQuality(mk(0))).toBe(BALANCE.GENOME.SLOTS); // perfect vs LLLLLL
@@ -324,14 +324,14 @@ describe('Phase 6a: the gate target is tier-authoritative and ROTATES', () => {
   });
 });
 
-describe('Phase 6a: the god-clone DING judges the TIER target, not tracking', () => {
+describe('Phase 6a: the truebred DING judges the TIER target, not tracking', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('a hatch matching the tier target DINGs even when tracking points elsewhere', () => {
     // rng 0.4: never mutates (0.4 > MUTATION_CHANCE) and every contested L-vs-D
     // slot resolves to L (0.4·(3+1) < 3 picks the L parent; ≥ 1 rejects the D one),
     // so complementary LDLDLD × DLDLDL half-clones deterministically ASSEMBLE an
-    // all-L god clone — neither parent is one, so the first-clone DING must fire.
+    // all-L truebred — neither parent is one, so the first-clone DING must fire.
     vi.spyOn(Math, 'random').mockReturnValue(0.4);
     const s = build({ coop: 1 });
     const half = (id: string, sex: 'drake' | 'hen', evenSlots: boolean): Duck => ({
@@ -348,7 +348,7 @@ describe('Phase 6a: the god-clone DING judges the TIER target, not tracking', ()
     s.genomeTarget = ['H', 'H', 'H', 'H', 'H', 'H'] as Gene[]; // tracking points elsewhere
     runBreeding(s, BALANCE.BREEDING.CLUTCH_INTERVAL_S + BALANCE.BREEDING.INCUBATE_S + 1);
     expect(s.ducks.length).toBeGreaterThan(2); // something hatched
-    expect(s.pendingGodClone ?? 0).toBeGreaterThan(0); // tier-0 target (all-L) → DING
+    expect(s.pendingTruebred ?? 0).toBeGreaterThan(0); // tier-0 target (all-L) → DING
   });
 });
 
