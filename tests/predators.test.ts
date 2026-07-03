@@ -1034,3 +1034,43 @@ describe('guard-idle wound care (tab open, player away)', () => {
     expect(s.ducks).not.toContain(extra);
   });
 });
+
+describe('strike outcomes all SPEAK (repelled + shrugged events — pure feedback)', () => {
+  const openStrike = (s: GameState) => {
+    s.rank = BALANCE.PREDATORS.INTRO_RANK;
+    s.predatorsIntroduced = true;
+    s.predatorsSeen = ['owl'];
+    s.predators.owl = { timeToNextWindow: 0, windowRemaining: 60, windowElapsed: 0, attacksFired: 0 };
+  };
+
+  it('a guard-mode miss against the floor emits repelled', () => {
+    const s = flock(6);
+    openStrike(s);
+    for (let i = 0; i < 5; i++) buildDeterrent(s); // a real floor to hold the line
+    s.resources.eggs = 1e9;
+    // Drive to a committed dive, then let it expire in GUARD with rng that FAILS
+    // the attack roll (rng 0.99 ≥ any success chance) — formerly silent.
+    let calls = 0;
+    const rig = () => (calls++ === 0 ? 0.0 : 0.99); // first roll commits scheduling paths deterministically-ish
+    runPredators(s, 30, { mode: 'online', rng: rig, activeDefense: false });
+    runPredators(s, 30, { mode: 'online', rng: () => 0.99, activeDefense: false });
+    const kinds = events(s).map((e) => e.kind);
+    expect(kinds).toContain('repelled');
+    expect(s.ducks.some((d) => d.wounded)).toBe(false);
+  });
+
+  it('a Hardy shrug emits shrugged (with the duck’s name riding along)', () => {
+    const s = flock(6);
+    openStrike(s);
+    s.ducks.forEach((d) => {
+      d.genome = ['H', 'H', 'H', 'H', 'H', 'H'];
+      d.name = 'Tank';
+    });
+    // rng 0.1: attack roll SUCCEEDS (0.1 < 0.45), resist roll SUCCEEDS (0.1 < 0.6 cap).
+    runPredators(s, 45, { mode: 'offline', rng: () => 0.1, lossBudget: { remaining: 10 } });
+    const shrug = events(s).find((e) => e.kind === 'shrugged');
+    expect(shrug).toBeDefined();
+    expect(shrug && 'duckName' in shrug ? shrug.duckName : undefined).toBe('Tank');
+    expect(s.ducks.some((d) => d.wounded)).toBe(false);
+  });
+});

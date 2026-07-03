@@ -229,7 +229,11 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
 
   // Resilience: a Hardy (H-gene) duck has a chance to shrug off the wound
   // entirely. Throughput-only — it can't reduce a requirement, just survive a hit.
-  if (rng() < woundResistChance(target.genome)) return;
+  if (rng() < woundResistChance(target.genome)) {
+    // The H-gene's proudest moment was invisible — announce it (pure feedback).
+    emit(state, { kind: 'shrugged', predatorId: def.id, duckId: target.id, duckName: target.name });
+    return;
+  }
 
   target.wounded = true;
   target.woundSource = 'predator';
@@ -355,7 +359,11 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
 
   // GUARD (online idle): the built floor + passive presence get a roll to hold.
   const success = attackChance(state, def, true);
-  if (rng() >= success) return; // missed — defenses/presence held
+  if (rng() >= success) {
+    // Formerly silent — the nets' finest work deserves a beat (pure feedback).
+    emit(state, { kind: 'repelled', predatorId: def.id, duckId: target.id });
+    return; // missed — defenses/presence held
+  }
   wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
   if (def.jackpot) ps.jackpotLanded = (ps.jackpotLanded ?? 0) + 1;
   landHit(state, def, opts, target, rng);

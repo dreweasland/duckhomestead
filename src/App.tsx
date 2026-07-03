@@ -8,6 +8,7 @@ import {
   playPlace,
   playTend,
   playThreat,
+  playScare,
   playUpgrade,
 } from './audio/sfx';
 import { BALANCE, zoneDef, type StationType } from './config/balance';
@@ -115,7 +116,14 @@ export default function App() {
         if (e.kind === 'scared') return; // the scare's own whoosh plays at the click
         if (e.kind === 'winding' || e.kind === 'feint') playDive(); // a dive (re)commits — scare it!
         else if (e.kind === 'incoming' || e.kind === 'open') playThreat();
-        else {
+        else if (e.kind === 'repelled' || e.kind === 'shrugged') {
+          // Good outcomes get the scare's own triumphant whoosh, not the screech —
+          // and a named Hardy duck's shrug is a story worth a toast.
+          playScare();
+          if (e.kind === 'shrugged' && e.duckName) {
+            setDuckNews({ id: Date.now(), text: `${e.duckName} shrugged it off!`, grave: false });
+          }
+        } else {
           playAttack(); // wound / snatched / escalated / crowdInjury — a duck got hurt
           if ('duckName' in e && e.duckName) {
             const text =

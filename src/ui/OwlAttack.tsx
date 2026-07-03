@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { playScare } from '../audio/sfx';
 import type { GameEngine } from '../game/engine';
 import { activeStrike } from '../game/predators';
@@ -34,10 +34,22 @@ const DIVE_SPOTS = [
 
 interface Puff {
   id: number;
-  kind: 'foiled' | 'feint';
+  kind: 'foiled' | 'feint' | 'wound' | 'repelled' | 'shrugged';
   left: number;
   top: number;
+  /** Which art flees on a foil (the raccoon scurries; the owl climbs). */
+  raccoon: boolean;
 }
+
+/** Burst styling per outcome — the foil is the HEADLINE beat (big text + the
+ *  predator visibly fleeing); the rest are readable mid-size bursts. */
+const PUFF_META: Record<Puff['kind'], { text: string; className: string }> = {
+  foiled: { text: 'Scared off!', className: 'text-xl text-[#bfe8a8]' },
+  feint: { text: 'Dodged!', className: 'text-sm text-[#ffd9a8]' },
+  wound: { text: 'Wounded!', className: 'text-base text-[#ff9a9a]' },
+  repelled: { text: 'Defenses held!', className: 'text-base text-[#8fc8e8]' },
+  shrugged: { text: 'Shrugged it off!', className: 'text-base text-[#9fd4e8]' },
+};
 
 export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameState }) {
   // A brief click-feedback puff that outlives the dive it reacts to (the strike
@@ -45,11 +57,33 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
   const [puff, setPuff] = useState<Puff | null>(null);
   useEffect(() => {
     if (puff == null) return;
-    const t = window.setTimeout(() => setPuff(null), 650);
+    const t = window.setTimeout(() => setPuff(null), puff.kind === 'feint' ? 650 : 950);
     return () => window.clearTimeout(t);
   }, [puff?.id]);
 
   const strike = activeStrike(state);
+
+  // Remember where the current dive is aimed — a strike clears from state the
+  // instant it RESOLVES, so outcome events (wound/repelled/shrugged) arrive
+  // after the spot is gone. The ref holds the last live position.
+  const lastSpotRef = useRef<{ left: number; top: number; raccoon: boolean } | null>(null);
+  if (strike) {
+    const sp = DIVE_SPOTS[strike.strike.spot % DIVE_SPOTS.length];
+    lastSpotRef.current = { left: sp.left, top: sp.top, raccoon: strike.predatorId === 'raccoon' };
+  }
+
+  // Un-clicked resolutions get their beat too: a landed hit, the floor holding,
+  // or a Hardy shrug — each bursts at the dive spot the moment it resolves.
+  useEffect(
+    () =>
+      engine.onPredator((e) => {
+        if (e.kind !== 'wound' && e.kind !== 'repelled' && e.kind !== 'shrugged') return;
+        const at = lastSpotRef.current;
+        if (!at) return;
+        setPuff({ id: Date.now(), kind: e.kind, left: at.left, top: at.top, raccoon: at.raccoon });
+      }),
+    [engine],
+  );
 
   const onScare = () => {
     if (!strike) return;
@@ -57,7 +91,13 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
     const res = engine.scare(strike.predatorId); // scare THIS predator (owl or raccoon)
     if (!res) return;
     if (res.kind === 'foiled') playScare(); // feint's re-dive screech plays via onPredator
-    setPuff({ id: Date.now(), kind: res.kind, left: spot.left, top: spot.top });
+    setPuff({
+      id: Date.now(),
+      kind: res.kind,
+      left: spot.left,
+      top: spot.top,
+      raccoon: strike.predatorId === 'raccoon',
+    });
   };
 
   if (!strike && puff == null) return null;
@@ -149,18 +189,29 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
         </>
       )}
 
-      {/* Click-feedback beat: green "Scared off!" on a foil, amber "Dodged!" when
-          the owl juked away (feint). */}
+      {/* Outcome beats: every resolution speaks. The foil is the headline —
+          big burst + the predator visibly fleeing; wound / defenses-held /
+          shrugged burst at the dive spot in their own colors. */}
       {puff != null && (
-        <span
-          key={puff.id}
-          className={`scare-puff absolute whitespace-nowrap text-sm font-black uppercase tracking-wider drop-shadow ${
-            puff.kind === 'foiled' ? 'text-[#bfe8a8]' : 'text-[#ffd9a8]'
-          }`}
-          style={{ left: `${puff.left}%`, top: `${puff.top}%` }}
-        >
-          {puff.kind === 'foiled' ? 'Scared off!' : 'Dodged!'}
-        </span>
+        <>
+          {puff.kind === 'foiled' && (
+            <span
+              key={`flee-${puff.id}`}
+              className={`${puff.raccoon ? 'raccoon-flee' : 'predator-flee'} absolute`}
+              style={{ left: `${puff.left}%`, top: `${puff.top}%` }}
+              aria-hidden
+            >
+              {puff.raccoon ? <RaccoonIcon size={76} /> : <SwoopOwlIcon size={84} />}
+            </span>
+          )}
+          <span
+            key={puff.id}
+            className={`outcome-burst absolute whitespace-nowrap font-black uppercase tracking-wider drop-shadow ${PUFF_META[puff.kind].className}`}
+            style={{ left: `${puff.left}%`, top: `${puff.top}%` }}
+          >
+            {PUFF_META[puff.kind].text}
+          </span>
+        </>
       )}
     </div>
   );

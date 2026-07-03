@@ -608,6 +608,10 @@ export type PredatorEvent =
   | { kind: 'crowdInjury'; duckId: string; duckName?: string }
   | { kind: 'wound'; predatorId: string; duckId: string; duckName?: string }
   | { kind: 'snatched'; predatorId: string; duckId: string; duckName?: string }
+  // The two formerly-INVISIBLE strike outcomes (pure feedback, no mechanics):
+  // the built floor/presence beat the attack, or a Hardy duck shrugged the hit.
+  | { kind: 'repelled'; predatorId: string; duckId: string }
+  | { kind: 'shrugged'; predatorId: string; duckId: string; duckName?: string }
   | { kind: 'escalated'; duckId: string; source?: 'predator' | 'overcrowd'; duckName?: string }
   // Phase 6c: a jackpot-eligible siege window closed flawless (≥1 committed
   // dive, zero landed) — grantModule already ran sim-side; the engine drain
