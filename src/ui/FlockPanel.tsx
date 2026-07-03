@@ -437,6 +437,10 @@ function Breeding({
         const isOpen = expanded.has(p.id);
         return (
           <div key={p.id} className="mb-1.5 rounded bg-[#171009] px-2 py-1.5">
+            {/* Line 1 — the marriage line: who this pair IS. Names get the whole
+                line ("Petunia Marigold × Ferdinand"); unnamed parents read as a
+                plain Drake/Hen. Genetics live on their own line below, so neither
+                ever crowds the other out. */}
             <div className="flex items-center gap-1.5 text-[11px]">
               <button
                 onClick={() => toggle(p.id)}
@@ -445,21 +449,29 @@ function Breeding({
               >
                 <span className="w-2 shrink-0 text-[#7a6a4a]">{isOpen ? '▾' : '▸'}</span>
                 <ColorSwatch color={phenotype(dr.genotype)} size={11} />
-                {dr.name && <span className="max-w-24 truncate font-bold text-[#f5ecd8]">{dr.name}</span>}
-                {!dr.genomeKnown && <PhenoBands genome={dr.genome} width={16} />}
-                <GenomeTiles duck={dr} target={target} size={12} />
-                <span className="text-[#5a4d3a]">·</span>
+                <span className={`truncate ${dr.name ? 'font-bold text-[#f5ecd8]' : 'text-[#c9b88f]'}`}>
+                  {dr.name ?? 'Drake'}
+                </span>
+                <span className="shrink-0 text-[#5a4d3a]">×</span>
                 <ColorSwatch color={phenotype(he.genotype)} size={11} />
-                {he.name && <span className="max-w-24 truncate font-bold text-[#f5ecd8]">{he.name}</span>}
-                {!he.genomeKnown && <PhenoBands genome={he.genome} width={16} />}
-                <GenomeTiles duck={he} target={target} size={12} />
+                <span className={`truncate ${he.name ? 'font-bold text-[#f5ecd8]' : 'text-[#c9b88f]'}`}>
+                  {he.name ?? 'Hen'}
+                </span>
               </button>
               <button
                 onClick={() => engine.unpair(p.id)}
-                className="ml-auto rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
+                className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
               >
                 unpair
               </button>
+            </div>
+            {/* Line 2 — the genetics, uncrowded. */}
+            <div className="mt-0.5 flex items-center gap-1.5 pl-3.5">
+              {!dr.genomeKnown && <PhenoBands genome={dr.genome} width={16} />}
+              <GenomeTiles duck={dr} target={target} size={12} />
+              <span className="text-[#5a4d3a]">·</span>
+              {!he.genomeKnown && <PhenoBands genome={he.genome} width={16} />}
+              <GenomeTiles duck={he} target={target} size={12} />
             </div>
             {dr.wounded || he.wounded ? (
               <div
