@@ -27,6 +27,7 @@ import {
 import { waterWoundMult } from '../src/game/water';
 import {
   buildDeterrent,
+  buildInfirmary,
   buildSecureCoop,
   repairDeterrents,
   setSecured,
@@ -990,5 +991,46 @@ describe('offline catch-up = exposure (built floor only, but never a wipe)', () 
     s.lastSeen = -1 * HOUR;
     const away = runOfflineCatchUp(s, 0);
     expect(away.debuffed).toBeUndefined(); // not re-reported as a "while away" toll
+  });
+});
+
+describe('guard-idle wound care (tab open, player away)', () => {
+  const mkWounded = () => {
+    const s = flock(4);
+    s.rank = 1; // no windows — only the wound clock
+    buildInfirmary(s);
+    const d = s.ducks[0];
+    d.wounded = true;
+    d.woundSource = 'predator';
+    d.severity = 'minor';
+    d.woundElapsed = 5;
+    return { s, d };
+  };
+
+  it('GUARDED (online, active lapsed): the infirmary auto-admits — same as offline', () => {
+    const { s, d } = mkWounded();
+    runPredators(s, 1, { mode: 'online', rng: never, activeDefense: false });
+    expect(d.recovering).toBe(true);
+  });
+
+  it('ACTIVE (player demonstrably here): triage stays manual', () => {
+    const { s, d } = mkWounded();
+    runPredators(s, 1, { mode: 'online', rng: never, activeDefense: true });
+    expect(d.recovering).toBeFalsy();
+  });
+
+  it('guard overflow still escalates — the exposure matches a night away', () => {
+    const { s } = mkWounded();
+    // Fill every slot, then wound one more past its timer.
+    for (const d of s.ducks) {
+      d.wounded = true;
+      d.severity = 'minor';
+      d.recovering = true;
+    }
+    const extra = s.ducks[1];
+    extra.recovering = false;
+    extra.woundElapsed = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * 2;
+    runPredators(s, 1, { mode: 'online', rng: never, activeDefense: false });
+    expect(s.ducks).not.toContain(extra);
   });
 });

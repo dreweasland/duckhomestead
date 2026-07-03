@@ -565,8 +565,15 @@ function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void 
       continue;
     }
 
-    // Offline the infirmary triages itself — auto-admit waiting wounds into free slots.
-    if (opts.mode === 'offline') {
+    // When the player is NOT actively here — offline catch-up OR guard-idle (the
+    // active window lapsed with the tab open) — the infirmary triages itself:
+    // auto-admit waiting wounds into free slots. Gating this on offline alone
+    // made tab-open-AFK strictly deadlier than closing the browser (no
+    // auto-admit, no mercy rail, full wall-clock escalation) — a perverse
+    // incentive. While ACTIVE, triage stays the player's job (the 150s active
+    // window is the "actually here" signal). Losses at guard now only occur on
+    // infirmary overflow — the same exposure as a night away.
+    if (opts.mode === 'offline' || !opts.activeDefense) {
       if (freeSlots < 0) freeSlots = infirmaryCapacity(state) - infirmaryOccupied(state);
       if (freeSlots > 0) {
         d.recovering = true;
