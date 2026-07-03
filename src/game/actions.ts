@@ -78,10 +78,15 @@ export function producerMaxed(station: Station): boolean {
   return INGREDIENT_PRODUCERS.has(station.type) && station.level >= BALANCE.UPGRADE.PRODUCER.levelCap;
 }
 
-/** Egg cost to upgrade a station from its current level to the next. */
+/** Egg cost to upgrade a station from its current level to the next. Producers
+ *  climb their own STEEPER curve (wide-then-tall; see UPGRADE.PRODUCER) —
+ *  mills/coops keep the standard one (they're the uncapped scale ladder). */
 export function upgradeCost(station: Station): number {
   const base = BALANCE.UPGRADE.baseCost[station.type];
-  return Math.round(base * Math.pow(BALANCE.UPGRADE.costGrowth, station.level - 1));
+  const growth = INGREDIENT_PRODUCERS.has(station.type)
+    ? BALANCE.UPGRADE.PRODUCER.costGrowth
+    : BALANCE.UPGRADE.costGrowth;
+  return Math.round(base * Math.pow(growth, station.level - 1));
 }
 
 /**

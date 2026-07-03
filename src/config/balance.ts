@@ -134,7 +134,17 @@ export const BALANCE = {
      * cap), and the per-zone board size bounds the flock (grow by unlocking the next
      * zone). Housing (coops) + mill blend capacity keep the full uncapped curve.
      */
-    PRODUCER: { outputMultPerLevel: 1.3, levelCap: 14 },
+    /** Producers also get their OWN cost growth (playtest, 2026-07-02): at the
+     * shared 1.6 vs 1.3×/level output, going tall stayed trivially cheap forever
+     * — inverting this curve's whole intent ("build wide first… then top out")
+     * and leaving late-game egg mountains nothing to buy (a 50k stockpile
+     * cleared every ladder without a decision). At 2.1 the growth barely moves
+     * early levels (L1→3 ~+20%) and diverges exactly where wealth lives: one
+     * shell line L5→L8 ≈ 39k, capping ONE producer at L14 ≈ 340k — "top out"
+     * becomes the endgame egg project. PRICE over POWER: output per level is
+     * untouched, so the validated nutrition puzzle is untouched (this retires
+     * the previously-banked outputMultPerLevel 1.3→1.2 candidate). */
+    PRODUCER: { outputMultPerLevel: 1.3, levelCap: 14, costGrowth: 2.1 },
   },
 
   // ── Online vs Offline (the core law) ────────────────────────────────

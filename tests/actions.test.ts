@@ -204,3 +204,20 @@ describe('outputPerCycle — the UI yield mirrors the sim', () => {
     expect(cornPerCycle(s, plot)).toBeGreaterThan(base);
   });
 });
+
+describe('producer repricing: wide-then-tall (price over power)', () => {
+  it('producers climb their own steeper cost curve; mills/coops keep the standard one', () => {
+    const s = build({ plot: 1, mill: 1 });
+    const plot = s.stations.find((x) => x.type === 'plot')!;
+    const mill = s.stations.find((x) => x.type === 'mill')!;
+    plot.level = 6;
+    mill.level = 6;
+    const U = BALANCE.UPGRADE;
+    expect(upgradeCost(plot)).toBe(Math.round(U.baseCost.plot * Math.pow(U.PRODUCER.costGrowth, 5)));
+    expect(upgradeCost(mill)).toBe(Math.round(U.baseCost.mill * Math.pow(U.costGrowth, 5)));
+    expect(upgradeCost(plot)).toBeGreaterThan(upgradeCost(mill)); // despite plot's LOWER base
+    // Early levels barely move: L1->L2 is the base cost on BOTH curves.
+    plot.level = 1;
+    expect(upgradeCost(plot)).toBe(U.baseCost.plot);
+  });
+});
