@@ -456,10 +456,20 @@ function Breeding({
                 unpair
               </button>
             </div>
-            <div className="mt-0.5 text-[10px] text-[#9a8a6a]">
-              clutch {Math.ceil(next)}s
-              {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
-            </div>
+            {dr.wounded || he.wounded ? (
+              <div
+                className="mt-0.5 text-[10px] font-bold text-[#e8a35a]"
+                title="A wounded bird can't breed — the clutch clock is stopped until it's treated (admit it to the infirmary)."
+              >
+                paused — {dr.wounded ? 'drake' : 'hen'} wounded, treat to resume
+                {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
+              </div>
+            ) : (
+              <div className="mt-0.5 text-[10px] text-[#9a8a6a]">
+                clutch {Math.ceil(next)}s
+                {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
+              </div>
+            )}
             {isOpen && (
               <>
                 <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#7a6a4a]">

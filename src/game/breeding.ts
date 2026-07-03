@@ -94,7 +94,9 @@ export function runBreeding(
     // Lay a fertilized clutch on the interval (bounded queue so it can't pile up).
     // breedRate (drake-ration throttle) scales how fast clutches accrue.
     pair.clutchProgress += step * breedRate;
-    while (pair.clutchProgress >= B.CLUTCH_INTERVAL_S && pair.incubating.length < B.CLUTCH_SIZE * 2) {
+    // Cap check leaves room for the WHOLE clutch — `< CLUTCH_SIZE * 2` allowed a
+    // full clutch to push at one-slot-free, overshooting the bound to 11 of 8.
+    while (pair.clutchProgress >= B.CLUTCH_INTERVAL_S && pair.incubating.length + B.CLUTCH_SIZE <= B.CLUTCH_SIZE * 2) {
       pair.clutchProgress -= B.CLUTCH_INTERVAL_S;
       for (let i = 0; i < B.CLUTCH_SIZE; i++) pair.incubating.push(0);
     }
