@@ -155,6 +155,25 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
   }
 
   let outflow = 0;
+  if (resource === 'eggs') {
+    // The clutch drain (4a dual-purpose law): each VALID pair (both parents
+    // present, adult, unwounded — mirrors runBreeding) spends CLUTCH_SIZE ×
+    // FERTILIZED_EGG_COST per interval, scaled by the drake-ration breed rate.
+    const B = BALANCE.BREEDING;
+    const byId = new Map(state.ducks.map((d) => [d.id, d]));
+    let pairs = 0;
+    for (const p of state.breedingPairs) {
+      const dr = byId.get(p.drakeId);
+      const he = byId.get(p.henId);
+      if (!dr || dr.sex !== 'drake' || dr.stage !== 'adult' || dr.wounded) continue;
+      if (!he || he.sex !== 'hen' || he.stage !== 'adult' || he.wounded) continue;
+      pairs++;
+    }
+    if (pairs > 0) {
+      const breedRate = state.drakeNutrition?.breedRate ?? 1;
+      outflow += (pairs * B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST * breedRate) / B.CLUTCH_INTERVAL_S;
+    }
+  }
   if ((INGREDIENTS as readonly string[]).includes(resource)) {
     const ing = resource as Ingredient;
     const coopCycle = BALANCE.COOP.cycleSeconds;

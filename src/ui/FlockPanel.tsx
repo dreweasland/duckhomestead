@@ -464,9 +464,17 @@ function Breeding({
                 paused — {dr.wounded ? 'drake' : 'hen'} wounded, treat to resume
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
               </div>
+            ) : next <= 0 && state.resources.eggs < B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST ? (
+              <div
+                className="mt-0.5 text-[10px] font-bold text-[#e8a35a]"
+                title="A clutch IS eggs — laying one draws them from storage. It fires the moment you can afford it."
+              >
+                clutch ready — needs {B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST} eggs
+                {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
+              </div>
             ) : (
               <div className="mt-0.5 text-[10px] text-[#9a8a6a]">
-                clutch {Math.ceil(next)}s
+                clutch {Math.ceil(next)}s · {B.CLUTCH_SIZE * B.FERTILIZED_EGG_COST} eggs
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
               </div>
             )}
