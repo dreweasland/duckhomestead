@@ -21,6 +21,7 @@ import {
   adultDrakes,
   adultLayers,
   breedingEstablished,
+  coopCapacity,
   deterrentCost,
   hardwareClothCost,
   infirmaryCapacity,
@@ -175,7 +176,11 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
       if (!he || he.sex !== 'hen' || he.stage !== 'adult' || he.wounded) continue;
       pairs++;
     }
-    if (pairs > 0) {
+    // A packed flock pins every clutch clock (hens don't nest without housing
+    // headroom) — the drain is zero until space frees, and the panel says so.
+    let homeCount = 0;
+    for (const d of state.ducks) if (d.site !== 'winter') homeCount++;
+    if (pairs > 0 && homeCount < coopCapacity(state)) {
       const breedRate = state.drakeNutrition?.breedRate ?? 1;
       outflow += (pairs * clutchCost(state) * breedRate) / B.CLUTCH_INTERVAL_S;
     }

@@ -481,6 +481,14 @@ function Breeding({
                 paused — {dr.wounded ? 'drake' : 'hen'} wounded, treat to resume
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
               </div>
+            ) : next <= 0 && state.ducks.filter((d) => d.site !== 'winter').length >= coopCapacity(state) ? (
+              <div
+                className="mt-0.5 text-[10px] font-bold text-[#e8a35a]"
+                title="Hens don’t nest when the coops are packed — the clutch (and its egg cost) waits for housing headroom, then lays and incubates normally. Free a slot: upgrade/build a coop, release a duck, or winter a hen."
+              >
+                waiting — coops full (clutch ready)
+                {p.incubating.length > 0 && ` · ${p.incubating.length} incubating`}
+              </div>
             ) : next <= 0 && state.resources.eggs < clutchCost(state) ? (
               <div
                 className="mt-0.5 text-[10px] font-bold text-[#e8a35a]"

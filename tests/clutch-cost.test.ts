@@ -87,3 +87,38 @@ describe('the clutch egg cost (spend-vs-grow, restored)', () => {
     expect(resourceFlow(s, 'eggs').out).toBe(0);
   });
 });
+
+describe('hens don’t nest when the coops are packed (housing gates the LAY, not just the hatch)', () => {
+  it('a full flock pins the clutch clock — no eggs spent, no parked queue growth', () => {
+    const s = pairFarm(100000);
+    s.contracts.peakEggRate = 8; // real pricing
+    // Fill housing exactly: fullSetup's coop (cap 4) with 2 parents + 2 fillers.
+    s.ducks.push({ ...s.ducks[1], id: 'f1' }, { ...s.ducks[1], id: 'f2' });
+    const eggs0 = s.resources.eggs;
+    runBreeding(s, B.CLUTCH_INTERVAL_S * 3);
+    expect(s.breedingPairs[0].incubating).toHaveLength(0); // nothing laid
+    expect(s.resources.eggs).toBe(eggs0); // nothing SPENT — the hidden drain is gone
+    expect(s.breedingPairs[0].clutchProgress).toBe(B.CLUTCH_INTERVAL_S); // pinned, ready
+
+    // Free a slot → the clutch lays (spending NOW) and incubates for real.
+    s.ducks = s.ducks.filter((d) => d.id !== 'f2');
+    runBreeding(s, 1);
+    expect(s.breedingPairs[0].incubating).toHaveLength(B.CLUTCH_SIZE);
+    expect(s.resources.eggs).toBe(eggs0 - clutchCost(s));
+    expect(s.ducks.length).toBe(3); // no insta-hatch — incubation runs its 60s
+    runBreeding(s, B.INCUBATE_S + 1);
+    expect(s.ducks.length).toBe(4); // hatched into the freed slot, on schedule
+  });
+
+  it('eggs already incubating when housing fills still park at hatch-ready (paid for)', () => {
+    const s = pairFarm(100000);
+    runBreeding(s, B.CLUTCH_INTERVAL_S - 1);
+    runBreeding(s, 2); // clutch laid with room available
+    expect(s.breedingPairs[0].incubating).toHaveLength(B.CLUTCH_SIZE);
+    // Now pack the housing before they hatch.
+    s.ducks.push({ ...s.ducks[1], id: 'f1' }, { ...s.ducks[1], id: 'f2' });
+    runBreeding(s, B.INCUBATE_S * 2);
+    expect(s.breedingPairs[0].incubating).toHaveLength(B.CLUTCH_SIZE); // parked
+    expect(s.ducks.length).toBe(4);
+  });
+});

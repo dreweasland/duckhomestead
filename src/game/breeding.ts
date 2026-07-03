@@ -110,9 +110,19 @@ export function runBreeding(
     // full clutch to push at one-slot-free, overshooting the bound to 11 of 8.
     // The clutch IS eggs (the 4a dual-purpose law): laying one draws real eggs
     // from storage; unaffordable → it WAITS at the threshold and fires the
-    // instant it's funded (throttle, like an input-starved station).
+    // instant it's funded (throttle, like an input-starved station). Hens also
+    // don't nest when the coops are PACKED: with no housing headroom a clutch
+    // would just sink its egg cost into a parked hatch-ready queue (a hidden
+    // drain at peak-priced costs) and insta-fill slots the moment one frees —
+    // so a full flock pins the clutch clock too, and freeing space triggers
+    // lay → real incubation → hatch, in that order. (Eggs already incubating
+    // when housing fills still park at hatch-ready — they're paid for.)
     const cost = clutchCost(state);
-    while (pair.clutchProgress >= B.CLUTCH_INTERVAL_S && pair.incubating.length + B.CLUTCH_SIZE <= B.CLUTCH_SIZE * 2) {
+    while (
+      pair.clutchProgress >= B.CLUTCH_INTERVAL_S &&
+      pair.incubating.length + B.CLUTCH_SIZE <= B.CLUTCH_SIZE * 2 &&
+      homeCount < capacity
+    ) {
       if (state.resources.eggs < cost) break; // waits — progress clamps below
       state.resources.eggs -= cost;
       pair.clutchProgress -= B.CLUTCH_INTERVAL_S;
