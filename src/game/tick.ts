@@ -1,5 +1,6 @@
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import type { Resource } from './state';
+import { addResource, INGREDIENTS, ingredientCap } from './state';
 import type { GameState, Station } from './state';
 import { UPGRADE_OUTPUT, stationOutputMult } from './actions';
 import { cycleMult, yieldMult } from './loot';
@@ -37,11 +38,12 @@ function stationOutput(station: Station, resource: Resource, throughput: number)
 }
 
 
-/** Move everything in a station's buffer into central storage. */
+/** Move everything in a station's buffer into central storage (ingredient adds
+ *  clamp at the Feed Store cap — the one accrual choke point). */
 function haul(state: GameState, station: Station): void {
   for (const key of Object.keys(station.buffer) as Resource[]) {
     const amt = station.buffer[key] ?? 0;
-    if (amt > 0) state.resources[key] += amt;
+    if (amt > 0) addResource(state, key, amt);
   }
   station.buffer = {};
 }
@@ -104,6 +106,21 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     // never cycles at all — a 0s cycle would spin the loop to its guard.
     if (station.type === 'mill' || station.type === 'coop' || station.type === 'winterCoop') continue;
     if (STATION_DEFS[station.type].cycleSeconds <= 0) continue;
+
+    // THE FEED STORE: a producer whose output store is FULL idles exactly like
+    // an input-starved station — ready the instant space frees (stock drains or
+    // a silo is bought). Keeps mountains impossible without wasting output.
+    const outputs = Object.keys(STATION_DEFS[station.type].outputs) as Resource[];
+    const storeFull =
+      outputs.length > 0 &&
+      outputs.every(
+        (res) =>
+          (INGREDIENTS as readonly string[]).includes(res) && state.resources[res] >= ingredientCap(state),
+      );
+    if (storeFull) {
+      station.cycleProgress = Math.min(station.cycleProgress, STATION_DEFS[station.type].cycleSeconds * cycleScale);
+      continue;
+    }
 
     // The boost divides cycle time — a global top-level rate scalar.
     const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleScale;

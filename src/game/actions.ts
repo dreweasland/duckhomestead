@@ -18,6 +18,7 @@ import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import { waterWoundMult } from './water';
 import type { Gene, GameState, Ingredient, Module, Rarity, Resource, Station } from './state';
 import {
+  addResource,
   adultDrakes,
   adultLayers,
   breedingEstablished,
@@ -382,7 +383,7 @@ export function collectStation(state: GameState, stationId: string): ActionResul
   if (!station) return fail('No such station');
   const moved = { ...station.buffer };
   for (const key of Object.keys(station.buffer) as Resource[]) {
-    state.resources[key] += station.buffer[key] ?? 0;
+    addResource(state, key, station.buffer[key] ?? 0); // ingredient caps apply
   }
   station.buffer = {};
   return done(moved);
@@ -395,7 +396,7 @@ export function collectAll(state: GameState): Partial<Record<Resource, number>> 
     for (const key of Object.keys(station.buffer) as Resource[]) {
       const amt = station.buffer[key] ?? 0;
       if (amt <= 0) continue;
-      state.resources[key] += amt;
+      addResource(state, key, amt); // ingredient caps apply
       total[key] = (total[key] ?? 0) + amt;
     }
     station.buffer = {};

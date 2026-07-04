@@ -27,6 +27,7 @@ export const STATION_TEXTURE_URL: Record<StationType, string> = {
   winterCoop: `${FARM}/winterCoop.png`,
   heater: `${FARM}/heater.png`,
   heatedWaterer: `${FARM}/heatedWaterer.png`,
+  silo: `${FARM}/silo.png`, // no baked art yet — flat-color fallback carries it
 };
 
 export const MILL_SAILS_URL = `${FARM}/mill_sails.png`;
