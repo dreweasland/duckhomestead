@@ -1115,3 +1115,19 @@ describe('defense COVERAGE: the floor stretches thin as the flock outgrows the n
     expect(defenseFloor(s)).toBeCloseTo(BALANCE.PREDATORS.DEFENSE_FLOOR_CAP, 6);
   });
 });
+
+it('coverage keeps the build path OPEN past the floor cap (the Watch maxed-gate rule)', () => {
+  // 4 nets cap the FLOOR, but a 100-duck flock needs ~7 for coverage — the
+  // "maxed" rule the Watch uses must be floor-capped AND fully covered.
+  const s = flock(4);
+  s.resources.eggs = 1e9;
+  for (let i = 0; i < 4; i++) buildDeterrent(s);
+  const P = BALANCE.PREDATORS;
+  while (s.ducks.length < 100) s.ducks.push({ ...s.ducks[0], id: `x${s.ducks.length}` });
+  const maxed =
+    s.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP &&
+    s.deterrents * P.DUCKS_COVERED_PER_UNIT >= exposedFlock(s);
+  expect(maxed).toBe(false); // stretched line → build stays open
+  while (s.deterrents * P.DUCKS_COVERED_PER_UNIT < exposedFlock(s)) buildDeterrent(s);
+  expect(defenseCoverage(s)).toBe(1);
+});

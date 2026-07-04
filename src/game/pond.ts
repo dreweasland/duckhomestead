@@ -238,7 +238,18 @@ export function placePondFeature(
 export function pondFeatureUpgradeCost(state: GameState, x: number, y: number): number {
   const f = featAt(state, x, y);
   if (!f) return 0;
-  return Math.round(F[f.type].costEggs * Math.pow(W.UPGRADE.costGrowth, f.level ?? 1));
+  const level = f.level ?? 1;
+  const flat = F[f.type].costEggs * Math.pow(W.UPGRADE.costGrowth, level);
+  // The clutch treatment: at scale the price rides the run's PEAK egg rate so
+  // covering a big flock's water is a real spend, not a rounding error. The
+  // flat curve floors it — the early game never notices.
+  const peak = (state.contracts.peakEggRate ?? 0) * W.UPGRADE.peakSecondsPerLevel * Math.pow(W.UPGRADE.costGrowth, level - 1);
+  return Math.round(Math.max(flat, peak));
+}
+
+/** True once a feature has hit the upgrade summit (levelCap). */
+export function pondFeatureMaxed(f: { level?: number }): boolean {
+  return (f.level ?? 1) >= W.UPGRADE.levelCap;
 }
 
 /** Upgrade a provision feature (+1 level → more water). The pre-prestige water
@@ -249,6 +260,7 @@ export function upgradePondFeature(state: GameState, x: number, y: number): Pond
   // A spring (baseProvision 0) is positional — its level never scales anything, so
   // upgrading it would just burn eggs. Its bonus to pools rides the POOL's level.
   if (F[f.type].baseProvision <= 0) return fail('Springs feed pools — they can’t be upgraded');
+  if (pondFeatureMaxed(f)) return fail('At max level — add another feature to grow provision');
   const cost = pondFeatureUpgradeCost(state, x, y);
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;
