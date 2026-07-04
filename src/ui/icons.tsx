@@ -528,7 +528,7 @@ export const GrangeIcon = (p: PixProps) => (
 export const PrimeIcon = (p: PixProps) => (
   <Pix
     {...p}
-    palette={{ y: '#ffd23f', h: '#fff2b8', d: '#c79a1f' }}
+    palette={{ y: '#c9a6ff', h: '#eee2ff', d: '#9a6fd9' }}
     rows={[
       '...y...',
       '..hyh..',

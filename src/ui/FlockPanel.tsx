@@ -24,8 +24,10 @@ export const GENE_META: Record<Gene, { label: string; color: string }> = {
   V: { label: 'Vigor', color: '#e8c45a' },
   H: { label: 'Hardy', color: '#7fb8e8' },
   D: { label: 'Dud', color: '#6a5a4a' },
-  // Phase 6c: the Prime wildcard — a distinct pixel-gold, never one of the axis colors.
-  P: { label: 'Prime', color: '#ffd23f' },
+  // Phase 6c: the Prime wildcard. Violet — the legacy/prestige color family
+  // (Prime IS legacy-tier content), and unmistakably not an axis color. (The
+  // original "distinct pixel-gold" read as Vigor's twin at tile size.)
+  P: { label: 'Prime', color: '#c9a6ff' },
 };
 
 /**
