@@ -785,13 +785,23 @@ export function buildDeterrent(state: GameState): ActionResult<{ deterrents: num
  * (and how many nets), so topping off and full repairs cost the same per unit.
  * Active-only upkeep — you can't repair while away, so the floor decays offline.
  */
-export function repairDeterrents(state: GameState): ActionResult<{ cost: number }> {
+/** The per-net full-wear repair price: seconds of the run's peak egg rate,
+ *  floored at the flat rate (see REPAIR_PEAK_SECONDS_PER_NET) — the clutch
+ *  pricing applied to the game's other recurring egg bill. */
+export function repairCostPerNet(state: GameState): number {
   const P = BALANCE.PREDATORS;
+  return Math.max(
+    P.DETERRENT_REPAIR_COST_PER_NET,
+    Math.round((state.contracts.peakEggRate ?? 0) * P.REPAIR_PEAK_SECONDS_PER_NET),
+  );
+}
+
+export function repairDeterrents(state: GameState): ActionResult<{ cost: number }> {
   if (state.deterrents <= 0) return fail('No deterrents to repair');
   if (state.deterrentIntegrity >= 1) return fail('Deterrents are already pristine');
   const cost = Math.max(
     1,
-    Math.round(state.deterrents * P.DETERRENT_REPAIR_COST_PER_NET * (1 - state.deterrentIntegrity)),
+    Math.round(state.deterrents * repairCostPerNet(state) * (1 - state.deterrentIntegrity)),
   );
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;
@@ -813,12 +823,11 @@ export function buildHardwareCloth(state: GameState): ActionResult<{ hardwareClo
 
 /** Repair the hardware-cloth floor back to pristine (prorated by wear). Active-only. */
 export function repairHardwareCloth(state: GameState): ActionResult<{ cost: number }> {
-  const P = BALANCE.PREDATORS;
   if (state.hardwareCloth <= 0) return fail('No hardware cloth to repair');
   if (state.hardwareClothIntegrity >= 1) return fail('Hardware cloth is already pristine');
   const cost = Math.max(
     1,
-    Math.round(state.hardwareCloth * P.DETERRENT_REPAIR_COST_PER_NET * (1 - state.hardwareClothIntegrity)),
+    Math.round(state.hardwareCloth * repairCostPerNet(state) * (1 - state.hardwareClothIntegrity)),
   );
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
   state.resources.eggs -= cost;

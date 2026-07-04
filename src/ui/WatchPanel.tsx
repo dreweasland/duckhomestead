@@ -1,9 +1,12 @@
 import { BALANCE, PREDATOR_DEFS } from '../config/balance';
+import { repairCostPerNet } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import { currentThreat, predatorLive } from '../game/predators';
 import { waterWoundMult } from '../game/water';
 import {
+  defenseCoverage,
   defenseFloor,
+  exposedFlock,
   deterrentCost as deterrentCostFn,
   hardwareClothCost as hardwareClothCostFn,
   infirmaryCapacity,
@@ -71,10 +74,16 @@ export function WatchPanel({
   const integrityPct = Math.round(integrity * 100);
   const repairCost = Math.max(
     1,
-    Math.round(state.deterrents * P.DETERRENT_REPAIR_COST_PER_NET * (1 - integrity)),
+    Math.round(state.deterrents * repairCostPerNet(state) * (1 - integrity)),
   );
   const integrityColor = integrity >= 0.66 ? '#8fe388' : integrity >= 0.33 ? '#e8c45a' : '#e8835a';
   const canRepair = state.deterrents > 0 && integrity < 1 && eggs >= repairCost;
+  // Coverage (the flock-proportional defense ladder): a line stretched over too
+  // many exposed ducks protects each of them less — surfaced right on the floor rows.
+  const PER_UNIT = BALANCE.PREDATORS.DUCKS_COVERED_PER_UNIT;
+  const exposed = exposedFlock(state);
+  const netCoverage = defenseCoverage(state, 'net');
+  const clothCoverage = defenseCoverage(state, 'cloth');
 
   // Hardware cloth (ground defense vs the raccoon) — shown once the raccoon debuts.
   const raccoonHere = (state.predatorsSeen ?? []).includes('raccoon');
@@ -85,7 +94,7 @@ export function WatchPanel({
   const clothIntegrityPct = Math.round(clothIntegrity * 100);
   const clothRepairCost = Math.max(
     1,
-    Math.round(state.hardwareCloth * P.DETERRENT_REPAIR_COST_PER_NET * (1 - clothIntegrity)),
+    Math.round(state.hardwareCloth * repairCostPerNet(state) * (1 - clothIntegrity)),
   );
   const clothColor = clothIntegrity >= 0.66 ? '#8fe388' : clothIntegrity >= 0.33 ? '#e8c45a' : '#e8835a';
   const canRepairCloth = state.hardwareCloth > 0 && clothIntegrity < 1 && eggs >= clothRepairCost;
@@ -144,13 +153,21 @@ export function WatchPanel({
           <StatRow
             label="Aerial floor (owl)"
             value={`${floorPct}%`}
-            hint={`cap ${capPct}% · ${state.deterrents} nets @ ${integrityPct}%`}
+            hint={
+              netCoverage < 1
+                ? `STRETCHED — ${state.deterrents} nets cover ${state.deterrents * PER_UNIT} of ${exposed} exposed ducks; build more netting`
+                : `cap ${capPct}% · ${state.deterrents} nets @ ${integrityPct}% · covers all ${exposed} exposed`
+            }
           />
           {raccoonHere && (
             <StatRow
               label="Ground floor (raccoon)"
               value={`${clothFloorPct}%`}
-              hint={`cap ${capPct}% · ${state.hardwareCloth} cloth @ ${clothIntegrityPct}%`}
+              hint={
+                clothCoverage < 1
+                  ? `STRETCHED — ${state.hardwareCloth} cloth covers ${state.hardwareCloth * PER_UNIT} of ${exposed} exposed ducks; build more cloth`
+                  : `cap ${capPct}% · ${state.hardwareCloth} cloth @ ${clothIntegrityPct}% · covers all ${exposed} exposed`
+              }
             />
           )}
           <StatRow label="Secured breeders" value={`${securedCount} / ${slots}`} hint="excluded from attacks" />

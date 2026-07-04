@@ -2,7 +2,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { BALANCE, PREDATOR_DEFS, predatorDef } from '../src/config/balance';
 import {
   initialState,
+  defenseCoverage,
   defenseFloor,
+  exposedFlock,
   deterrentCost,
   secureCapacity,
   type Duck,
@@ -1072,5 +1074,44 @@ describe('strike outcomes all SPEAK (repelled + shrugged events — pure feedbac
     expect(shrug).toBeDefined();
     expect(shrug && 'duckName' in shrug ? shrug.duckName : undefined).toBe('Tank');
     expect(s.ducks.some((d) => d.wounded)).toBe(false);
+  });
+});
+
+describe('defense COVERAGE: the floor stretches thin as the flock outgrows the netting', () => {
+  const N = BALANCE.PREDATORS.DUCKS_COVERED_PER_UNIT;
+
+  it('full floor while covered; proportional degradation past coverage; more nets restore', () => {
+    const s = flock(6); // small — one net covers everyone
+    buildDeterrent(s);
+    s.resources.eggs = 1e9;
+    const full = defenseFloor(s);
+    expect(defenseCoverage(s)).toBe(1);
+    // Outgrow one net's coverage 2:1 → the floor halves.
+    while (s.ducks.length < N * 2) s.ducks.push({ ...s.ducks[0], id: `x${s.ducks.length}` });
+    expect(defenseCoverage(s)).toBeCloseTo(0.5, 6);
+    expect(defenseFloor(s)).toBeCloseTo(full * 0.5, 6);
+    // A second net restores full coverage (and its own floor contribution).
+    buildDeterrent(s);
+    expect(defenseCoverage(s)).toBe(1);
+    expect(defenseFloor(s)).toBeGreaterThan(full);
+  });
+
+  it('securing and wintering REDUCE exposure (the vault is a coverage lever)', () => {
+    const s = flock(6);
+    buildDeterrent(s);
+    while (s.ducks.length < N + 5) s.ducks.push({ ...s.ducks[0], id: `x${s.ducks.length}` });
+    expect(defenseCoverage(s)).toBeLessThan(1);
+    for (let i = 0; i < 3; i++) s.ducks[i].secured = true;
+    s.ducks[3].site = 'winter';
+    s.ducks[4].site = 'winter';
+    expect(exposedFlock(s)).toBe(N);
+    expect(defenseCoverage(s)).toBe(1); // back under the netting
+  });
+
+  it('the cap still binds: coverage never pushes the floor past DEFENSE_FLOOR_CAP', () => {
+    const s = flock(4);
+    s.resources.eggs = 1e9;
+    for (let i = 0; i < 10; i++) buildDeterrent(s); // way past the cap count
+    expect(defenseFloor(s)).toBeCloseTo(BALANCE.PREDATORS.DEFENSE_FLOOR_CAP, 6);
   });
 });

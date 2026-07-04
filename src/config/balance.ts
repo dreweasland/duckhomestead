@@ -409,6 +409,20 @@ export const BALANCE = {
     /** Built defenses alone can never exceed this floor (can't be 100% passive —
      *  presence and securing remain the levers for the rest). */
     DEFENSE_FLOOR_CAP: 0.7,
+    /**
+     * COVERAGE (playtest, 2026-07-04 — the clutch principle applied to defense
+     * CAPEX): each net / cloth length fully protects up to this many EXPOSED
+     * ducks (home, unsecured); past that the line stretches thin and the floor
+     * scales by the coverage ratio. Converts defenses from a capped one-time
+     * buy (~4 nets, done forever) into a flock-proportional ladder on the
+     * existing 1.6× escalation: ~7 nets for a 100-duck flock (~6.5k
+     * cumulative), ~15 for a 225-duck gate flock (~300k) — and the peak-priced
+     * repair bill grows with the longer line. Under-building degrades
+     * gracefully (throttle, never a wall); securing ducks REDUCES exposure, so
+     * the vault is now also a coverage lever. Early game untouched (1–2 nets
+     * cover any starter flock).
+     */
+    DUCKS_COVERED_PER_UNIT: 15,
     /** Passive cover applied to attack success while the player is PRESENT (online)
      *  during an open window — a partial "I'm watching" deterrent that holds even
      *  if you don't react. Absence removes it; the built floor is all that's left.
@@ -485,7 +499,14 @@ export const BALANCE = {
     // and the floor still means something at 3am.
     DETERRENT_WEAR_PER_WINDOW: 0.005, // ambient weathering per threat window
     DETERRENT_WEAR_PER_HIT: 0.06, // extra damage when an attack breaches the floor
-    DETERRENT_REPAIR_COST_PER_NET: 50, // eggs to fully repair one net (prorated by wear)
+    DETERRENT_REPAIR_COST_PER_NET: 50, // floor: eggs to fully repair one net (prorated by wear)
+    /** Repairs are the game's only recurring egg bill besides clutches, and a
+     *  flat 50/net decayed to ~3s of endgame income — the designed 'routine
+     *  morning bill' was noise. Priced like the clutch: seconds of the RUN'S
+     *  PEAK egg rate per net (full wear), floored at the flat rate so the
+     *  early game is unchanged. 5s/net ≈ identical at mid-game (~10 eggs/s),
+     *  ~6× at endgame — always routine, always felt. */
+    REPAIR_PEAK_SECONDS_PER_NET: 5,
     /** Eggs to build one Secure Coop. Each adds SECURE_SLOTS_PER_COOP slots; a
      *  duck marked secured (up to the slot total) is excluded from targeting. */
     SECURE_COOP_COST_EGGS: 400,

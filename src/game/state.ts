@@ -750,14 +750,38 @@ export const secureCoopCost = (state: GameState): number =>
 export const infirmaryCost = (state: GameState): number =>
   defenseBuildCost(BALANCE.PREDATORS.INFIRMARY.COST_EGGS, state.infirmaries);
 
-/** Homestead-wide protection floor from built deterrents (capped), scaled by their
- *  integrity. Passive and offline-safe, but it WEARS — a neglected floor sags
- *  toward zero, so it must be repaired to keep its full value. */
+/** The ducks a defense line must actually cover: home (winter has no predators)
+ *  and unsecured (the vault is its own protection — securing REDUCES exposure). */
+export function exposedFlock(state: GameState): number {
+  let n = 0;
+  for (const d of state.ducks) if (!d.secured && d.site !== 'winter') n++;
+  return n;
+}
+
+/** A defense line's coverage ratio: 1 while every exposed duck is under the
+ *  netting, thinning proportionally as the flock outgrows the line. */
+export function defenseCoverage(state: GameState, type: DefenseType = 'net'): number {
+  const P = BALANCE.PREDATORS;
+  const count = type === 'cloth' ? state.hardwareCloth : state.deterrents;
+  const exposed = exposedFlock(state);
+  if (exposed <= 0 || count <= 0) return count > 0 ? 1 : 0;
+  return Math.min(1, (count * P.DUCKS_COVERED_PER_UNIT) / exposed);
+}
+
+/** Homestead-wide protection floor from built deterrents (capped), scaled by
+ *  their integrity AND their coverage (a line stretched over too many ducks
+ *  protects each of them less — the flock-proportional defense ladder). Passive
+ *  and offline-safe, but it WEARS — a neglected floor sags toward zero, so it
+ *  must be repaired to keep its full value. */
 export function defenseFloor(state: GameState, type: DefenseType = 'net'): number {
   const P = BALANCE.PREDATORS;
   const count = type === 'cloth' ? state.hardwareCloth : state.deterrents;
   const integrity = type === 'cloth' ? state.hardwareClothIntegrity : state.deterrentIntegrity;
-  return Math.min(P.DEFENSE_FLOOR_CAP, count * P.DEFENSE_FLOOR_PER_DETERRENT * integrity);
+  return (
+    Math.min(P.DEFENSE_FLOOR_CAP, count * P.DEFENSE_FLOOR_PER_DETERRENT) *
+    integrity *
+    defenseCoverage(state, type)
+  );
 }
 
 /** Mutable per-zone state (the static shape lives in ZONE_DEFS). */
