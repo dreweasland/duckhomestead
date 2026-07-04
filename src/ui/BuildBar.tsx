@@ -44,6 +44,7 @@ const CHAIN_HINT: Record<StationType, React.ReactNode> = {
   winterCoop: <span>houses assigned winter ducks</span>,
   heater: <span>warms nearby winter coops</span>,
   heatedWaterer: <span>waters 6 winter ducks</span>,
+  silo: <span>+feed storage — a tile that isn’t a producer</span>,
 };
 
 export function BuildBar({ state, buildType, onPick, activeZone = 'yard' }: Props) {

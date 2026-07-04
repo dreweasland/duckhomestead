@@ -42,6 +42,36 @@ export const INGREDIENTS = [
 ] as const;
 export type Ingredient = (typeof INGREDIENTS)[number];
 
+/** The per-ingredient storage cap: a base cushion + every placed SILO's
+ *  capacity (standard uncapped upgrade curve — the capacity ladder). Eggs are
+ *  currency and never capped. Stock above the cap (a pre-Feed-Store save, or a
+ *  demolished silo) is grandfathered: adds clamp, existing stock drains
+ *  normally — never confiscated. */
+export function ingredientCap(state: GameState): number {
+  const S = BALANCE.STORAGE;
+  let cap = S.BASE_CAP;
+  for (const st of state.stations) {
+    if (st.type === 'silo') {
+      cap += S.CAP_PER_SILO * Math.pow(BALANCE.UPGRADE.outputMultPerLevel, st.level - 1);
+    }
+  }
+  return Math.round(cap);
+}
+
+/** Add to storage, clamping INGREDIENTS at the Feed Store cap (overflow is
+ *  discarded — a full store simply can't take more). Eggs and legacy resources
+ *  pass through uncapped. The ONE accrual choke point for hauls/collects. */
+export function addResource(state: GameState, res: Resource, amount: number): void {
+  if (amount <= 0) return;
+  if ((INGREDIENTS as readonly string[]).includes(res)) {
+    const cap = ingredientCap(state);
+    state.resources[res] = Math.min(Math.max(state.resources[res], cap), state.resources[res] + amount);
+    // (max() grandfathers over-cap legacy stock: never confiscate, never add.)
+    return;
+  }
+  state.resources[res] += amount;
+}
+
 /** An all-zero ration (the empty starting point — nothing fed until the player sets it). */
 export const zeroRation = (): Record<Ingredient, number> =>
   ({ corn: 0, peas: 0, mealworms: 0, brewersYeast: 0, oysterShell: 0, sunflowerSeeds: 0, fodderSprouts: 0 });

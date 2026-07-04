@@ -24,6 +24,7 @@ import {
   breedingEstablished,
   coopCapacity,
   flockRatio,
+  ingredientCap,
   rationUnset,
   zoneUnlocked,
   type GameState,
@@ -238,6 +239,18 @@ export const GUIDE_DEFS: GuideDef[] = [
     body: 'The second homestead is unlocked, but it starts empty. Assign hardy hens from the Flock panel (look for the snowflake) — Hardy genes finally pay off out here, at a real premium. Set the winter ration in Nutrition, and keep heaters near the winter coops; a cold coop still lays, just at a throttle.',
     when: (state) => zoneUnlocked(state, 'winterstead'),
     cta: { label: 'Open Flock', open: 'flock' },
+  },
+  {
+    id: 'feed-store-full',
+    title: 'A feed line is full',
+    icon: NutritionIcon,
+    body: 'One of your ingredient stores has hit its cap — its producers are idling until the flock eats the stock down. That stock is your overnight cushion and your buffer against a bad stretch, so if the flock keeps growing, build a Silo (or upgrade one) — it takes a board tile a producer could have had, which is the trade. Otherwise, an idle line just means you\u2019re producing faster than they can eat — no harm done.',
+    when: (state) =>
+      state.nutrition != null &&
+      (['corn', 'peas', 'mealworms', 'brewersYeast', 'oysterShell', 'sunflowerSeeds', 'fodderSprouts'] as const).some(
+        (i) => state.resources[i] >= ingredientCap(state),
+      ),
+    cta: { label: 'Open Nutrition', open: 'nutrition', tab: 'layers' },
   },
   {
     id: 'backup',

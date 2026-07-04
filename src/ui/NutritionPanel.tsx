@@ -5,12 +5,14 @@ import {
   AXES,
   breedingEstablished,
   INGREDIENTS,
+  ingredientCap,
   rationUnset,
   zoneUnlocked,
   type Axis,
   type GameState,
   type Ingredient,
 } from '../game/state';
+
 import {
   flockRequirement,
   waterAccess,
@@ -86,6 +88,7 @@ function RationSliders({
   ration: Record<Ingredient, number>;
   onSet: (ing: Ingredient, v: number) => void;
 }) {
+  const cap = ingredientCap(state);
   return (
     <div className="flex flex-col gap-2.5">
       {INGREDIENTS.map((ing) => {
@@ -104,7 +107,12 @@ function RationSliders({
               <div className="text-[11px] font-bold">{ING_LABEL[ing]}</div>
               <div className="text-[9px] text-[#7a6a4a]">
                 {contrib} · stock{' '}
-                <span className={starved ? 'text-[#e8835a]' : 'text-[#9a8a6a]'}>{fmt(stock)}</span>
+                <span
+                  className={starved ? 'text-[#e8835a]' : stock >= cap ? 'text-[#e8c45a]' : 'text-[#9a8a6a]'}
+                  title={stock >= cap ? 'Feed Store FULL — producers of this line are idling. Upgrade the Feed Store or let the flock eat it down.' : undefined}
+                >
+                  {fmt(stock)}/{fmt(cap)}
+                </span>
               </div>
             </div>
             <input
@@ -305,6 +313,22 @@ export function NutritionPanel({
               </div>
 
               <WaterCard state={state} />
+
+              {/* THE FEED STORE: the per-ingredient storage cap — your offline
+                  runway + shock buffer. Capacity is BUILT (silos on the board),
+                  so storage competes with producers for tiles. */}
+              <div className="mb-4 rounded-md bg-[#1f1812] px-3 py-2 text-xs">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+                  Feed Store
+                </div>
+                <div className="text-[10px] text-[#9a8a6a]">
+                  holds {fmt(ingredientCap(state))} of each ingredient
+                  {state.stations.some((s) => s.type === 'silo')
+                    ? ` (base + ${state.stations.filter((s) => s.type === 'silo').length} silo${state.stations.filter((s) => s.type === 'silo').length > 1 ? 's' : ''})`
+                    : ''}{' '}
+                  — full lines idle their producers. Build or upgrade Silos on the board for more.
+                </div>
+              </div>
 
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
                 Nutrient balance ({adults} adult{adults > 1 ? 's' : ''})

@@ -110,6 +110,9 @@ export function StationBar({
   } else if (station.type === 'heatedWaterer') {
     statusText = `Waters ${BALANCE.WINTER.STATIONS.heatedWaterer.supports} winter ducks`;
     statusColor = '#8fc8e8';
+  } else if (station.type === 'silo') {
+    statusText = `+${Math.round(BALANCE.STORAGE.CAP_PER_SILO * Math.pow(BALANCE.UPGRADE.outputMultPerLevel, station.level - 1))} feed storage`;
+    statusColor = '#c9b884';
   } else if (status.producing) {
     statusText = 'Producing';
   } else {

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import type { Module, ModuleStat } from '../src/game/state';
 import {
+  placeStation,
   installModule,
   removeStation,
   salvageModule,
@@ -37,6 +38,12 @@ describe('module effects apply offline, but drops never do', () => {
     // Plot-only (no flock consuming corn) isolates the producer-yield effect.
     const plain = build({ plot: 1 });
     const boosted = build({ plot: 1 });
+    // Feed Store headroom — this measures yield scaling, not the storage cap.
+    for (const st of [plain, boosted]) {
+      st.resources.eggs += 100;
+      placeStation(st, 'silo', 7, 0);
+      st.stations[st.stations.length - 1].level = 20;
+    }
     boosted.rack = [mod('stationYield', 'legendary', 0.5)];
     plain.lastSeen = -3600 * 1000;
     boosted.lastSeen = -3600 * 1000;

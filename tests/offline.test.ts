@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
+import { placeStation } from '../src/game/actions';
 import { runOfflineCatchUp } from '../src/game/save';
 import { tick } from '../src/game/tick';
 import { waterWoundMult } from '../src/game/water';
@@ -89,12 +90,17 @@ describe('offline catch-up × nutrition', () => {
     const mult = BALANCE.OFFLINE_RATE_MULT;
 
     // Lone plots: no flock → no nutrition or predators to muddy the comparison.
+    // Feed Store headroom so the rate comparison never pins at the storage cap.
     const online = build({ plot: 3 });
+    placeStation(online, 'silo', 7, 0);
+    online.stations[online.stations.length - 1].level = 20;
     const beforeOn = online.resources.corn;
     run(online, T);
     const gainedOnline = online.resources.corn - beforeOn;
 
     const offline = build({ plot: 3 });
+    placeStation(offline, 'silo', 7, 0);
+    offline.stations[offline.stations.length - 1].level = 20;
     const beforeOff = offline.resources.corn;
     offline.lastSeen = -T * 1000;
     runOfflineCatchUp(offline, 0);

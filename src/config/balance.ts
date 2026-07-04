@@ -23,7 +23,10 @@ export type StationType =
   | 'fodderRack'
   | 'winterCoop'
   | 'heater'
-  | 'heatedWaterer';
+  | 'heatedWaterer'
+  // THE FEED STORE: a buildable silo — per-ingredient storage capacity that
+  // costs a board tile (storage competes with producers for the yard).
+  | 'silo';
 
 /** Phase 2 ingredient-producing stations (raw producers, like the plot). */
 export const INGREDIENT_STATIONS: StationType[] = [
@@ -83,6 +86,7 @@ export const BALANCE = {
     winterCoop: 500,
     heater: 350,
     heatedWaterer: 300,
+    silo: 100,
   } as Record<StationType, number>,
 
   /** Fraction of a station's PLACEMENT cost refunded when removed (0..1). */
@@ -120,6 +124,7 @@ export const BALANCE = {
       winterCoop: 999999,
       heater: 999999,
       heatedWaterer: 999999,
+      silo: 80, // the standard uncapped curve — the capacity ladder
     } as Record<StationType, number>,
     costGrowth: 1.6,
     /** Output multiplier per level. Level N output = base * mult^(N-1). */
@@ -145,6 +150,26 @@ export const BALANCE = {
      * untouched, so the validated nutrition puzzle is untouched (this retires
      * the previously-banked outputMultPerLevel 1.3→1.2 candidate). */
     PRODUCER: { outputMultPerLevel: 1.3, levelCap: 14, costGrowth: 2.1 },
+  },
+
+  // ── THE FEED STORE (playtest, 2026-07-04): ingredient storage caps ──
+  // Ingredients were the last unbounded buffer: past the point where producers
+  // outpace consumption, stock ran away — deadening the Phase 2 throughput
+  // puzzle (green bars off the pile, not the lines) and offline marginality
+  // (every homestead wakes fine off a mountain). Eggs are CURRENCY and stay
+  // uncapped. The cap is what stock now MEANS: your offline runway + shock
+  // buffer, as a purchased number (the ingredient-side scaling egg sink).
+  // Producers idle when their output's store is full (input-starved pattern);
+  // adds clamp at the cap; pre-existing stock above cap is grandfathered (it
+  // drains normally — never confiscated).
+  STORAGE: {
+    /** Per-ingredient cap with NO silos — a modest starter cushion. */
+    BASE_CAP: 500,
+    /** Each placed SILO adds this much per-ingredient cap at level 1, scaling
+     *  on the standard uncapped upgrade curve (×1.5/level, like coops/mills).
+     *  Silos are BUILDABLES: capacity costs board tiles, so storage competes
+     *  with producers for the yard — buffer vs throughput is a layout call. */
+    CAP_PER_SILO: 500,
   },
 
   // ── Online vs Offline (the core law) ────────────────────────────────
@@ -1136,6 +1161,14 @@ export const STATION_DEFS: Record<
     inputs: {},
     outputs: {},
   },
+  silo: {
+    // THE FEED STORE: pure storage — raises every ingredient's cap. No cycles.
+    label: 'Silo',
+    color: 0xc9b884,
+    cycleSeconds: 0,
+    inputs: {},
+    outputs: {},
+  },
 };
 
 export const STATION_ORDER: StationType[] = [
@@ -1151,6 +1184,7 @@ export const STATION_ORDER: StationType[] = [
   'winterCoop',
   'heater',
   'heatedWaterer',
+  'silo',
 ];
 
 // ── Phase 4b: data-driven zones ──────────────────────────────────────
