@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { pondFeatureUpgradeCost, pondView } from '../game/pond';
+import { pondFeatureMaxed, pondFeatureUpgradeCost, pondView } from '../game/pond';
 import { flockRequirement, waterAccess, waterProvision, waterStatus } from '../game/water';
 import {
   cellKey,
@@ -28,17 +28,21 @@ type Mode = 'layout' | 'circulation';
  *  out of the game save so it never touches prestige/migration). */
 const HELP_SEEN_KEY = (mode: Mode) => `duck-homestead-waterhelp-${mode}`;
 
-const FEAT_META: Record<PondFeatureType, { label: string; color: string; tag: string }> = {
-  spring: { label: 'Spring', color: '#52b6dc', tag: 'Sp' },
-  bathingPool: { label: 'Bathing Pool', color: '#3f8fd0', tag: 'Ba' },
-  plantBed: { label: 'Plant Bed', color: '#6fb04f', tag: 'Pl' },
-  deepZone: { label: 'Deep Zone', color: '#2f5f8c', tag: 'Dp' },
+// Hand-drawn pixel sprites (baked via .asset-src/water.cjs, like the farm's) —
+// the pond speaks the same visual language as the yard now. `hint` is the
+// build-card one-liner, matching the yard BuildBar's grammar.
+const FEAT_META: Record<PondFeatureType, { label: string; color: string; hint: string }> = {
+  spring: { label: 'Spring', color: '#52b6dc', hint: 'lifts pools beside it' },
+  bathingPool: { label: 'Bathing Pool', color: '#3f8fd0', hint: '+water · loves springs' },
+  plantBed: { label: 'Plant Bed', color: '#6fb04f', hint: '+water · lifts neighbours' },
+  deepZone: { label: 'Deep Zone', color: '#2f5f8c', hint: 'most water · fouls fastest' },
 };
-const FLOW_META: Record<FlowFeatureType, { label: string; color: string; tag: string }> = {
-  intake: { label: 'Intake', color: '#5ad0a0', tag: 'In' },
-  fountain: { label: 'Fountain', color: '#7fd8e8', tag: 'Fn' },
-  outflow: { label: 'Outflow', color: '#9a8a6a', tag: 'Out' },
+const FLOW_META: Record<FlowFeatureType, { label: string; color: string; hint: string }> = {
+  intake: { label: 'Intake', color: '#5ad0a0', hint: 'fresh water in' },
+  fountain: { label: 'Fountain', color: '#7fd8e8', hint: 'keeps features fresh' },
+  outflow: { label: 'Outflow', color: '#9a8a6a', hint: 'spent water out' },
 };
+const waterSprite = (t: string) => `/assets/water/${t}.png`;
 
 const FEAT_TYPES = Object.keys(FEAT_META) as PondFeatureType[];
 const FLOW_TYPES = Object.keys(FLOW_META) as FlowFeatureType[];
@@ -281,9 +285,8 @@ function WaterHelp({
  */
 export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state: GameState; mode: Mode }) {
   const isFlow = mode === 'circulation';
-  const [pick, setPick] = useState<PondFeatureType | FlowFeatureType>(
-    isFlow ? 'fountain' : 'bathingPool',
-  );
+  // Build tool — starts UNARMED like the yard's palette; click again to cancel.
+  const [pick, setPick] = useState<PondFeatureType | FlowFeatureType | null>(null);
   const [help, setHelp] = useState(false);
   // Selected provision feature (layout mode) — opens the upgrade/remove panel.
   const [selKey, setSelKey] = useState<string | null>(null);
@@ -407,11 +410,21 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
     if (isFlow) {
       if (flowAt(x, y)) {
         if (engine.removeFlowFeature(x, y).ok) playPlace();
-      } else if (engine.placeFlowFeature(pick as FlowFeatureType, x, y).ok) playPlace();
-    } else if (featAt(x, y)) {
-      // Tap a placed feature to SELECT it (upgrade / remove live in the panel).
-      setSelKey(cellKey(x, y));
-    } else if (engine.placePondFeature(pick as PondFeatureType, x, y).ok) {
+      } else if (pick && engine.placeFlowFeature(pick as FlowFeatureType, x, y).ok) playPlace();
+      return;
+    }
+    const here = featAt(x, y);
+    if (here) {
+      // The YARD grammar: with the matching tool armed, clicking a placed
+      // feature upgrades it in place. Otherwise clicking selects it (the
+      // panel has upgrade/remove).
+      if (pick === here.type) {
+        if (engine.upgradePondFeature(x, y).ok) playUpgrade();
+        else setSelKey(cellKey(x, y)); // maxed/broke → show the panel instead
+      } else {
+        setSelKey(cellKey(x, y));
+      }
+    } else if (pick && engine.placePondFeature(pick as PondFeatureType, x, y).ok) {
       playPlace();
       setSelKey(null);
     }
@@ -503,10 +516,14 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
                 {/* provision feature (faded in circulation mode — context only) */}
                 {feat && meta && (
                   <g opacity={isFlow ? 0.45 : 1}>
-                    <rect x={px + 6} y={py + 6} width={TILE - 12} height={TILE - 12} rx={5} fill={meta.color} />
-                    <text x={px + TILE / 2} y={py + 20} textAnchor="middle" fontSize={9} fontWeight="bold" fill="#0e2230" fontFamily="monospace">
-                      {meta.tag}
-                    </text>
+                    <image
+                      href={waterSprite(feat.type)}
+                      x={px + 5}
+                      y={py + 3}
+                      width={TILE - 10}
+                      height={TILE - 10}
+                      style={{ imageRendering: 'pixelated' }}
+                    />
                     {/* freshness pip (circulation era) / provision value (layout) */}
                     <text x={px + TILE / 2} y={py + TILE - 9} textAnchor="middle" fontSize={9} fontWeight="bold" fill="#0e2230" fontFamily="monospace">
                       {view.worksUnlocked && isFlow ? `${Math.round(feat.freshness * 100)}%` : feat.provision.toFixed(1)}
@@ -529,10 +546,16 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
                 {/* circulation feature */}
                 {flow && fmeta && (
                   <>
-                    <circle cx={px + TILE / 2} cy={py + TILE / 2} r={12} fill={fmeta.color} opacity={live ? 1 : 0.5} stroke={live ? '#fff4d6' : '#5a6a70'} strokeWidth={live ? 2 : 1.5} strokeDasharray={live ? undefined : '3 3'} />
-                    <text x={px + TILE / 2} y={py + TILE / 2 + 3} textAnchor="middle" fontSize={8} fontWeight="bold" fill="#0e2230" fontFamily="monospace">
-                      {fmeta.tag}
-                    </text>
+                    <image
+                      href={waterSprite(flow.type)}
+                      x={px + 8}
+                      y={py + 8}
+                      width={TILE - 16}
+                      height={TILE - 16}
+                      opacity={live ? 1 : 0.55}
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                    <circle cx={px + TILE / 2} cy={py + TILE / 2} r={15} fill="none" stroke={live ? '#fff4d6' : '#5a6a70'} strokeWidth={live ? 2 : 1.5} strokeDasharray={live ? undefined : '3 3'} opacity={live ? 0.9 : 0.7} />
                   </>
                 )}
               </g>
@@ -588,8 +611,9 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
         <div className="w-full rounded-md bg-[#13202a] px-3 py-2 ring-1 ring-[#27485a]">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-bold" style={{ color: FEAT_META[selected.type].color }}>
-              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: FEAT_META[selected.type].color }} />
+              <img src={waterSprite(selected.type)} alt="" className="h-4 w-4" style={{ imageRendering: 'pixelated' }} />
               {FEAT_META[selected.type].label} · Lv {selected.level ?? 1}
+              {pondFeatureMaxed(selected) && <span className="text-[9px] font-normal text-[#7a9aa8]">(max)</span>}
             </span>
             <span className="text-[10px] tabular-nums text-[#7a9aa8]">
               +{selected.provision.toFixed(1)} water
@@ -597,23 +621,29 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
           </div>
           <div className="flex items-center gap-1.5">
             {W.FEATURES[selected.type].baseProvision > 0 ? (
-              <button
-                onClick={() => {
-                  if (engine.upgradePondFeature(selected.x, selected.y).ok) playUpgrade();
-                }}
-                disabled={state.resources.eggs < upgradeCost}
-                className={`flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-[11px] font-bold transition ${
-                  state.resources.eggs >= upgradeCost
-                    ? 'bg-[#1f4a2a] text-[#bfe8a8] hover:bg-[#27583a]'
-                    : 'cursor-not-allowed bg-[#13202a] text-[#5a7a8a]'
-                }`}
-                title={`Upgrade to Lv ${(selected.level ?? 1) + 1} — ×${W.UPGRADE.provisionMult} water`}
-              >
-                Upgrade → Lv {(selected.level ?? 1) + 1}
-                <span className="inline-flex items-center gap-0.5">
-                  <EggIcon size={10} /> {upgradeCost}
+              pondFeatureMaxed(selected) ? (
+                <span className="flex-1 rounded bg-[#13202a] px-2 py-1.5 text-center text-[10px] text-[#5a7a8a]">
+                  Max level — add another feature to grow provision
                 </span>
-              </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (engine.upgradePondFeature(selected.x, selected.y).ok) playUpgrade();
+                  }}
+                  disabled={state.resources.eggs < upgradeCost}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-[11px] font-bold transition ${
+                    state.resources.eggs >= upgradeCost
+                      ? 'bg-[#1f4a2a] text-[#bfe8a8] hover:bg-[#27583a]'
+                      : 'cursor-not-allowed bg-[#13202a] text-[#5a7a8a]'
+                  }`}
+                  title={`Upgrade to Lv ${(selected.level ?? 1) + 1} of ${W.UPGRADE.levelCap} — ×${W.UPGRADE.provisionMult} water`}
+                >
+                  Upgrade → Lv {(selected.level ?? 1) + 1}
+                  <span className="inline-flex items-center gap-0.5">
+                    <EggIcon size={10} /> {upgradeCost}
+                  </span>
+                </button>
+              )
             ) : (
               <span className="flex-1 rounded bg-[#13202a] px-2 py-1.5 text-center text-[10px] text-[#5a7a8a]">
                 Feeds adjacent pools — not upgradeable
@@ -663,26 +693,37 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
         </div>
       </div>
 
-      {/* palette */}
-      <div className="flex w-full flex-wrap gap-1">
+      {/* Build palette — the yard BuildBar's grammar: cards with sprite, label,
+          one-line hint, egg cost; select a tool, click water to place, click a
+          MATCHING placed feature to upgrade in place, click the card to cancel. */}
+      <div className="grid w-full grid-cols-12 gap-1.5">
         {(isFlow ? FLOW_TYPES : FEAT_TYPES).map((t) => {
           const meta = isFlow ? FLOW_META[t as FlowFeatureType] : FEAT_META[t as PondFeatureType];
           const cost = isFlow ? W.FLOW[t as FlowFeatureType].costEggs : W.FEATURES[t as PondFeatureType].costEggs;
           const active = pick === t;
+          const affordable = state.resources.eggs >= cost;
           return (
             <button
               key={t}
-              onClick={() => setPick(t)}
-              className={`flex flex-1 items-center justify-center gap-1 rounded px-2 py-1 text-[10px] font-bold transition ${
-                active ? 'ring-1 ring-[#fff4d6]' : 'opacity-80 hover:opacity-100'
-              }`}
-              style={{ background: '#13202a', color: meta.color }}
+              onClick={() => setPick(active ? null : t)}
+              className={`${isFlow ? 'col-span-4' : 'col-span-3'} flex flex-col items-start gap-0.5 rounded-md border px-2 py-1.5 text-left transition ${
+                active ? 'border-[#fff4d6] bg-[#1a2c38]' : 'border-transparent bg-[#13202a] hover:bg-[#182835]'
+              } ${affordable ? '' : 'opacity-50'}`}
             >
-              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: meta.color }} />
-              {meta.label}
-              <span className="inline-flex items-center gap-0.5 text-[9px] text-[#7a9aa8]">
-                <EggIcon size={9} />
-                {cost}
+              <span className="flex w-full items-center gap-1.5">
+                <img
+                  src={waterSprite(t)}
+                  alt=""
+                  className="h-5 w-5 object-contain"
+                  style={{ imageRendering: 'pixelated' }}
+                />
+                <span className="text-[11px] font-bold" style={{ color: meta.color }}>
+                  {meta.label}
+                </span>
+              </span>
+              <span className="text-[9px] text-[#7a9aa8]">{meta.hint}</span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#ffe9a8]">
+                <EggIcon size={10} /> {cost}
               </span>
             </button>
           );
@@ -711,8 +752,9 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
         </div>
       ) : (
         <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
-          Tap empty water to place; tap a feature to upgrade it (more water) or remove it. Cluster for
-          bonuses: bathing pools beside a spring, plant beds beside your richest features.
+          {pick
+            ? `Tap empty water to place a ${FEAT_META[pick as PondFeatureType]?.label ?? ''} — or tap a placed one to upgrade it in place. Tap the card again to cancel.`
+            : 'Pick a card below, then tap water to place — or tap any placed feature to inspect, upgrade, or remove it. Cluster for bonuses: pools beside a spring, plant beds beside your richest features.'}
         </div>
       )}
     </div>
