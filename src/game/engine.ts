@@ -318,6 +318,25 @@ export class GameEngine {
     for (const color of pending) this.emitDex({ color });
     this.state.pendingDex = [];
   }
+  /** THE PRIME DUCK — the rarest hatch in the game gets its own thunder. */
+  private drainPrimeDuck() {
+    const n = this.state.pendingPrimeDuck ?? 0;
+    if (n <= 0) return;
+    this.state.pendingPrimeDuck = 0;
+    this.emitDing({
+      newRank: this.state.rank,
+      levelsGained: 0,
+      milestones: [
+        {
+          rank: this.state.rank,
+          title: 'THE PRIME DUCK',
+          description:
+            'Six Prime genes. Every slot a wildcard, every Standard a match — the rarest duck it is possible to breed, and the finest breeding stock that will ever stand in your yard. Name it. Secure it. Build the line from it. The Legacy Hall will remember this run.',
+          kind: 'breeding',
+        },
+      ],
+    });
+  }
   /** Promote any truebred hatch (a duck perfectly matching the target) to a
    *  can't-miss milestone DING — the payoff of the whole min/max grind. */
   private drainTruebred() {
@@ -405,6 +424,7 @@ export class GameEngine {
         this.accumulator -= this.stepMs;
       }
       this.drainDex(); // fire DINGs for any first-of-color hatches this frame
+      this.drainPrimeDuck(); // THE PRIME DUCK outranks every other beat this frame
       this.drainTruebred(); // fire the truebred DING for a perfect-target hatch
       this.drainPredatorEvents(); // telegraph / attack / loss feedback this frame
       this.drainContractExpiry(); // a deadline lapse gets a toast, never silence

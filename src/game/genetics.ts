@@ -131,6 +131,14 @@ export function targetMatch(genome: Genome, target: Genome): number {
   return n;
 }
 
+/** THE PRIME DUCK: every slot Prime — the game's rarest conceivable hatch
+ *  (each P must appear by mutation at its position, then be fixed across
+ *  generations). A universal Standard-match and the finest breeding stock
+ *  possible (dominance-4 wildcards), with deliberately generalist stats. */
+export function isPrimeDuck(genome: Genome): boolean {
+  return genome.length > 0 && genome.every((g) => g === 'P');
+}
+
 /** True iff this genome exactly matches the target (a truebred). */
 export function isTruebred(genome: Genome, target: Genome): boolean {
   return genome.length === target.length && targetMatch(genome, target) === target.length;

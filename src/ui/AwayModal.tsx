@@ -42,6 +42,12 @@ export function AwayModal({ away, onClose }: { away: AwaySummary; onClose: () =>
           )}
         </div>
 
+        {away.primeDuck && (
+          <div className="mt-3 rounded-md bg-[#2a2440] px-3 py-2 text-xs font-bold text-[#cdbcff] ring-1 ring-[#6b4f9e]">
+            THE PRIME DUCK hatched while you were away — six Prime genes, the rarest bird there is.
+            Find it in the flock, name it, secure it.
+          </div>
+        )}
         {away.names && (away.names.lost.length > 0 || away.names.wounded.length > 0) && (
           <div className="mt-3 rounded-md bg-[#2a1a24] px-3 py-2 text-xs ring-1 ring-[#5a2a44]">
             {away.names.lost.length > 0 && (

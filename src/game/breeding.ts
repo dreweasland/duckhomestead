@@ -1,6 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { onHatch } from './contracts';
-import { breedGenome, breedGenotype, isTruebred, maturationMult, recordColor } from './genetics';
+import { breedGenome, breedGenotype, isPrimeDuck, isTruebred, maturationMult, recordColor } from './genetics';
 import { targetForTier } from './prestige';
 import { rollWoundSeverity } from './predators';
 import { breedingEstablished, coopCapacity, drainCondition, flockRatio, phenotype, type Duck, type GameState } from './state';
@@ -161,7 +161,13 @@ export function runBreeding(
       if (recordColor(state, phenotype(genotype))) {
         (state.pendingDex ??= []).push(phenotype(genotype));
       }
-      if (!hadTruebred && isTruebred(genome, standardTarget)) {
+      if (isPrimeDuck(genome) && !state.ducks.some((d) => d !== duckling && isPrimeDuck(d.genome))) {
+        // THE PRIME DUCK — the rarest hatch there is. Supersedes the ordinary
+        // truebred DING for this hatch (a full-Prime IS a truebred via the
+        // wildcard; two banners for one duckling would bury the bigger one).
+        // Same guard shape as truebred: re-fires only if every Prime Duck is lost.
+        state.pendingPrimeDuck = (state.pendingPrimeDuck ?? 0) + 1;
+      } else if (!hadTruebred && isTruebred(genome, standardTarget)) {
         state.pendingTruebred = (state.pendingTruebred ?? 0) + 1;
       }
       // The Grange (Phase 6b): only an ONLINE hatch may complete a hatch-spec

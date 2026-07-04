@@ -13,8 +13,9 @@ import { AXES } from '../src/game/state';
 import { buildGeneReader, createPair, placeStation, setDuckName, setGenomeTarget } from '../src/game/actions';
 import { runBreeding } from '../src/game/breeding';
 import { runPredators } from '../src/game/predators';
+import { championSnapshot } from '../src/game/prestige';
 import { serialize, deserialize } from '../src/game/save';
-import { layMult, targetMatch } from '../src/game/genetics';
+import { isPrimeDuck, layMult, targetMatch } from '../src/game/genetics';
 import type { Duck, GameState } from '../src/game/state';
 import { build, fullSetup, stockAll, run, setHens, FLAT_GENOME, genome } from './helpers';
 
@@ -269,5 +270,62 @@ describe('duck naming (opt-in — the emotional layer)', () => {
     const e = (s.pendingPredatorEvents ?? []).find((x) => x.kind === 'escalated');
     expect(e && 'duckName' in e ? e.duckName : undefined).toBe('Petunia');
     expect(s.ducks.find((x) => x.name === 'Petunia')).toBeUndefined(); // she's gone — the event remembers
+  });
+});
+
+describe('THE PRIME DUCK (a full-PPPPPP hatch — the rarest bird there is)', () => {
+  const B = BALANCE.BREEDING;
+  // Complementary half-Prime parents: at rng 0.4 every contested P(dom 4) vs
+  // D(dom 1) slot resolves to P and mutation never fires — the cross ASSEMBLES
+  // a full Prime deterministically while neither parent is one (so the
+  // had-one guard can't suppress the first hatch).
+  const primePair = (): GameState => {
+    const s = build({ coop: 1 });
+    const mk = (id: string, sex: 'drake' | 'hen', g: Genome): Duck => ({
+      id,
+      genotype: ['Bl', 'bl'],
+      genome: g,
+      genomeKnown: true,
+      sex,
+      stage: 'adult',
+      ageTicks: 0,
+    });
+    s.ducks = [mk('dr', 'drake', genome('PPPDDD')), mk('he', 'hen', genome('DDDPPP'))];
+    s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
+    s.contracts.peakEggRate = 0; // clutch at the floor cost
+    return s;
+  };
+
+  it('fires its OWN pending beat and supersedes the truebred DING for that hatch', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.4); // no mutation; P×P slots stay P
+    const s = primePair();
+    runBreeding(s, B.CLUTCH_INTERVAL_S - 1);
+    runBreeding(s, B.INCUBATE_S + 2);
+    vi.restoreAllMocks();
+    const hatched = s.ducks.filter((d) => d.stage === 'duckling');
+    expect(hatched.length).toBeGreaterThan(0);
+    expect(hatched.every((d) => isPrimeDuck(d.genome))).toBe(true);
+    expect(s.pendingPrimeDuck ?? 0).toBeGreaterThan(0);
+    expect(s.pendingTruebred ?? 0).toBe(0); // one duckling, one (bigger) banner
+  });
+
+  it('the guard mirrors truebred: no re-fire while a Prime Duck lives, re-fires when all are lost', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.4);
+    const s = primePair();
+    runBreeding(s, B.CLUTCH_INTERVAL_S - 1);
+    runBreeding(s, B.INCUBATE_S + 2); // first hatch → beat + a living Prime duckling
+    s.pendingPrimeDuck = 0;
+    runBreeding(s, B.CLUTCH_INTERVAL_S - 1);
+    runBreeding(s, B.INCUBATE_S + 2); // second hatch — a Prime duckling already lives
+    expect(s.pendingPrimeDuck ?? 0).toBe(0);
+    vi.restoreAllMocks();
+  });
+
+  it('the champion snapshot remembers the run that bred one', () => {
+    const s = primePair();
+    s.ducks[0].genome = genome('PPPPPP'); // a living Prime Duck at reset time
+    expect(championSnapshot(s, 0).primeDuck).toBe(true);
+    s.ducks.forEach((d) => (d.genome = genome('LLLLLL')));
+    expect(championSnapshot(s, 0).primeDuck).toBeUndefined();
   });
 });

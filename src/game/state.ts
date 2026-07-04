@@ -437,6 +437,9 @@ export interface GameState {
   geneReader: boolean;
   /** Transient: truebred hatches this tick (drained by the engine for DINGs). */
   pendingTruebred?: number;
+  /** Transient: full-Prime (PPPPPP) hatches this tick — THE PRIME DUCK, the
+   *  rarest hatch in the game. Drained by the engine for its own DING. */
+  pendingPrimeDuck?: number;
   /** Colors ever produced (the dex) — drives first-of-color DINGs. */
   dexSeen: Color[];
   /** Transient: colors discovered this tick, drained by the engine for DINGs. */
@@ -539,6 +542,8 @@ export interface ChampionSnapshot {
   /** Best genome quality in the flock (most slots matching target). */
   bestQuality: number;
   flockSize: number;
+  /** This run bred THE PRIME DUCK (a full-PPPPPP hatch) — remembered forever. */
+  primeDuck?: boolean;
   /** Colors the flock had achieved (the dex at reset). */
   colors: Color[];
   /** Wall-clock ms at prestige. */

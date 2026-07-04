@@ -356,6 +356,11 @@ export function LegacyPanel({
                       <ColorSwatch key={col} color={col} size={9} />
                     ))}
                   </span>
+                  {c.primeDuck && (
+                    <span title="This run bred THE PRIME DUCK — six Prime genes, the rarest hatch there is.">
+                      <PrimeIcon size={11} />
+                    </span>
+                  )}
                   <span className="tabular-nums text-[#c9b88f]">{(c.meanQuality ?? 0).toFixed(2)} avg</span>
                   <span className="ml-auto inline-flex items-center gap-1 tabular-nums text-[#7a6a4a]">
                     <DuckIcon size={10} /> {c.flockSize ?? 0}

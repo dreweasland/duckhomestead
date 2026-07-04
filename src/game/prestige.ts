@@ -2,7 +2,7 @@ import { BALANCE } from '../config/balance';
 // Circular at module level (actions → prestige for the boost multipliers), but
 // both sides only use the other inside function bodies, so ESM resolves it.
 import { placeStarterEngine } from './actions';
-import { targetMatch } from './genetics';
+import { isPrimeDuck, targetMatch } from './genetics';
 import { COLORS, initialState, type ChampionSnapshot, type GameState, type Genome } from './state';
 
 /**
@@ -179,6 +179,7 @@ export function championSnapshot(state: GameState, now: number): ChampionSnapsho
   const target = targetForTier(state.legacyTier);
   return {
     tier: state.legacyTier + 1,
+    primeDuck: state.ducks.some((d) => isPrimeDuck(d.genome)) || undefined,
     meanQuality: meanQuality(state),
     bestQuality: state.ducks.reduce((m, d) => Math.max(m, targetMatch(d.genome, target)), 0),
     flockSize: state.ducks.length,

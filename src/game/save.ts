@@ -55,6 +55,9 @@ export interface AwaySummary {
   /** Player-NAMED victims of this catch-up, by name — a named duck's fate is a
    *  story, not a statistic. Wounded = survivors you can still save. */
   names?: { wounded: string[]; lost: string[] };
+  /** THE PRIME DUCK hatched overnight — too big to bury with the other muted
+   *  offline beats, so the away summary announces it instead of the live DING. */
+  primeDuck?: boolean;
 }
 
 export function serialize(state: GameState): string {
@@ -379,7 +382,9 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
   // (Same treatment as the predator events above; the achievements persist in
   // dexSeen / the flock.)
   state.pendingDex = [];
+  const primeDuckOvernight = (state.pendingPrimeDuck ?? 0) > 0;
   state.pendingTruebred = 0;
+  state.pendingPrimeDuck = 0;
   const predator =
     predatorLost > 0 || predatorWounded > 0 ? { wounded: predatorWounded, lost: predatorLost } : undefined;
   const overcrowd =
@@ -397,6 +402,7 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
     overcrowd,
     debuffed,
     names,
+    primeDuck: primeDuckOvernight || undefined,
   };
 }
 
