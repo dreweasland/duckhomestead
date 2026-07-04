@@ -163,9 +163,12 @@ function OddsPreview({ a, b, target, primeEligible }: { a: Duck; b: Duck; target
                 <span
                   key={i}
                   className="flex h-4 flex-1 items-center justify-center rounded-[2px] text-[8px] tabular-nums"
-                  title={`Slot ${i + 1}: ${Math.round(p * 100)}% ${GENE_META[gene].label}`}
+                  title={`Slot ${i + 1}: ${p > 0 && p < 0.01 ? '<1' : Math.round(p * 100)}% ${GENE_META[gene].label}`}
                   style={{
-                    background: `color-mix(in srgb, ${GENE_META[gene].color} ${Math.round(p * 100)}%, #171009)`,
+                    // A possible-but-rare outcome keeps a faint visible tint —
+                    // mutation odds (~0.5%/gene, Prime ~0.1%) must never read as
+                    // literally impossible.
+                    background: `color-mix(in srgb, ${GENE_META[gene].color} ${p > 0 ? Math.max(4, Math.round(p * 100)) : 0}%, #171009)`,
                     color: p > 0.5 ? '#171009' : '#9a8a6a',
                     boxShadow: isTarget ? 'inset 0 0 0 1px #ffe9a8' : undefined,
                   }}
