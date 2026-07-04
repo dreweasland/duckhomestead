@@ -198,8 +198,10 @@ export function ResourceFlowPanel({ state, onClose }: { state: GameState; onClos
         )}
 
         <p className="mt-3 text-[10px] leading-relaxed text-[#7a6a4a]">
-          Eggs have no feed outflow — they’re your currency, spent on building &amp; upgrades as you
-          choose. Rates are live and shift with ration, mill capacity, level, and modules.
+          Eggs’ outflow is your breeding program — every running pair draws its clutch cost from
+          storage (paused or housing-pinned pairs draw nothing). One-time spends (building,
+          upgrades, repairs) aren’t rates and don’t show here. Rates are live and shift with
+          ration, mill capacity, level, and modules.
         </p>
       </div>
     </div>
