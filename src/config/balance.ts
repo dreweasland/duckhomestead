@@ -1171,10 +1171,12 @@ export const STATION_DEFS: Record<
   },
 };
 
+// (silo sits with the core chain in the build palette: plot → mill → coop → silo)
 export const STATION_ORDER: StationType[] = [
   'plot',
   'mill',
   'coop',
+  'silo',
   'peaPatch',
   'mealwormFarm',
   'yeastVat',
@@ -1184,7 +1186,6 @@ export const STATION_ORDER: StationType[] = [
   'winterCoop',
   'heater',
   'heatedWaterer',
-  'silo',
 ];
 
 // ── Phase 4b: data-driven zones ──────────────────────────────────────

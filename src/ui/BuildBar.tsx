@@ -18,10 +18,6 @@ const swatch = (color: string, label: string) => (
   </span>
 );
 
-// The core production chain shares the top row; the four ingredient producers
-// sit in the second row. On a 12-col grid that's span-4 (×3) over span-3 (×4).
-const CORE: StationType[] = ['plot', 'mill', 'coop'];
-
 const CHAIN_HINT: Record<StationType, React.ReactNode> = {
   plot: (
     <span className="inline-flex items-center gap-1">
@@ -44,7 +40,7 @@ const CHAIN_HINT: Record<StationType, React.ReactNode> = {
   winterCoop: <span>houses assigned winter ducks</span>,
   heater: <span>warms nearby winter coops</span>,
   heatedWaterer: <span>waters 6 winter ducks</span>,
-  silo: <span>+feed storage — a tile that isn’t a producer</span>,
+  silo: <span>+feed storage</span>,
 };
 
 export function BuildBar({ state, buildType, onPick, activeZone = 'yard' }: Props) {
@@ -60,7 +56,8 @@ export function BuildBar({ state, buildType, onPick, activeZone = 'yard' }: Prop
           const cost = BALANCE.COSTS[t];
           const affordable = state.resources.eggs >= cost;
           const selected = buildType === t;
-          const span = CORE.includes(t) ? 'col-span-4' : 'col-span-3';
+          // Uniform 4-per-row: the core chain + silo up top, producers below.
+          const span = 'col-span-3';
           return (
             <button
               key={t}
