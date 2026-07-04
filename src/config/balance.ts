@@ -365,6 +365,15 @@ export const BALANCE = {
     UPGRADE: {
       provisionMult: 1.5, // provision ×= this per level above 1
       costGrowth: 1.7, // upgrade cost = placeCost × costGrowth^level
+      /** Features finish at this level (×5 provision) — like producers, a
+       *  summit; covering a bigger flock past it means MORE features/board
+       *  thought, not one infinite tile (playtest, 2026-07-04). */
+      levelCap: 5,
+      /** Upgrade pricing gets the clutch treatment: cost = max(flat curve,
+       *  peak egg rate × this many seconds × growth^(level-1)) — flat floors
+       *  the early game unchanged; endgame levels actually hit (~15s of peak
+       *  income each, escalating). */
+      peakSecondsPerLevel: 15,
     },
     /** Circulation FLOW features (Stage 2). A fountain is "live" (projects
      *  coverage) only on a path that connects an intake to an outflow. */

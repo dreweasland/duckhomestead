@@ -66,8 +66,13 @@ export function WatchPanel({
   const recovering = wounded.filter((d) => d.recovering);
   const waiting = wounded.filter((d) => !d.recovering);
   // Maxed keys off PRISTINE capacity (so wear doesn't re-invite building more nets —
-  // you repair instead).
-  const floorMaxed = state.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP;
+  // you repair instead). COVERAGE changed what "maxed" means: past the floor
+  // cap, extra nets still stretch the line over MORE ducks — so the line is
+  // only truly done when the floor is capped AND every exposed duck is under
+  // it. A STRETCHED line must never grey the build button.
+  const floorMaxed =
+    state.deterrents * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP &&
+    state.deterrents * P.DUCKS_COVERED_PER_UNIT >= exposedFlock(state);
 
   // Deterrent integrity + repair.
   const integrity = state.deterrentIntegrity;
@@ -89,7 +94,9 @@ export function WatchPanel({
   const raccoonHere = (state.predatorsSeen ?? []).includes('raccoon');
   const clothCost = hardwareClothCostFn(state);
   const clothFloorPct = Math.round(defenseFloor(state, 'cloth') * 100);
-  const clothMaxed = state.hardwareCloth * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP;
+  const clothMaxed =
+    state.hardwareCloth * P.DEFENSE_FLOOR_PER_DETERRENT >= P.DEFENSE_FLOOR_CAP &&
+    state.hardwareCloth * P.DUCKS_COVERED_PER_UNIT >= exposedFlock(state);
   const clothIntegrity = state.hardwareClothIntegrity;
   const clothIntegrityPct = Math.round(clothIntegrity * 100);
   const clothRepairCost = Math.max(
@@ -276,7 +283,7 @@ export function WatchPanel({
                 <span className="font-bold">Deterrent</span>
                 <span className="block text-[10px] opacity-80">
                   {floorMaxed
-                    ? `floor maxed at ${capPct}% — build secure coops instead`
+                    ? `line complete — ${capPct}% floor, all ${exposedFlock(state)} exposed covered`
                     : `+${Math.round(P.DEFENSE_FLOOR_PER_DETERRENT * 100)}% protection floor (passive, offline-safe)`}
                 </span>
               </span>
@@ -301,7 +308,7 @@ export function WatchPanel({
                   <span className="font-bold">Hardware Cloth</span>
                   <span className="block text-[10px] opacity-80">
                     {clothMaxed
-                      ? `ground floor maxed at ${capPct}%`
+                      ? `line complete — ${capPct}% ground floor, all exposed covered`
                       : `+${Math.round(P.DEFENSE_FLOOR_PER_DETERRENT * 100)}% GROUND floor vs the raccoon (nets don’t help here)`}
                   </span>
                 </span>

@@ -335,3 +335,33 @@ describe('pond terrain rotation (Phase 5 juice, water assessment fix ③)', () =
     expect(reset.pond.features).toHaveLength(0); // clean slate — no stale feature to conflict
   });
 });
+
+describe('pond upgrades get the clutch treatment: a level cap + peak pricing', () => {
+  it('features finish at levelCap; the upgrade fails cleanly at the summit', () => {
+    const s = initialState(0);
+    s.zones.pond.unlocked = true;
+    s.resources.eggs = 1e9;
+    placePondFeature(s, 'bathingPool', 0, 0);
+    for (let i = 1; i < W.UPGRADE.levelCap; i++) {
+      expect(upgradePondFeature(s, 0, 0).ok).toBe(true);
+    }
+    const r = upgradePondFeature(s, 0, 0);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/max level/i);
+    expect(s.pond.features[0].level).toBe(W.UPGRADE.levelCap);
+  });
+
+  it('the price rides the run PEAK past the flat floor (negligible no more)', () => {
+    const s = initialState(0);
+    s.zones.pond.unlocked = true;
+    s.resources.eggs = 1e9;
+    placePondFeature(s, 'bathingPool', 0, 0);
+    const flat = pondFeatureUpgradeCost(s, 0, 0);
+    s.contracts.peakEggRate = 60; // endgame-scale peak
+    const peakPriced = pondFeatureUpgradeCost(s, 0, 0);
+    expect(peakPriced).toBe(Math.round(60 * W.UPGRADE.peakSecondsPerLevel));
+    expect(peakPriced).toBeGreaterThan(flat);
+    s.contracts.peakEggRate = 0.5; // early game: the flat curve floors it
+    expect(pondFeatureUpgradeCost(s, 0, 0)).toBe(flat);
+  });
+});
