@@ -169,11 +169,13 @@ function OddsPreview({ a, b, target, primeEligible }: { a: Duck; b: Duck; target
                     // mutation odds (~0.5%/gene, Prime ~0.1%) must never read as
                     // literally impossible.
                     background: `color-mix(in srgb, ${GENE_META[gene].color} ${p > 0 ? Math.max(4, Math.round(p * 100)) : 0}%, #171009)`,
-                    color: p > 0.5 ? '#171009' : '#9a8a6a',
+                    // Contrast flips with the fill: bright cells (heavy gene tint)
+                    // take dark ink; dim cells take bright cream — never dim-on-dark.
+                    color: p > 0.45 ? '#171009' : '#f5ecd8',
                     boxShadow: isTarget ? 'inset 0 0 0 1px #ffe9a8' : undefined,
                   }}
                 >
-                  {p >= 0.005 ? Math.round(p * 100) : ''}
+                  {p === 0 ? '' : p < 0.01 ? '<1' : Math.round(p * 100)}
                 </span>
               );
             })}
