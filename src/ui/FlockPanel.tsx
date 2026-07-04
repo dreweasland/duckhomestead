@@ -47,7 +47,9 @@ export function GenomeTiles({
   return (
     <span className="inline-flex gap-0.5">
       {duck.genome.map((g, i) => {
-        const hit = known && target && target[i] === g;
+        // The ONE match rule (slotMatches): Prime is a wildcard, so a P gene
+        // lights the target ring like any landed slot — same as the gate counts it.
+        const hit = known && target && slotMatches(g, target[i]);
         return (
           <span
             key={i}
