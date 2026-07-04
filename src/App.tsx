@@ -305,6 +305,12 @@ export default function App() {
       case 'backup':
         backupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         break;
+      case 'build-silo':
+        // The fix is a PLACEMENT: jump to the Yard with the silo tool armed —
+        // the next tile click builds one.
+        setActiveZone('yard');
+        setBuildType('silo');
+        break;
     }
   }, []);
 

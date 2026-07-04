@@ -1,4 +1,5 @@
 import { millLoad, resourceFlow } from '../game/actions';
+import { INGREDIENTS, ingredientCap } from '../game/state';
 import type { GameState, Resource } from '../game/state';
 import { fmt } from './format';
 import { CloseIcon, RESOURCE_ICON } from './icons';
@@ -121,6 +122,52 @@ export function ResourceFlowPanel({ state, onClose }: { state: GameState; onClos
             );
           })}
         </div>
+
+        {/* Feed Store capacity — the storage ⇄ production partnership (the
+            fullest line is the binding one, same logic as mill load). */}
+        {(() => {
+          const cap = ingredientCap(state);
+          let fullest: { key: Resource; frac: number } = { key: 'corn', frac: 0 };
+          for (const key of INGREDIENTS) {
+            const frac = (state.resources[key] ?? 0) / cap;
+            if (frac > fullest.frac) fullest = { key, frac };
+          }
+          const label = ROWS.find((r) => r.key === fullest.key)?.label ?? fullest.key;
+          const silos = state.stations.filter((s) => s.type === 'silo').length;
+          const full = fullest.frac >= 1;
+          const color = full ? '#e8c45a' : fullest.frac >= 0.8 ? '#e8c45a' : '#8fe388';
+          const hint = full
+            ? `${label} store is FULL — its producers are idling. Build or upgrade a Silo (a board tile), or let the flock eat it down.`
+            : fullest.frac >= 0.8
+              ? `${label} is approaching the cap — a Silo buys headroom (and overnight cushion).`
+              : 'Headroom — stored feed is your overnight cushion and shock buffer.';
+          return (
+            <div className="mt-3 rounded-md bg-[#1f1812] p-2.5">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
+                  Feed store capacity
+                </span>
+                <span className="text-xs font-bold tabular-nums" style={{ color }}>
+                  {Math.round(Math.min(1, fullest.frac) * 100)}% full
+                </span>
+              </div>
+              <div className="mb-1 h-2 overflow-hidden rounded-full bg-[#3a2e22]">
+                <div
+                  className="h-full rounded-full transition-[width]"
+                  style={{ width: `${Math.min(1, fullest.frac) * 100}%`, background: color }}
+                />
+              </div>
+              <div className="mb-1 text-[10px] tabular-nums text-[#9a8a6a]">
+                fullest line: {label} {fmt(Math.min(state.resources[fullest.key] ?? 0, cap))} /{' '}
+                {fmt(cap)} per ingredient
+                {silos > 0 ? ` · ${silos} silo${silos > 1 ? 's' : ''}` : ' · no silos built'}
+              </div>
+              <div className="text-[10px] leading-relaxed" style={{ color }}>
+                {hint}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Feed mill capacity — the production ⇄ mill partnership. */}
         {load && mill && (

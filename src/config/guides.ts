@@ -48,7 +48,16 @@ import type { NutritionTab } from '../ui/NutritionPanel';
 /** Which panel (App.tsx's boolean open-state) a CTA opens, and — for Nutrition
  *  only — which internal tab to land on. 'backup' has no modal; the reader
  *  scrolls the always-visible backup controls into view instead. */
-export type GuideOpenTarget = 'nutrition' | 'flock' | 'modules' | 'watch' | 'legacy' | 'grange' | 'backup';
+export type GuideOpenTarget =
+  | 'nutrition'
+  | 'flock'
+  | 'modules'
+  | 'watch'
+  | 'legacy'
+  | 'grange'
+  | 'backup'
+  // Arms the SILO build tool on the Yard (no panel — the fix is a placement).
+  | 'build-silo';
 
 export interface GuideDef {
   /** localStorage key suffix: duck-homestead-guide-<id>. Stable — renaming a
@@ -245,12 +254,12 @@ export const GUIDE_DEFS: GuideDef[] = [
     title: 'A feed line is full',
     icon: NutritionIcon,
     body: 'One of your ingredient stores has hit its cap — its producers are idling until the flock eats the stock down. That stock is your overnight cushion and your buffer against a bad stretch, so if the flock keeps growing, build a Silo (or upgrade one) — it takes a board tile a producer could have had, which is the trade. Otherwise, an idle line just means you\u2019re producing faster than they can eat — no harm done.',
+    cta: { label: 'Build a Silo', open: 'build-silo' },
     when: (state) =>
       state.nutrition != null &&
       (['corn', 'peas', 'mealworms', 'brewersYeast', 'oysterShell', 'sunflowerSeeds', 'fodderSprouts'] as const).some(
         (i) => state.resources[i] >= ingredientCap(state),
       ),
-    cta: { label: 'Open Nutrition', open: 'nutrition', tab: 'layers' },
   },
   {
     id: 'backup',
