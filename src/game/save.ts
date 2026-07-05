@@ -385,6 +385,7 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
   const primeDuckOvernight = (state.pendingPrimeDuck ?? 0) > 0;
   state.pendingTruebred = 0;
   state.pendingPrimeDuck = 0;
+  state.pendingPrimeTruebred = 0;
   const predator =
     predatorLost > 0 || predatorWounded > 0 ? { wounded: predatorWounded, lost: predatorLost } : undefined;
   const overcrowd =

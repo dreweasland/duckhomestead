@@ -470,6 +470,10 @@ export interface GameState {
   /** Transient: full-Prime (PPPPPP) hatches this tick — THE PRIME DUCK, the
    *  rarest hatch in the game. Drained by the engine for its own DING. */
   pendingPrimeDuck?: number;
+  /** Transient: a truebred hatched carrying a NEW BEST Prime-wildcard count
+   *  for the flock (the value = that count) — a rung on the Prime chase's
+   *  celebration ladder. Drained by the engine. */
+  pendingPrimeTruebred?: number;
   /** Colors ever produced (the dex) — drives first-of-color DINGs. */
   dexSeen: Color[];
   /** Transient: colors discovered this tick, drained by the engine for DINGs. */

@@ -161,12 +161,29 @@ export function runBreeding(
       if (recordColor(state, phenotype(genotype))) {
         (state.pendingDex ??= []).push(phenotype(genotype));
       }
+      const pCount = genome.filter((g) => g === 'P').length;
       if (isPrimeDuck(genome) && !state.ducks.some((d) => d !== duckling && isPrimeDuck(d.genome))) {
         // THE PRIME DUCK — the rarest hatch there is. Supersedes the ordinary
         // truebred DING for this hatch (a full-Prime IS a truebred via the
         // wildcard; two banners for one duckling would bury the bigger one).
         // Same guard shape as truebred: re-fires only if every Prime Duck is lost.
         state.pendingPrimeDuck = (state.pendingPrimeDuck ?? 0) + 1;
+      } else if (
+        pCount > 0 &&
+        isTruebred(genome, standardTarget) &&
+        !state.ducks.some(
+          (d) =>
+            d !== duckling &&
+            isTruebred(d.genome, standardTarget) &&
+            d.genome.filter((g) => g === 'P').length >= pCount,
+        )
+      ) {
+        // The celebration LADDER of the Prime chase: a truebred carrying a NEW
+        // BEST wildcard count for the flock (first 1-P truebred, first 2-P, …)
+        // gets its own beat — the had-a-truebred guard was swallowing these
+        // (playtest: 'hit a 6/6 prime, but no fanfare'). Full PPPPPP stays the
+        // summit above.
+        state.pendingPrimeTruebred = Math.max(state.pendingPrimeTruebred ?? 0, pCount);
       } else if (!hadTruebred && isTruebred(genome, standardTarget)) {
         state.pendingTruebred = (state.pendingTruebred ?? 0) + 1;
       }

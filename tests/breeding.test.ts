@@ -359,3 +359,73 @@ it('the excess-drake cull sends Prime carriers to the BACK of the line', async (
   expect(ids.has('prime')).toBe(true); // spared despite the junk genome
   expect(ids.has('d1')).toBe(false); // the true worst classics went instead
 });
+
+describe('the Prime chase LADDER: a truebred with a new best wildcard count gets fanfare', () => {
+  const B2 = BALANCE.BREEDING;
+  const mkPair = (drakeG: string, henG: string, flock: Duck[] = []): GameState => {
+    const s = build({ coop: 2 });
+    const mk = (id: string, sex: 'drake' | 'hen', g: string): Duck => ({
+      id,
+      genotype: ['Bl', 'bl'],
+      genome: genome(g),
+      genomeKnown: true,
+      sex,
+      stage: 'adult',
+      ageTicks: 0,
+    });
+    s.ducks = [mk('dr', 'drake', drakeG), mk('he', 'hen', henG), ...flock];
+    s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
+    s.contracts.peakEggRate = 0;
+    s.resources.eggs = 100000;
+    return s;
+  };
+  const hatch = (s: GameState) => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.4);
+    runBreeding(s, B2.CLUTCH_INTERVAL_S - 1);
+    runBreeding(s, B2.INCUBATE_S + 2);
+    vi.restoreAllMocks();
+  };
+
+  it('a 1-P truebred fires the ladder beat even though plain truebreds exist', () => {
+    // Target LLLLLL (tier 0). Drake PDDDDD (a P-carrier, NOT a truebred) x a
+    // plain-truebred hen deterministically hatch PLLLLL (P dom 4 beats L in
+    // slot 0; L beats D elsewhere at rng 0.4) — a 1-P truebred, while a plain
+    // truebred already lives. The OLD guard would have swallowed this.
+    const s = mkPair('PDDDDD', 'LLLLLL', [
+      {
+        id: 'tb',
+        genotype: ['Bl', 'bl'],
+        genome: genome('LLLLLL'),
+        genomeKnown: true,
+        sex: 'hen',
+        stage: 'adult',
+        ageTicks: 0,
+      },
+    ]);
+    hatch(s);
+    expect(s.pendingPrimeTruebred ?? 0).toBe(1);
+    expect(s.pendingTruebred ?? 0).toBe(0);
+  });
+
+  it('no re-fire at the SAME count; a higher count fires again', () => {
+    // A 1-P truebred already in the flock → a fresh 1-P hatch is not a new best.
+    const one = mkPair('PDDDDD', 'LLLLLL', [
+      {
+        id: 'p1best',
+        genotype: ['Bl', 'bl'],
+        genome: genome('PLLLLL'),
+        genomeKnown: true,
+        sex: 'hen',
+        stage: 'adult',
+        ageTicks: 0,
+      },
+    ]);
+    hatch(one);
+    expect(one.pendingPrimeTruebred ?? 0).toBe(0); // the 1-P rung is already held
+
+    // A 2-P drake (not a truebred) x plain truebred → PPLLLL, a NEW best.
+    const two = mkPair('PPDDDD', 'LLLLLL');
+    hatch(two);
+    expect(two.pendingPrimeTruebred ?? 0).toBe(2);
+  });
+});

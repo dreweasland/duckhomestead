@@ -337,6 +337,25 @@ export class GameEngine {
       ],
     });
   }
+  /** A rung on the Prime chase's ladder: a truebred carrying a new best
+   *  wildcard count for the flock. */
+  private drainPrimeTruebred() {
+    const n = this.state.pendingPrimeTruebred ?? 0;
+    if (n <= 0) return;
+    this.state.pendingPrimeTruebred = 0;
+    this.emitDing({
+      newRank: this.state.rank,
+      levelsGained: 0,
+      milestones: [
+        {
+          rank: this.state.rank,
+          title: n === 1 ? 'PRIME BLOOD IN THE LINE' : `A ${n}-PRIME TRUEBRED`,
+          description: `A truebred carrying ${n === 1 ? 'a Prime wildcard' : `${n} Prime wildcards`} — those slots match ANY Standard, and it passes them at full dominance. Breed from it: THE PRIME DUCK is ${6 - n} slot${6 - n === 1 ? '' : 's'} away.`,
+          kind: 'breeding',
+        },
+      ],
+    });
+  }
   /** Promote any truebred hatch (a duck perfectly matching the target) to a
    *  can't-miss milestone DING — the payoff of the whole min/max grind. */
   private drainTruebred() {
@@ -425,6 +444,7 @@ export class GameEngine {
       }
       this.drainDex(); // fire DINGs for any first-of-color hatches this frame
       this.drainPrimeDuck(); // THE PRIME DUCK outranks every other beat this frame
+      this.drainPrimeTruebred(); // a new best wildcard count among truebreds — the chase's ladder
       this.drainTruebred(); // fire the truebred DING for a perfect-target hatch
       this.drainPredatorEvents(); // telegraph / attack / loss feedback this frame
       this.drainContractExpiry(); // a deadline lapse gets a toast, never silence
