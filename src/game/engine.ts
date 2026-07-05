@@ -46,7 +46,7 @@ import {
   type ClaimResult,
 } from './contracts';
 import { goodGeneCount } from './genetics';
-import { flockRatio } from './state';
+import { flockRatio, type Duck } from './state';
 import { scareOff, type ScareResult } from './predators';
 import { tryTendDrop } from './loot';
 import { conditionTarget } from './nutrition';
@@ -692,9 +692,14 @@ export class GameEngine {
     const { excess } = flockRatio(this.state);
     if (excess <= 0) return { ok: false, reason: 'No excess drakes' };
     const paired = new Set(this.state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
+    // Worst genome first — with Prime carriers weighted to the very BACK of
+    // the line: a lone P in a junk genome reads as a bad drake but is precious
+    // stock for the Prime chase (same protection as the bulk-release tool).
+    const cullRank = (d: Duck) =>
+      d.genome.filter((g) => g === 'P').length * 10 + goodGeneCount(d.genome);
     const ids = this.state.ducks
       .filter((d) => d.stage === 'adult' && d.sex === 'drake' && !d.secured && !paired.has(d.id))
-      .sort((a, b) => goodGeneCount(a.genome) - goodGeneCount(b.genome)) // worst genome first
+      .sort((a, b) => cullRank(a) - cullRank(b))
       .slice(0, excess)
       .map((d) => d.id);
     const r = cullDucks(this.state, ids);

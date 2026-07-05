@@ -329,3 +329,33 @@ describe('THE PRIME DUCK (a full-PPPPPP hatch — the rarest bird there is)', ()
     expect(championSnapshot(s, 0).primeDuck).toBeUndefined();
   });
 });
+
+it('the excess-drake cull sends Prime carriers to the BACK of the line', async () => {
+  const { GameEngine } = await import('../src/game/engine');
+  const s = build({ coop: 3 });
+  const mk = (id: string, sex: 'drake' | 'hen', g: string): Duck => ({
+    id,
+    genotype: ['Bl', 'bl'],
+    genome: genome(g),
+    genomeKnown: true,
+    sex,
+    stage: 'adult',
+    ageTicks: 0,
+  });
+  // 8 hens + 4 drakes (over the ratio threshold): the P-carrier has the
+  // WORST classic genome of the drakes.
+  s.ducks = [
+    ...Array.from({ length: 8 }, (_, i) => mk(`h${i}`, 'hen' as const, 'LLLLLL')),
+    mk('prime', 'drake', 'PDDDDD'), // 1 good-gene equiv, but carries the P
+    mk('d1', 'drake', 'LLDDDD'),
+    mk('d2', 'drake', 'LLLDDD'),
+    mk('d3', 'drake', 'LLLLDD'),
+  ];
+  const engine = new GameEngine(0); // loads a fresh game (no storage in tests)…
+  engine.state = s; // …then adopt the staged flock
+  const r = engine.cullExcessDrakes();
+  expect(r.ok).toBe(true);
+  const ids = new Set(s.ducks.map((d) => d.id));
+  expect(ids.has('prime')).toBe(true); // spared despite the junk genome
+  expect(ids.has('d1')).toBe(false); // the true worst classics went instead
+});

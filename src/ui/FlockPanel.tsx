@@ -117,13 +117,14 @@ const GENE_ORDER: Gene[] = ['L', 'V', 'H', 'D'];
 /** Flock-browser sort keys. `match`/`good` read the EXACT genome (reader-gated);
  *  the band sorts (`lay`/`vigor`/`hardy`) read the free coarse tier, so they work
  *  on unread ducks too — the pre-reader selection tool. `new` reads the id. */
-type SortKey = 'match' | 'good' | 'lay' | 'vigor' | 'hardy' | 'new';
+type SortKey = 'match' | 'good' | 'prime' | 'lay' | 'vigor' | 'hardy' | 'new';
 const SORT_LABEL: Record<SortKey, string> = {
   lay: 'Lay band',
   vigor: 'Vigor band',
   hardy: 'Hardy band',
   match: 'Target match',
   good: 'Good genes',
+  prime: 'Prime genes',
   new: 'Newest',
 };
 /** Numeric tail of a duck id (e.g. "d12" → 12) for the "Newest" sort. */
@@ -675,6 +676,8 @@ export function FlockPanel({
   const sortStat: Record<SortKey, (d: Duck) => number> = {
     match: (d) => targetMatch(d.genome, target),
     good: (d) => goodGeneCount(d.genome),
+    // The Prime chase: P-carriers first (by count), quality as the tiebreak.
+    prime: (d) => d.genome.filter((g) => g === 'P').length * 10 + targetMatch(d.genome, target),
     lay: (d) => axisTier(d.genome, 'lay'),
     vigor: (d) => axisTier(d.genome, 'vigor'),
     hardy: (d) => axisTier(d.genome, 'hardy'),
@@ -682,7 +685,7 @@ export function FlockPanel({
   };
   // Only the EXACT-genome sorts (match/good) sink unread ducks — the band sorts
   // read free public info, so they rank read and unread ducks alike.
-  const exactSort = sortKey === 'match' || sortKey === 'good';
+  const exactSort = sortKey === 'match' || sortKey === 'good' || sortKey === 'prime';
   const shown = ducks
     .filter(
       (d) =>
@@ -829,7 +832,7 @@ export function FlockPanel({
                 className="rounded bg-[#2a2018] px-1.5 py-1 text-[11px] text-[#f5ecd8]"
               >
                 <option value="any">any</option>
-                {GENE_ORDER.map((g) => (
+                {[...GENE_ORDER, 'P' as Gene].map((g) => (
                   <option key={g} value={g}>
                     {g} · {GENE_META[g].label}
                   </option>
@@ -861,6 +864,10 @@ export function FlockPanel({
                   !d.secured &&
                   !pairedIds.has(d.id) &&
                   d.genomeKnown &&
+                  // A Prime carrier is never mass-released: a single P in a junk
+                  // genome scores low on target match but is PRECIOUS breeding
+                  // stock for the Prime chase (per-row release still works).
+                  !d.genome.includes('P') &&
                   targetMatch(d.genome, target) < cullQuality,
               );
               const n = eligible.length;
@@ -911,7 +918,7 @@ export function FlockPanel({
                     </button>
                   </div>
                   <div className="mt-1 text-[9px] text-[#7a6a4a]">
-                    matches the {target.map((g) => g).join('')} target · keeps secured + paired birds
+                    matches the {target.map((g) => g).join('')} target · keeps secured + paired + Prime carriers
                   </div>
                 </div>
               );
