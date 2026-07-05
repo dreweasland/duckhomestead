@@ -634,11 +634,48 @@ export function WaterBoard({
                   <rect x={px + 3} y={py + 3} width={TILE - 6} height={TILE - 6} rx={6} fill="none" stroke="#fff4d6" strokeWidth={2} />
                 )}
                 {/* circulation feature */}
-                {flow && fmeta && (
+                {flow && fmeta && flow.type === 'pipe' && (
+                  // AUTO-SHAPED PIPES (playtest): a pipe draws a timber channel
+                  // ARM toward each connected neighbour (pumps above and drains
+                  // below count), so corners, tees, crosses, and verticals all
+                  // emerge from the layout — no fixed sprite orientation.
+                  <g>
+                    {(
+                      [
+                        [0, -1, 'N'],
+                        [1, 0, 'E'],
+                        [0, 1, 'S'],
+                        [-1, 0, 'W'],
+                      ] as const
+                    ).map(([dx, dy, dir]) => {
+                      if (!flowAt(x + dx, y + dy)) return null;
+                      const cx = px + TILE / 2;
+                      const cy = py + TILE / 2;
+                      const wood = '#684628';
+                      const water = live ? '#7fd8e8' : '#2e4e5e';
+                      const L = TILE / 2;
+                      return dy !== 0 ? (
+                        <g key={dir}>
+                          <rect x={cx - 7} y={dy < 0 ? py : cy} width={14} height={L} fill={wood} />
+                          <rect x={cx - 4} y={dy < 0 ? py : cy} width={8} height={L} fill={water} />
+                        </g>
+                      ) : (
+                        <g key={dir}>
+                          <rect x={dx < 0 ? px : cx} y={cy - 7} width={L} height={14} fill={wood} />
+                          <rect x={dx < 0 ? px : cx} y={cy - 4} width={L} height={8} fill={water} />
+                        </g>
+                      );
+                    })}
+                    {/* brass knuckle at the joint */}
+                    <rect x={px + TILE / 2 - 8} y={py + TILE / 2 - 8} width={16} height={16} rx={3} fill="#c8a050" stroke="#96742f" strokeWidth={1.5} />
+                    <rect x={px + TILE / 2 - 3} y={py + TILE / 2 - 3} width={6} height={6} rx={1} fill={live ? '#bef0f8' : '#3a5a68'} />
+                  </g>
+                )}
+                {flow && fmeta && flow.type !== 'pipe' && (
                   <>
                     {/* Connection stubs toward adjacent flow pieces (+x/+y only,
-                        so each junction draws once) — the plumbing reads as a
-                        LINE, not scattered dots. */}
+                        so each junction draws once; pipe-to-pipe junctions are
+                        handled by the pipes' own arms). */}
                     {flowAt(x + 1, y) && (
                       <rect x={px + TILE - 10} y={py + TILE / 2 - 3} width={20} height={6} rx={2} fill={live ? '#7fd8e8' : '#3a5a68'} opacity={0.9} />
                     )}
