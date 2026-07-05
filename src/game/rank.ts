@@ -1,8 +1,15 @@
 import { BALANCE } from '../config/balance';
 
-/** XP required to advance FROM level n TO level n+1. */
+/** XP required to advance FROM level n TO level n+1: geometric to the knee,
+ *  then the gentler tail (see RANK_SOFT_KNEE in balance.ts). */
 export function xpForLevel(n: number): number {
-  return Math.round(BALANCE.RANK_BASE_XP * Math.pow(BALANCE.RANK_GROWTH, n - 1));
+  const knee = BALANCE.RANK_SOFT_KNEE;
+  if (n <= knee) return Math.round(BALANCE.RANK_BASE_XP * Math.pow(BALANCE.RANK_GROWTH, n - 1));
+  return Math.round(
+    BALANCE.RANK_BASE_XP *
+      Math.pow(BALANCE.RANK_GROWTH, knee - 1) *
+      Math.pow(BALANCE.RANK_TAIL_GROWTH, n - knee),
+  );
 }
 
 /** Fraction [0,1] of the way to the next rank. */

@@ -980,6 +980,8 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
 
   station.tendCooldownRemaining = BALANCE.TEND_COOLDOWN_S * tendCooldownMult(state);
   // Renown (legacy boost) scales active-action XP — online-only law holds.
-  const xp = gainXP(state, Math.round(BALANCE.TEND_XP * renownBoostMult(state)));
+  // XP rides the station's LEVEL: an L1 plot pays the same 20 as ever, an L14
+  // producer pays 280 — upgrades feed progression, matching the kneed curve.
+  const xp = gainXP(state, Math.round(BALANCE.TEND_XP * station.level * renownBoostMult(state)));
   return done({ station, burst, xp });
 }

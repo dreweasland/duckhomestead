@@ -191,9 +191,18 @@ export const BALANCE = {
   TEND_XP: 20,
 
   // ── Homestead Rank + the DING ───────────────────────────────────────
-  /** XP needed for level n = BASE * GROWTH^(n-1). */
+  /** XP needed for level n = BASE * GROWTH^(n-1)… up to the KNEE, then the
+   *  gentler TAIL_GROWTH takes over (playtest, 2026-07-05: geometric-forever
+   *  requirements against flat tend income walled rank 22 at ~246k XP/level —
+   *  rank 25, where the SIEGE debuts, was unreachable in any run). The knee
+   *  sits past every early milestone (autohaul 5, whistle 10, grants 13) so
+   *  the taught early pacing is untouched; the tail keeps late ranks a
+   *  journey (~63k at 22→23) without being a wall. Paired fix: tend XP now
+   *  scales with station LEVEL, so upgrades feed progression too. */
   RANK_BASE_XP: 50,
   RANK_GROWTH: 1.5,
+  RANK_SOFT_KNEE: 15,
+  RANK_TAIL_GROWTH: 1.2,
 
   // ── Phase 2: ingredient producers (raw, like the plot) ──────────────
   /** Each ingredient station produces `perCycle` of its resource every cycle. */

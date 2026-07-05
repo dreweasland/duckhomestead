@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { xpForLevel, rankProgress, milestoneAtRank } from '../src/game/rank';
 import { gainXP, tend } from '../src/game/actions';
-import { fullSetup, stockAll, run } from './helpers';
+import { build, fullSetup, stockAll, run } from './helpers';
 
 const GRANTS = BALANCE.LOOT.MILESTONE_GRANTS;
 
@@ -93,5 +93,38 @@ describe('tend', () => {
     }
     expect(s.rank).toBeGreaterThanOrEqual(5);
     expect(s.autoHaulUnlocked).toBe(true);
+  });
+});
+
+describe('the kneed rank curve + level-scaled tend XP (rank 25 must be reachable)', () => {
+  it('early curve is byte-identical; the tail grows gently from the knee', () => {
+    const B = BALANCE;
+    for (let n = 1; n <= B.RANK_SOFT_KNEE; n++) {
+      expect(xpForLevel(n)).toBe(Math.round(B.RANK_BASE_XP * Math.pow(B.RANK_GROWTH, n - 1)));
+    }
+    // Continuity at the knee: the first tail step is knee-value × tail growth.
+    expect(xpForLevel(B.RANK_SOFT_KNEE + 1)).toBe(
+      Math.round(B.RANK_BASE_XP * Math.pow(B.RANK_GROWTH, B.RANK_SOFT_KNEE - 1) * B.RANK_TAIL_GROWTH),
+    );
+    // The playtest wall: 22→23 must be a session, not an era (was ~246k).
+    expect(xpForLevel(22)).toBeLessThan(60_000);
+    // …and 25 (the siege debut) affordable within a deep run.
+    const to25 = xpForLevel(22) + xpForLevel(23) + xpForLevel(24);
+    expect(to25).toBeLessThan(220_000);
+  });
+
+  it('tend XP rides the station level (an L1 pays the classic 20)', () => {
+    const s = build({ plot: 1 });
+    run(s, 100); // ready to tend
+    const before = s.xp;
+    tend(s, s.stations[0].id);
+    expect(s.xp - before).toBe(BALANCE.TEND_XP); // L1 unchanged
+    const s2 = build({ plot: 1 });
+    s2.stations[0].level = 10;
+    s2.rank = 20; // far from the next level — no cascade eats the measurement
+    run(s2, 100);
+    const b2 = s2.xp;
+    tend(s2, s2.stations[0].id);
+    expect(s2.xp - b2).toBe(BALANCE.TEND_XP * 10);
   });
 });
