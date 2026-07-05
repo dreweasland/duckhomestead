@@ -316,7 +316,19 @@ export function removePondFeature(state: GameState, x: number, y: number): PondR
   return ok();
 }
 
-/** Place a circulation feature (Stage 2). */
+/** THE RAILS (playtest, 2026-07-05 — Rust-sprinkler geometry): pumps (intakes)
+ *  live on a dedicated rail ABOVE the canvas (y = -1) and drains (outflows) on
+ *  a rail BELOW it (y = CANVAS.height); the pond tiles themselves hold only
+ *  pipes + fountains. Water reads as entering the top, flowing through your
+ *  plumbing, and leaving the bottom — and the canvas is freed for the actual
+ *  routing puzzle. BFS adjacency handles the sentinel rows naturally
+ *  ((c,-1)↔(c,0), (c,H-1)↔(c,H)). Legacy in-canvas intakes/outflows keep
+ *  conducting and can be removed, but can't be re-placed in the canvas. */
+export const PUMP_RAIL_Y = -1;
+export const drainRailY = (): number => W.CANVAS.height;
+
+/** Place a circulation feature (Stage 2). Pumps/drains go on their rails;
+ *  pipes + fountains go in the pond. */
 export function placeFlowFeature(
   state: GameState,
   type: FlowFeatureType,
@@ -324,8 +336,15 @@ export function placeFlowFeature(
   y: number,
 ): PondResult {
   if (!zoneUnlocked(state, WORKS_ZONE)) return fail('Unlock Waterworks first');
-  if (!inBounds(x, y)) return fail('Out of bounds');
-  if (isTerrainBlocked(state, x, y)) return fail('Blocked by terrain');
+  if (x < 0 || x >= W.CANVAS.width) return fail('Out of bounds');
+  if (type === 'intake') {
+    if (y !== PUMP_RAIL_Y) return fail('Pumps mount on the top rail');
+  } else if (type === 'outflow') {
+    if (y !== drainRailY()) return fail('Drains mount on the bottom rail');
+  } else {
+    if (!inBounds(x, y)) return fail('Out of bounds');
+    if (isTerrainBlocked(state, x, y)) return fail('Blocked by terrain');
+  }
   if (flowAt(state, x, y)) return fail('Tile occupied');
   const cost = W.FLOW[type].costEggs;
   if (state.resources.eggs < cost) return fail(`Need ${cost} eggs`);
