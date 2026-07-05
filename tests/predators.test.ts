@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { BALANCE, PREDATOR_DEFS, predatorDef } from '../src/config/balance';
 import {
+  secureCoopCost,
   initialState,
   defenseCoverage,
   defenseFloor,
@@ -1130,4 +1131,31 @@ it('coverage keeps the build path OPEN past the floor cap (the Watch maxed-gate 
   expect(maxed).toBe(false); // stretched line → build stays open
   while (s.deterrents * P.DUCKS_COVERED_PER_UNIT < exposedFlock(s)) buildDeterrent(s);
   expect(defenseCoverage(s)).toBe(1);
+});
+
+describe('net/cloth pricing: kneed flat curve, then seconds-of-peak (flock-proportional goods)', () => {
+  it('early curve unchanged; past the knee the price is peak-priced, not geometric', () => {
+    const P = BALANCE.PREDATORS;
+    const s = flock(4);
+    s.contracts.peakEggRate = 100; // endgame-scale peak
+    // Below the knee: the classic escalation, byte-identical.
+    s.deterrents = 2;
+    expect(deterrentCost(s)).toBe(Math.round(P.DETERRENT_COST_EGGS * P.DEFENSE_COST_GROWTH ** 2));
+    // Far past the knee (the playtest wall: 20 nets, 181k next): constant effort now.
+    s.deterrents = 20;
+    expect(deterrentCost(s)).toBe(100 * P.DETERRENT_BUY_PEAK_SECONDS); // 6k, not 181k
+    // A low-peak run still pays the kneed flat floor.
+    s.contracts.peakEggRate = 1;
+    expect(deterrentCost(s)).toBe(
+      Math.round(P.DETERRENT_COST_EGGS * P.DEFENSE_COST_GROWTH ** P.DEFENSE_COST_KNEE),
+    );
+  });
+
+  it('secure coops keep pure escalation (bounded demand — the old curve is right for them)', () => {
+    const s = flock(4);
+    s.contracts.peakEggRate = 1000;
+    s.secureCoops = 10;
+    const P = BALANCE.PREDATORS;
+    expect(secureCoopCost(s)).toBe(Math.round(P.SECURE_COOP_COST_EGGS * P.DEFENSE_COST_GROWTH ** 10));
+  });
 });

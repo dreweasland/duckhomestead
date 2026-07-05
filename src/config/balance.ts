@@ -552,6 +552,16 @@ export const BALANCE = {
     // and the floor still means something at 3am.
     DETERRENT_WEAR_PER_WINDOW: 0.005, // ambient weathering per threat window
     DETERRENT_WEAR_PER_HIT: 0.06, // extra damage when an attack breaches the floor
+    /** Net/cloth PURCHASE pricing (playtest, 2026-07-05 — '20 nets, next is
+     *  181k for +1% floor'): coverage made netting FLOCK-PROPORTIONAL (linear
+     *  benefit, +DUCKS_COVERED_PER_UNIT each), and the old geometric curve
+     *  (built for the capped 4-net world) walled it. The flat curve now knees
+     *  at this unit count (~2.5k), and beyond it each net costs seconds of the
+     *  run's PEAK egg rate — constant benefit, constant effort. Secure coops +
+     *  infirmaries keep pure escalation (their demand IS bounded). At mega-
+     *  flock scale the honest limiter becomes the repair bill on a long line. */
+    DEFENSE_COST_KNEE: 6,
+    DETERRENT_BUY_PEAK_SECONDS: 60,
     DETERRENT_REPAIR_COST_PER_NET: 50, // floor: eggs to fully repair one net (prorated by wear)
     /** Repairs are the game's only recurring egg bill besides clutches, and a
      *  flat 50/net decayed to ~3s of endgame income — the designed 'routine

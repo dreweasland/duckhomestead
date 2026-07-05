@@ -771,14 +771,26 @@ export function infirmaryOccupied(state: GameState): number {
 }
 
 /** Escalating build cost: the (built+1)th defense of a kind costs base ×
- *  DEFENSE_COST_GROWTH^built — so each additional one is a real decision. */
+ *  DEFENSE_COST_GROWTH^built — so each additional one is a real decision.
+ *  Right for CAPPED goods (secure coops, infirmaries — bounded demand). */
 function defenseBuildCost(base: number, built: number): number {
   return Math.round(base * Math.pow(BALANCE.PREDATORS.DEFENSE_COST_GROWTH, built));
 }
+
+/** Net/cloth build cost: coverage made these FLOCK-PROPORTIONAL (+15 ducks
+ *  each, linearly), so past the knee the price is seconds of the run's peak
+ *  egg rate — constant benefit, constant effort — instead of a geometric
+ *  curve that walls a big flock (see DEFENSE_COST_KNEE in balance.ts). */
+function coverageBuildCost(state: GameState, base: number, built: number): number {
+  const P = BALANCE.PREDATORS;
+  const flat = base * Math.pow(P.DEFENSE_COST_GROWTH, Math.min(built, P.DEFENSE_COST_KNEE));
+  const peak = (state.contracts.peakEggRate ?? 0) * P.DETERRENT_BUY_PEAK_SECONDS;
+  return Math.round(built < P.DEFENSE_COST_KNEE ? flat : Math.max(flat, peak));
+}
 export const deterrentCost = (state: GameState): number =>
-  defenseBuildCost(BALANCE.PREDATORS.DETERRENT_COST_EGGS, state.deterrents);
+  coverageBuildCost(state, BALANCE.PREDATORS.DETERRENT_COST_EGGS, state.deterrents);
 export const hardwareClothCost = (state: GameState): number =>
-  defenseBuildCost(BALANCE.PREDATORS.HARDWARE_CLOTH_COST_EGGS, state.hardwareCloth);
+  coverageBuildCost(state, BALANCE.PREDATORS.HARDWARE_CLOTH_COST_EGGS, state.hardwareCloth);
 export const secureCoopCost = (state: GameState): number =>
   defenseBuildCost(BALANCE.PREDATORS.SECURE_COOP_COST_EGGS, state.secureCoops);
 export const infirmaryCost = (state: GameState): number =>
