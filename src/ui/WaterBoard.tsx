@@ -43,6 +43,7 @@ const FLOW_META: Record<FlowFeatureType, { label: string; color: string; hint: s
   intake: { label: 'Intake', color: '#5ad0a0', hint: 'fresh water in' },
   fountain: { label: 'Fountain', color: '#7fd8e8', hint: 'keeps features fresh' },
   outflow: { label: 'Outflow', color: '#9a8a6a', hint: 'spent water out' },
+  pipe: { label: 'Pipe', color: '#c9b884', hint: 'carries flow · cheap' },
 };
 const waterSprite = (t: string) => `/assets/water/${t}.png`;
 
@@ -98,9 +99,10 @@ const FEAT_EFFECT: Record<PondFeatureType, string> = {
   deepZone: `+${W.FEATURES.deepZone.baseProvision} water — the richest tile, but fouls fastest, so keep it in a fountain's range.`,
 };
 const FLOW_EFFECT: Record<FlowFeatureType, string> = {
-  intake: 'Where fresh water enters. A fountain needs one in its line.',
-  fountain: `Keeps every tile within ${W.CIRCULATION.fountainCoverageRadius} (a ${2 * W.CIRCULATION.fountainCoverageRadius + 1}×${2 * W.CIRCULATION.fountainCoverageRadius + 1} area) fresh — but only when its line connects an intake to an outflow.`,
+  intake: `Where fresh water enters. Each intake+outflow PAIR pressurises up to ${W.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR} fountains on its line.`,
+  fountain: `Keeps every tile within ${W.CIRCULATION.fountainCoverageRadius} (a ${2 * W.CIRCULATION.fountainCoverageRadius + 1}×${2 * W.CIRCULATION.fountainCoverageRadius + 1} area) fresh — but only when its line connects an intake to an outflow, and only within pump pressure (${W.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR} per pump pair; the far end of an over-stretched line goes stagnant first).`,
   outflow: 'Where stale water leaves — closes the circuit.',
+  pipe: 'Carries flow, projects nothing — the cheap connector that lets one pump pair reach fountains anywhere on the board.',
 };
 
 /** A compact, centred 3×3 cluster: a spring feeds the pools, plant beds lift them. */
@@ -117,9 +119,12 @@ const EXAMPLE_FEATURES: PondFeature[] = [
 ];
 /** One live line across the middle — a single fountain covers the whole cluster. */
 const EXAMPLE_FLOW: FlowFeature[] = [
-  { x: 2, y: 2, type: 'intake' },
+  { x: 1, y: 2, type: 'intake' },
+  { x: 2, y: 2, type: 'pipe' },
   { x: 3, y: 2, type: 'fountain' },
-  { x: 4, y: 2, type: 'outflow' },
+  { x: 4, y: 2, type: 'pipe' },
+  { x: 5, y: 2, type: 'fountain' },
+  { x: 6, y: 2, type: 'outflow' },
 ];
 
 /** A small static diagram of the canvas (used only in the help sheet). */
@@ -489,7 +494,8 @@ export function WaterBoard({
             const key = cellKey(x, y);
             const feat = featAt(x, y);
             const flow = flowAt(x, y);
-            const live = flow && view.liveKeys.has(key);
+            const live =
+              flow && (flow.type === 'fountain' ? view.liveKeys.has(key) : view.poweredKeys.has(key));
             const meta = feat ? FEAT_META[feat.type] : null;
             const fmeta = flow ? FLOW_META[flow.type] : null;
             const blocked = terrainAt(x, y);
@@ -558,6 +564,15 @@ export function WaterBoard({
                 {/* circulation feature */}
                 {flow && fmeta && (
                   <>
+                    {/* Connection stubs toward adjacent flow pieces (+x/+y only,
+                        so each junction draws once) — the plumbing reads as a
+                        LINE, not scattered dots. */}
+                    {flowAt(x + 1, y) && (
+                      <rect x={px + TILE - 10} y={py + TILE / 2 - 3} width={20} height={6} rx={2} fill={live ? '#7fd8e8' : '#3a5a68'} opacity={0.9} />
+                    )}
+                    {flowAt(x, y + 1) && (
+                      <rect x={px + TILE / 2 - 3} y={py + TILE - 10} width={6} height={20} rx={2} fill={live ? '#7fd8e8' : '#3a5a68'} opacity={0.9} />
+                    )}
                     <image
                       href={waterSprite(flow.type)}
                       x={px + 8}
@@ -710,15 +725,16 @@ export function WaterBoard({
       {isFlow ? (
         stagnating > 0 ? (
           <div className="w-full rounded-md bg-[#3a2a14] px-3 py-1.5 text-[10px] font-bold text-[#e8c45a]">
-            {stagnating} feature{stagnating > 1 ? 's' : ''} going stagnant — route intake → fountains
-            → outflow so a live fountain reaches {stagnating > 1 ? 'them' : 'it'}, or provision coasts
-            to the floor.
+            {stagnating} feature{stagnating > 1 ? 's' : ''} going stagnant — pipe a line from an
+            intake to an outflow so a pressurised fountain reaches {stagnating > 1 ? 'them' : 'it'}
+            (each pump pair supplies {W.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR} fountains), or provision
+            coasts to the floor.
           </div>
         ) : (
           <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
             {view.features.length === 0
               ? 'Build the Pond layout first — then circulate it here. A fountain only works on a line that connects an intake to an outflow.'
-              : 'Pond fully circulated — every feature is held at peak. Tap to place; tap a flow piece to remove.'}
+              : 'Pond fully circulated — every feature is held at peak. Pipes carry flow; each intake+outflow pair pressurises up to three fountains on its line.'}
           </div>
         )
       ) : outgrowing ? (
@@ -765,7 +781,7 @@ export function WaterBuildBar({
             <button
               key={t}
               onClick={() => setPick(active ? null : t)}
-              className={`${isFlow ? 'col-span-4' : 'col-span-3'} flex flex-col items-start gap-0.5 rounded-md border px-2 py-1.5 text-left transition ${
+              className={`col-span-3 flex flex-col items-start gap-0.5 rounded-md border px-2 py-1.5 text-left transition ${
                 active ? 'border-[#fff4d6] bg-[#1a2c38]' : 'border-transparent bg-[#13202a] hover:bg-[#182835]'
               } ${affordable ? '' : 'opacity-50'}`}
             >

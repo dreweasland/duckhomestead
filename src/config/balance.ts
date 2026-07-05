@@ -390,10 +390,20 @@ export const BALANCE = {
       intake: { costEggs: 100 }, // where fresh water enters the circuit
       fountain: { costEggs: 90 }, // aerator: keeps the nearby pond fresh (when live)
       outflow: { costEggs: 60 }, // where stale water leaves — closes the circuit
+      pipe: { costEggs: 15 }, // pure connector — carries flow, projects nothing
     },
 
     /** The ONE upkeep loop: fouling pressure vs circulation coverage. */
     CIRCULATION: {
+      /** PUMP PRESSURE (playtest, 2026-07-05): a pump pair (intake+outflow)
+       *  supplies up to this many fountains in its connected network; past
+       *  budget the fountains FURTHEST from an intake lose pressure first
+       *  (the end of the line goes stagnant). With cheap pipes this makes one
+       *  real network — a trunk line, fountains hung off it, routed around
+       *  terrain — strictly better than stamping intake→fountain→outflow
+       *  triplets, which was the old optimum. Old triplets still work (one
+       *  pair supplies its one fountain). */
+      FOUNTAINS_PER_PUMP_PAIR: 3,
       foulPerDuckPerSec: 0.02, // fouling pressure scales with flock size
       circulationFloor: 0.45, // a fully-stagnant feature still gives ~45% of its provision
       foulToFloorSec: 600, // an uncovered feature coasts to the floor this slowly

@@ -12,6 +12,7 @@ import {
 import { waterSynergy, flockWaterSynergy } from '../src/game/genetics';
 import { unlockZone } from '../src/game/actions';
 import {
+  liveFountains,
   isTerrainBlocked,
   placeFlowFeature,
   placePondFeature,
@@ -363,5 +364,51 @@ describe('pond upgrades get the clutch treatment: a level cap + peak pricing', (
     expect(peakPriced).toBeGreaterThan(flat);
     s.contracts.peakEggRate = 0.5; // early game: the flat curve floors it
     expect(pondFeatureUpgradeCost(s, 0, 0)).toBe(flat);
+  });
+});
+
+describe('waterworks plumbing: pipes conduct, pump pairs pressurise (playtest rework)', () => {
+  const works = (): GameState => {
+    const s = initialState(0);
+    s.zones.pond.unlocked = true;
+    s.zones.backPasture = { unlocked: true }; // WORKS_ZONE — circulation rides it
+    s.resources.eggs = 1e7;
+    return s;
+  };
+
+  it('a piped line lights its fountains; disconnected pipes conduct nothing', () => {
+    const s = works();
+    placeFlowFeature(s, 'intake', 0, 0);
+    placeFlowFeature(s, 'pipe', 1, 0);
+    placeFlowFeature(s, 'pipe', 2, 0);
+    placeFlowFeature(s, 'fountain', 3, 0);
+    expect(liveFountains(s)).toHaveLength(0); // no outflow yet — dead line
+    placeFlowFeature(s, 'pipe', 4, 0);
+    placeFlowFeature(s, 'outflow', 5, 0);
+    expect(liveFountains(s)).toHaveLength(1); // pipes carried it home
+  });
+
+  it('pump pressure: one pair supplies 3 fountains; the FAR end stagnates; a second pair restores it', () => {
+    const s = works();
+    placeFlowFeature(s, 'intake', 0, 0);
+    for (let x = 1; x <= 4; x++) placeFlowFeature(s, 'fountain', x, 0);
+    placeFlowFeature(s, 'outflow', 5, 0);
+    const live1 = liveFountains(s);
+    expect(live1).toHaveLength(BALANCE.WATER.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR);
+    // The far end (x=4, furthest from the intake) is the one that lost pressure.
+    expect(live1.some((f) => f.x === 4)).toBe(false);
+    // A second pump pair on the same line powers the whole run.
+    placeFlowFeature(s, 'intake', 0, 1);
+    placeFlowFeature(s, 'pipe', 0, 2);
+    placeFlowFeature(s, 'outflow', 1, 2);
+    expect(liveFountains(s)).toHaveLength(4);
+  });
+
+  it('legacy triplets keep working untouched (migration-free)', () => {
+    const s = works();
+    placeFlowFeature(s, 'intake', 0, 0);
+    placeFlowFeature(s, 'fountain', 1, 0);
+    placeFlowFeature(s, 'outflow', 2, 0);
+    expect(liveFountains(s)).toHaveLength(1);
   });
 });
