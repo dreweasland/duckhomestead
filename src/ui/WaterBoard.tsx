@@ -40,9 +40,9 @@ const FEAT_META: Record<PondFeatureType, { label: string; color: string; hint: s
   deepZone: { label: 'Deep Zone', color: '#2f5f8c', hint: 'most water · fouls fastest' },
 };
 const FLOW_META: Record<FlowFeatureType, { label: string; color: string; hint: string }> = {
-  intake: { label: 'Intake', color: '#5ad0a0', hint: 'fresh water in' },
+  intake: { label: 'Pump', color: '#5ad0a0', hint: 'top rail · water in' },
   fountain: { label: 'Fountain', color: '#7fd8e8', hint: 'keeps features fresh' },
-  outflow: { label: 'Outflow', color: '#9a8a6a', hint: 'spent water out' },
+  outflow: { label: 'Drain', color: '#9a8a6a', hint: 'bottom rail · water out' },
   pipe: { label: 'Pipe', color: '#c9b884', hint: 'carries flow · cheap' },
 };
 const waterSprite = (t: string) => `/assets/water/${t}.png`;
@@ -99,9 +99,9 @@ const FEAT_EFFECT: Record<PondFeatureType, string> = {
   deepZone: `+${W.FEATURES.deepZone.baseProvision} water — the richest tile, but fouls fastest, so keep it in a fountain's range.`,
 };
 const FLOW_EFFECT: Record<FlowFeatureType, string> = {
-  intake: `Where fresh water enters. Each intake+outflow PAIR pressurises up to ${W.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR} fountains on its line.`,
-  fountain: `Keeps every tile within ${W.CIRCULATION.fountainCoverageRadius} (a ${2 * W.CIRCULATION.fountainCoverageRadius + 1}×${2 * W.CIRCULATION.fountainCoverageRadius + 1} area) fresh — but only when its line connects an intake to an outflow, and only within pump pressure (${W.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR} per pump pair; the far end of an over-stretched line goes stagnant first).`,
-  outflow: 'Where stale water leaves — closes the circuit.',
+  intake: `The pump — mounts on the rail ABOVE the pond. Each pump+drain PAIR pressurises up to ${W.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR} fountains on its line.`,
+  fountain: `Keeps every tile within ${W.CIRCULATION.fountainCoverageRadius} (a ${2 * W.CIRCULATION.fountainCoverageRadius + 1}×${2 * W.CIRCULATION.fountainCoverageRadius + 1} area) fresh — but only when its line runs pump → … → drain, and only within pump pressure (${W.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR} per pump+drain pair; the far end of an over-stretched line goes stagnant first).`,
+  outflow: 'The drain — mounts on the rail BELOW the pond. Spent water leaves here; every line needs one.',
   pipe: 'Carries flow, projects nothing — the cheap connector that lets one pump pair reach fountains anywhere on the board.',
 };
 
@@ -119,33 +119,50 @@ const EXAMPLE_FEATURES: PondFeature[] = [
 ];
 /** One live line across the middle — a single fountain covers the whole cluster. */
 const EXAMPLE_FLOW: FlowFeature[] = [
-  { x: 1, y: 2, type: 'intake' },
-  { x: 2, y: 2, type: 'pipe' },
-  { x: 3, y: 2, type: 'fountain' },
+  { x: 1, y: -1, type: 'intake' }, // pump, on the TOP rail
+  { x: 1, y: 0, type: 'pipe' },
+  { x: 1, y: 1, type: 'pipe' },
+  { x: 2, y: 1, type: 'fountain' },
+  { x: 3, y: 1, type: 'pipe' },
+  { x: 4, y: 1, type: 'fountain' },
   { x: 4, y: 2, type: 'pipe' },
-  { x: 5, y: 2, type: 'fountain' },
-  { x: 6, y: 2, type: 'outflow' },
+  { x: 4, y: 3, type: 'pipe' },
+  { x: 4, y: 4, type: 'pipe' },
+  { x: 4, y: 5, type: 'outflow' }, // drain, on the BOTTOM rail (y = height)
 ];
 
 /** A small static diagram of the canvas (used only in the help sheet). */
 function MiniGrid({ features, flow }: { features: PondFeature[]; flow?: FlowFeature[] }) {
   const T = 26;
+  const rails = !!flow; // the circulation diagram shows the pump/drain rails
   const w = W.CANVAS.width * T;
-  const h = W.CANVAS.height * T;
+  const h = (W.CANVAS.height + (rails ? 2 : 0)) * T;
   const featAt = (x: number, y: number) => features.find((f) => f.x === x && f.y === y);
   const flowAt = (x: number, y: number) => flow?.find((f) => f.x === x && f.y === y);
   return (
     <svg width={w} height={h} shapeRendering="crispEdges" style={{ imageRendering: 'pixelated' }}>
-      <rect x={0} y={0} width={w} height={h} rx={6} fill="#163243" />
-      {Array.from({ length: W.CANVAS.height }).map((_, y) =>
+      <rect x={0} y={rails ? T : 0} width={w} height={W.CANVAS.height * T} rx={6} fill="#163243" />
+      {rails && (
+        <>
+          <rect x={0} y={0} width={w} height={T - 3} rx={4} fill="#232b31" />
+          <rect x={0} y={h - T + 3} width={w} height={T - 3} rx={4} fill="#232b31" />
+        </>
+      )}
+      {(rails
+        ? Array.from({ length: W.CANVAS.height + 2 }, (_, i) => i - 1)
+        : Array.from({ length: W.CANVAS.height }, (_, i) => i)
+      ).map((y) =>
         Array.from({ length: W.CANVAS.width }).map((_, x) => {
+          const isRail = y === -1 || y === W.CANVAS.height;
           const px = x * T;
-          const py = y * T;
-          const feat = featAt(x, y);
+          const py = (y + (rails ? 1 : 0)) * T;
+          const feat = isRail ? undefined : featAt(x, y);
           const fl = flowAt(x, y);
           return (
             <g key={`${x},${y}`}>
-              <rect x={px + 1} y={py + 1} width={T - 2} height={T - 2} rx={3} fill={(x + y) % 2 ? '#1a3a4c' : '#173443'} />
+              {!isRail && (
+                <rect x={px + 1} y={py + 1} width={T - 2} height={T - 2} rx={3} fill={(x + y) % 2 ? '#1a3a4c' : '#173443'} />
+              )}
               {feat && (
                 <rect x={px + 4} y={py + 4} width={T - 8} height={T - 8} rx={3} fill={FEAT_META[feat.type].color} opacity={flow ? 0.45 : 1} />
               )}
@@ -480,17 +497,29 @@ export function WaterBoard({
       </div>
       <svg
         width={GW}
-        height={GH}
-        viewBox={`0 0 ${GW} ${GH}`}
+        height={isFlow ? GH + 2 * TILE : GH}
+        viewBox={`0 0 ${GW} ${isFlow ? GH + 2 * TILE : GH}`}
         shapeRendering="crispEdges"
         style={{ imageRendering: 'pixelated' }}
       >
-        {/* pond water base */}
-        <rect x={0} y={0} width={GW} height={GH} rx={10} fill="#163243" />
-        {Array.from({ length: W.CANVAS.height }).map((_, y) =>
+        {/* pond water base (offset below the pump rail in circulation mode) */}
+        <rect x={0} y={isFlow ? TILE : 0} width={GW} height={GH} rx={10} fill="#163243" />
+        {isFlow && (
+          <>
+            {/* THE RAILS: pumps mount above the pond, drains below — water
+                enters the top, flows through your plumbing, leaves the bottom. */}
+            <rect x={0} y={0} width={GW} height={TILE - 4} rx={6} fill="#232b31" />
+            <rect x={0} y={GH + TILE + 4} width={GW} height={TILE - 4} rx={6} fill="#232b31" />
+          </>
+        )}
+        {(isFlow
+          ? Array.from({ length: W.CANVAS.height + 2 }, (_, i) => i - 1)
+          : Array.from({ length: W.CANVAS.height }, (_, i) => i)
+        ).map((y) =>
           Array.from({ length: W.CANVAS.width }).map((_, x) => {
+            const isRail = y === -1 || y === W.CANVAS.height;
             const px = x * TILE;
-            const py = y * TILE;
+            const py = (y + (isFlow ? 1 : 0)) * TILE;
             const key = cellKey(x, y);
             const feat = featAt(x, y);
             const flow = flowAt(x, y);
@@ -499,6 +528,49 @@ export function WaterBoard({
             const meta = feat ? FEAT_META[feat.type] : null;
             const fmeta = flow ? FLOW_META[flow.type] : null;
             const blocked = terrainAt(x, y);
+            if (isRail) {
+              const railWants = y === -1 ? 'intake' : 'outflow';
+              const armed = pick === railWants;
+              const ry = y === -1 ? 2 : py + 5;
+              return (
+                <g key={key} onClick={() => onCell(x, y)} style={{ cursor: 'pointer' }}>
+                  <rect
+                    x={px + 4}
+                    y={ry}
+                    width={TILE - 8}
+                    height={TILE - 12}
+                    rx={4}
+                    fill={flow ? '#2e3a42' : '#1c2429'}
+                    stroke={armed && !flow ? '#7fd8e8' : '#324049'}
+                    strokeWidth={armed && !flow ? 1.5 : 1}
+                    strokeDasharray={flow ? undefined : '4 3'}
+                  />
+                  {flow && (
+                    <image
+                      href={waterSprite(flow.type)}
+                      x={px + 10}
+                      y={ry + 2}
+                      width={TILE - 20}
+                      height={TILE - 20}
+                      opacity={live ? 1 : 0.55}
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                  )}
+                  {!flow && armed && (
+                    <text x={px + TILE / 2} y={ry + (TILE - 12) / 2 + 4} textAnchor="middle" fontSize={13} fontWeight="bold" fill="#7fd8e8">
+                      +
+                    </text>
+                  )}
+                  {/* stub down into (or up out of) the pond when connected */}
+                  {y === -1 && flow && flowAt(x, 0) && (
+                    <rect x={px + TILE / 2 - 3} y={ry + TILE - 14} width={6} height={16} rx={2} fill={live ? '#7fd8e8' : '#3a5a68'} />
+                  )}
+                  {y === W.CANVAS.height && flow && flowAt(x, y - 1) && (
+                    <rect x={px + TILE / 2 - 3} y={ry - 8} width={6} height={10} rx={2} fill={live ? '#7fd8e8' : '#3a5a68'} />
+                  )}
+                </g>
+              );
+            }
             return (
               <g
                 key={key}
@@ -593,7 +665,7 @@ export function WaterBoard({
             top of the tile grid; pointer-events off so they never intercept
             tile clicks. */}
         {duckImgs && (
-          <g pointerEvents="none">
+          <g pointerEvents="none" transform={isFlow ? `translate(0, ${TILE})` : undefined}>
             {swimmers.map((sw) => {
               const frame = duckImgs[sw.color]?.[0] ?? duckImgs[sw.color]?.[1];
               if (!frame) return null;

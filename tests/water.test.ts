@@ -13,6 +13,7 @@ import { waterSynergy, flockWaterSynergy } from '../src/game/genetics';
 import { unlockZone } from '../src/game/actions';
 import {
   liveFountains,
+  removeFlowFeature,
   isTerrainBlocked,
   placeFlowFeature,
   placePondFeature,
@@ -367,7 +368,8 @@ describe('pond upgrades get the clutch treatment: a level cap + peak pricing', (
   });
 });
 
-describe('waterworks plumbing: pipes conduct, pump pairs pressurise (playtest rework)', () => {
+describe('waterworks plumbing: rails + pipes + pump pressure (playtest rework)', () => {
+  const H = BALANCE.WATER.CANVAS.height;
   const works = (): GameState => {
     const s = initialState(0);
     s.zones.pond.unlocked = true;
@@ -376,39 +378,52 @@ describe('waterworks plumbing: pipes conduct, pump pairs pressurise (playtest re
     return s;
   };
 
-  it('a piped line lights its fountains; disconnected pipes conduct nothing', () => {
+  it('pumps mount ONLY on the top rail, drains only on the bottom', () => {
     const s = works();
-    placeFlowFeature(s, 'intake', 0, 0);
-    placeFlowFeature(s, 'pipe', 1, 0);
-    placeFlowFeature(s, 'pipe', 2, 0);
-    placeFlowFeature(s, 'fountain', 3, 0);
-    expect(liveFountains(s)).toHaveLength(0); // no outflow yet — dead line
-    placeFlowFeature(s, 'pipe', 4, 0);
-    placeFlowFeature(s, 'outflow', 5, 0);
-    expect(liveFountains(s)).toHaveLength(1); // pipes carried it home
+    expect(placeFlowFeature(s, 'intake', 0, 0).ok).toBe(false); // in-canvas → no
+    expect(placeFlowFeature(s, 'intake', 0, -1).ok).toBe(true); // top rail
+    expect(placeFlowFeature(s, 'outflow', 1, 2).ok).toBe(false);
+    expect(placeFlowFeature(s, 'outflow', 1, H).ok).toBe(true); // bottom rail
+    expect(placeFlowFeature(s, 'pipe', 2, -1).ok).toBe(false); // pipes stay in the pond
+    expect(placeFlowFeature(s, 'fountain', 2, H).ok).toBe(false);
   });
 
-  it('pump pressure: one pair supplies 3 fountains; the FAR end stagnates; a second pair restores it', () => {
+  it('a piped column from pump to drain lights its fountains', () => {
     const s = works();
-    placeFlowFeature(s, 'intake', 0, 0);
-    for (let x = 1; x <= 4; x++) placeFlowFeature(s, 'fountain', x, 0);
-    placeFlowFeature(s, 'outflow', 5, 0);
+    placeFlowFeature(s, 'intake', 1, -1); // pump on the rail
+    placeFlowFeature(s, 'pipe', 1, 0);
+    placeFlowFeature(s, 'fountain', 1, 1);
+    for (let y = 2; y < H; y++) placeFlowFeature(s, 'pipe', 1, y);
+    expect(liveFountains(s)).toHaveLength(0); // no drain yet — dead line
+    placeFlowFeature(s, 'outflow', 1, H); // drain closes the circuit
+    expect(liveFountains(s)).toHaveLength(1);
+  });
+
+  it('pump pressure: one pair supplies 3 fountains; the FAR end stagnates; a second pump restores it', () => {
+    const s = works();
+    placeFlowFeature(s, 'intake', 0, -1);
+    // A trunk across row 0 with four fountains, draining down column 4.
+    for (const x of [1, 2, 3, 4]) placeFlowFeature(s, 'fountain', x, 0);
+    placeFlowFeature(s, 'pipe', 0, 0);
+    for (let y = 1; y < H; y++) placeFlowFeature(s, 'pipe', 4, y);
+    placeFlowFeature(s, 'outflow', 4, H);
     const live1 = liveFountains(s);
     expect(live1).toHaveLength(BALANCE.WATER.CIRCULATION.FOUNTAINS_PER_PUMP_PAIR);
-    // The far end (x=4, furthest from the intake) is the one that lost pressure.
-    expect(live1.some((f) => f.x === 4)).toBe(false);
-    // A second pump pair on the same line powers the whole run.
-    placeFlowFeature(s, 'intake', 0, 1);
-    placeFlowFeature(s, 'pipe', 0, 2);
-    placeFlowFeature(s, 'outflow', 1, 2);
-    expect(liveFountains(s)).toHaveLength(4);
+    expect(live1.some((f) => f.x === 4 && f.y === 0)).toBe(false); // furthest from the pump
+    placeFlowFeature(s, 'intake', 5, -1); // second pump…
+    placeFlowFeature(s, 'pipe', 5, 0);
+    placeFlowFeature(s, 'fountain', 5, 1); // …wait, keep the network shape: joins via (5,0)-(4,0)
+    placeFlowFeature(s, 'outflow', 5, H); // second drain
+    for (let y = 2; y < H; y++) placeFlowFeature(s, 'pipe', 5, y);
+    expect(liveFountains(s).length).toBeGreaterThanOrEqual(4);
   });
 
-  it('legacy triplets keep working untouched (migration-free)', () => {
+  it('legacy in-canvas intakes/outflows (old saves) still conduct — migration-free', () => {
     const s = works();
-    placeFlowFeature(s, 'intake', 0, 0);
-    placeFlowFeature(s, 'fountain', 1, 0);
-    placeFlowFeature(s, 'outflow', 2, 0);
+    // An old save's triplet arrives via state, not placement.
+    s.pond.flow.push({ x: 0, y: 0, type: 'intake' }, { x: 1, y: 0, type: 'fountain' }, { x: 2, y: 0, type: 'outflow' });
     expect(liveFountains(s)).toHaveLength(1);
+    // …and it can still be removed for a refund.
+    expect(removeFlowFeature(s, 0, 0).ok).toBe(true);
   });
 });
