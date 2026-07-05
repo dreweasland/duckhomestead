@@ -18,7 +18,9 @@ import { loadDuckTintImages } from '../render/assets';
 import { CloseIcon, EggIcon, WaterIcon } from './icons';
 
 const W = BALANCE.WATER;
-const TILE = 52;
+// 68px tiles: 7 columns ≈ the yard board's width (8×56+pad), so the water
+// canvas fills the same column instead of floating in it (playtest ask).
+const TILE = 68;
 const GW = W.CANVAS.width * TILE;
 const GH = W.CANVAS.height * TILE;
 
@@ -57,7 +59,7 @@ function getDuckTintImages(): Promise<Record<Color, string[]>> {
   return duckTintCache;
 }
 
-const SWIMMER_SIZE = 22;
+const SWIMMER_SIZE = 28;
 const SWIMMER_CAP = 8;
 
 interface Swimmer {
@@ -283,10 +285,20 @@ function WaterHelp({
  *     so live fountains keep the pond features fresh. Both tabs read the same
  *     coordinates, so the Waterworks tab shows your pond features as context.
  */
-export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state: GameState; mode: Mode }) {
+export function WaterBoard({
+  engine,
+  state,
+  mode,
+  pick,
+}: {
+  engine: GameEngine;
+  state: GameState;
+  mode: Mode;
+  /** The armed water build tool — lifted to App (like the yard's buildType)
+   *  so the palette can live in the BUILD card below the board. */
+  pick: PondFeatureType | FlowFeatureType | null;
+}) {
   const isFlow = mode === 'circulation';
-  // Build tool — starts UNARMED like the yard's palette; click again to cancel.
-  const [pick, setPick] = useState<PondFeatureType | FlowFeatureType | null>(null);
   const [help, setHelp] = useState(false);
   // Selected provision feature (layout mode) — opens the upgrade/remove panel.
   const [selKey, setSelKey] = useState<string | null>(null);
@@ -693,6 +705,53 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
         </div>
       </div>
 
+      {/* Dynamic, invited-upgrade prompt — the flock outgrowing its water should
+          read as a celebratory nudge, never a silent amber bar. */}
+      {isFlow ? (
+        stagnating > 0 ? (
+          <div className="w-full rounded-md bg-[#3a2a14] px-3 py-1.5 text-[10px] font-bold text-[#e8c45a]">
+            {stagnating} feature{stagnating > 1 ? 's' : ''} going stagnant — route intake → fountains
+            → outflow so a live fountain reaches {stagnating > 1 ? 'them' : 'it'}, or provision coasts
+            to the floor.
+          </div>
+        ) : (
+          <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
+            {view.features.length === 0
+              ? 'Build the Pond layout first — then circulate it here. A fountain only works on a line that connects an intake to an outflow.'
+              : 'Pond fully circulated — every feature is held at peak. Tap to place; tap a flow piece to remove.'}
+          </div>
+        )
+      ) : outgrowing ? (
+        <div className="w-full rounded-md bg-[#3a2a14] px-3 py-1.5 text-[10px] font-bold text-[#e8c45a]">
+          Your flock is outgrowing the pond — add features (cluster for bonuses: pools beside a
+          spring, plant beds beside your richest features) to give it more water.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The water build palette — rendered by App in the BUILD card below the
+ *  board (the yard's layout), not inside the board column. Same card grammar
+ *  as the yard's BuildBar; `pick` state lives in App. */
+export function WaterBuildBar({
+  state,
+  mode,
+  pick,
+  onPick,
+}: {
+  state: GameState;
+  mode: Mode;
+  pick: PondFeatureType | FlowFeatureType | null;
+  onPick: (t: PondFeatureType | FlowFeatureType | null) => void;
+}) {
+  const isFlow = mode === 'circulation';
+  const setPick = onPick;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="text-xs font-bold uppercase tracking-wider text-[#9a8a6a]">
+        Build — {isFlow ? 'circulation' : 'the pond'}
+      </div>
       {/* Build palette — the yard BuildBar's grammar: cards with sprite, label,
           one-line hint, egg cost; select a tool, click water to place, click a
           MATCHING placed feature to upgrade in place, click the card to cancel. */}
@@ -729,34 +788,11 @@ export function WaterBoard({ engine, state, mode }: { engine: GameEngine; state:
           );
         })}
       </div>
-      {/* Dynamic, invited-upgrade prompt — the flock outgrowing its water should
-          read as a celebratory nudge, never a silent amber bar. */}
-      {isFlow ? (
-        stagnating > 0 ? (
-          <div className="w-full rounded-md bg-[#3a2a14] px-3 py-1.5 text-[10px] font-bold text-[#e8c45a]">
-            {stagnating} feature{stagnating > 1 ? 's' : ''} going stagnant — route intake → fountains
-            → outflow so a live fountain reaches {stagnating > 1 ? 'them' : 'it'}, or provision coasts
-            to the floor.
-          </div>
-        ) : (
-          <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
-            {view.features.length === 0
-              ? 'Build the Pond layout first — then circulate it here. A fountain only works on a line that connects an intake to an outflow.'
-              : 'Pond fully circulated — every feature is held at peak. Tap to place; tap a flow piece to remove.'}
-          </div>
-        )
-      ) : outgrowing ? (
-        <div className="w-full rounded-md bg-[#3a2a14] px-3 py-1.5 text-[10px] font-bold text-[#e8c45a]">
-          Your flock is outgrowing the pond — add features (cluster for bonuses: pools beside a
-          spring, plant beds beside your richest features) to give it more water.
-        </div>
-      ) : (
-        <div className="w-full rounded-md bg-[#13202a] px-3 py-1.5 text-[10px] text-[#7a9aa8]">
-          {pick
-            ? `Tap empty water to place a ${FEAT_META[pick as PondFeatureType]?.label ?? ''} — or tap a placed one to upgrade it in place. Tap the card again to cancel.`
-            : 'Pick a card below, then tap water to place — or tap any placed feature to inspect, upgrade, or remove it. Cluster for bonuses: pools beside a spring, plant beds beside your richest features.'}
-        </div>
-      )}
+      <div className="text-[10px] text-[#7a6a4a]">
+        {pick
+          ? `Tap empty water to place a ${(isFlow ? FLOW_META[pick as FlowFeatureType] : FEAT_META[pick as PondFeatureType])?.label ?? ''} — or tap a matching placed feature to upgrade it in place. Click the card again to cancel.`
+          : 'Pick a card, then tap water to place — or tap any placed feature to inspect, upgrade, or remove it. Cluster for bonuses: pools beside a spring, plant beds beside your richest features.'}
+      </div>
     </div>
   );
 }

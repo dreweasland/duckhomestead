@@ -15,13 +15,13 @@ import { BALANCE, zoneDef, type StationType } from './config/balance';
 import { resetAllGuides, type GuideDef } from './config/guides';
 import { AlmanacCard } from './ui/AlmanacCard';
 import { useAlmanac } from './ui/useAlmanac';
-import { WaterBoard } from './ui/WaterBoard';
+import { WaterBoard, WaterBuildBar } from './ui/WaterBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
 import { championGoal } from './game/prestige';
 import { GrangePanel } from './ui/GrangePanel';
 import { LegacyPanel } from './ui/LegacyPanel';
-import { defenseFloor, flockRatio, rackSockets, RARITIES, stationAt, zoneUnlocked } from './game/state';
+import { defenseFloor, flockRatio, rackSockets, RARITIES, stationAt, zoneUnlocked, type FlowFeatureType, type PondFeatureType } from './game/state';
 import { DuckIcon, GrangeIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel } from './ui/WatchPanel';
@@ -241,6 +241,12 @@ export default function App() {
   // Build is only meaningful on a buildable (non-water) unlocked zone — the Yard.
   const activeZd = zoneDef(activeZone);
   const isBuildZone = zoneUnlocked(state, activeZone) && !activeZd?.pondLayout && !activeZd?.waterworks;
+  const isWaterZone = zoneUnlocked(state, activeZone) && !!(activeZd?.pondLayout || activeZd?.waterworks);
+  // The water build tool — lifted here (like buildType) so the palette lives
+  // in the BUILD card below the board. Cleared on zone switch (pond and
+  // waterworks arm different feature kinds).
+  const [waterPick, setWaterPick] = useState<PondFeatureType | FlowFeatureType | null>(null);
+  useEffect(() => setWaterPick(null), [activeZone]);
   // Close the station popover on Escape.
   useEffect(() => {
     if (!selectedId) return;
@@ -530,6 +536,7 @@ export default function App() {
                         engine={engine}
                         state={state}
                         mode={zd.waterworks ? 'circulation' : 'layout'}
+                        pick={waterPick}
                       />
                     );
                   }
@@ -759,11 +766,22 @@ export default function App() {
         </div>
         </div>
 
-        {/* Build palette — a full-width row spanning both columns, below the board.
-            Yard-only: the water canvases aren't build space. */}
+        {/* Build palette — a full-width row spanning both columns, below the
+            board. The water zones get their own palette here too (same layout
+            as the yard — playtest ask: no build UI crammed into the board). */}
         {isBuildZone && (
           <div className="rounded-lg bg-[#1f1812] p-3 ring-1 ring-[#3a2e22]">
             <BuildBar state={state} buildType={buildType} onPick={setBuildType} activeZone={activeZone} />
+          </div>
+        )}
+        {isWaterZone && (
+          <div className="rounded-lg bg-[#1f1812] p-3 ring-1 ring-[#3a2e22]">
+            <WaterBuildBar
+              state={state}
+              mode={activeZd?.waterworks ? 'circulation' : 'layout'}
+              pick={waterPick}
+              onPick={setWaterPick}
+            />
           </div>
         )}
 
