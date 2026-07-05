@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotMatches, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
@@ -599,7 +599,22 @@ function Breeding({
   );
 }
 
-export function FlockPanel({
+/** FlockPanel, render-gated: the engine notifies ~15Hz and mutates state in
+ *  place (same reference), so prop-equality can't tell "something changed" —
+ *  App passes a coarse `renderTick` instead and the comparator re-renders only
+ *  when it moves. During a dive the tick FREEZES: a 1000-duck list repainting
+ *  under an owl click was why attacks felt unclickable at scale. */
+export const FlockPanel = memo(
+  FlockPanelInner,
+  (prev, next) => prev.renderTick === next.renderTick && prev.onClose === next.onClose,
+);
+
+/** Rows rendered per section before the "show all" expander — at 1000+ ducks
+ *  a full render is ~15k DOM nodes; the cap keeps the panel light (playtest,
+ *  2026-07-05: 1088 ducks). */
+const SECTION_ROW_CAP = 100;
+
+function FlockPanelInner({
   engine,
   state,
   onClose,
@@ -607,8 +622,14 @@ export function FlockPanel({
   engine: GameEngine;
   state: GameState;
   onClose: () => void;
+  /** Coarse render clock from App — the memo comparator re-renders the panel
+   *  only when this changes (~4Hz; FROZEN during a predator dive so the main
+   *  thread belongs to the scare click). Internal setState still renders. */
+  renderTick: number;
 }) {
   useEscapeKey(onClose);
+  // Sections the user expanded past the row cap ("show all").
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [armedCull, setArmedCull] = useState<string | null>(null);
   // Role sections in the duck list: which are collapsed (The Flock at scale).
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -1197,7 +1218,17 @@ export function FlockPanel({
                         </button>
                       )}
                       {!collapsedSections.has(sec.id) && (
-                        <div className="flex flex-col gap-1">{sec.ducks.map(renderDuck)}</div>
+                        <div className="flex flex-col gap-1">
+                          {(expandedRows.has(sec.id) ? sec.ducks : sec.ducks.slice(0, SECTION_ROW_CAP)).map(renderDuck)}
+                          {!expandedRows.has(sec.id) && sec.ducks.length > SECTION_ROW_CAP && (
+                            <button
+                              onClick={() => setExpandedRows((prev) => new Set(prev).add(sec.id))}
+                              className="rounded-md bg-[#241c14] px-2.5 py-1.5 text-[10px] font-bold text-[#b59a5a] hover:bg-[#2e2318]"
+                            >
+                              Show all {sec.ducks.length} ({sec.ducks.length - SECTION_ROW_CAP} more) — sorts and filters above narrow this list faster
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   ));

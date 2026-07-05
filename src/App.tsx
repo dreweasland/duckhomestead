@@ -272,6 +272,8 @@ export default function App() {
   const anyPanelOpen =
     nutritionOpen || modulesOpen || flockOpen || watchOpen || legacyOpen || grangeOpen;
   const predatorDiving = Object.values(state.predators).some((p) => p.strike != null);
+  // Stable identity — the FlockPanel memo comparator checks onClose equality.
+  const closeFlock = useCallback(() => setFlockOpen(false), []);
   const guideBlocked =
     (engine.away != null && awayOpen) ||
     ding != null ||
@@ -434,7 +436,16 @@ export default function App() {
       {modulesOpen && (
         <ModulesPanel engine={engine} state={state} onClose={() => setModulesOpen(false)} />
       )}
-      {flockOpen && <FlockPanel engine={engine} state={state} onClose={() => setFlockOpen(false)} />}
+      {flockOpen && (
+        <FlockPanel
+          engine={engine}
+          state={state}
+          // ~4Hz normally; FROZEN while a dive is in flight so the scare click
+          // never fights a 1000-duck list repaint for the main thread.
+          renderTick={predatorDiving ? -1 : Math.floor(version / 4)}
+          onClose={closeFlock}
+        />
+      )}
       {watchOpen && <WatchPanel engine={engine} state={state} onClose={() => setWatchOpen(false)} />}
       {legacyOpen && <LegacyPanel engine={engine} state={state} onClose={() => setLegacyOpen(false)} />}
       {grangeOpen && <GrangePanel engine={engine} state={state} onClose={() => setGrangeOpen(false)} />}
