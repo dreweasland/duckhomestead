@@ -666,6 +666,11 @@ export function FlockPanel({
     state.ducks.reduce((m, d) => (d.genomeKnown ? Math.max(m, targetMatch(d.genome, target)) : m), 0),
   );
   const [armedBulk, setArmedBulk] = useState(false);
+  // Bulk-release Prime protection — ON by default, but a TOGGLE with a visible
+  // spared-count: deep in the Prime chase most sub-cutoff birds are carriers
+  // (P passes at dominance 4), and a silent blanket rule made the tool look
+  // dead ('no bulk release button lights up', playtest 2026-07-05).
+  const [keepPrime, setKeepPrime] = useState(true);
 
   const geneQueryActive = queryGene !== 'any';
   const matchesGeneQuery = (d: Duck): boolean => {
@@ -859,17 +864,18 @@ export function FlockPanel({
                 eligible (an unread "?" can't be judged). Protects secured (prize)
                 + paired (in-use) birds — use the per-row release for those. */}
             {shown.length > 0 && (() => {
-              const eligible = shown.filter(
+              const underCutoff = shown.filter(
                 (d) =>
                   !d.secured &&
                   !pairedIds.has(d.id) &&
                   d.genomeKnown &&
-                  // A Prime carrier is never mass-released: a single P in a junk
-                  // genome scores low on target match but is PRECIOUS breeding
-                  // stock for the Prime chase (per-row release still works).
-                  !d.genome.includes('P') &&
                   targetMatch(d.genome, target) < cullQuality,
               );
+              // Prime carriers are spared while the toggle is on: a single P in
+              // a junk genome scores low on target match but is precious stock
+              // for the Prime chase. The spared count keeps the rule VISIBLE.
+              const spared = keepPrime ? underCutoff.filter((d) => d.genome.includes('P')).length : 0;
+              const eligible = keepPrime ? underCutoff.filter((d) => !d.genome.includes('P')) : underCutoff;
               const n = eligible.length;
               const step = (delta: number) =>
                 setCullQuality((v) => Math.max(0, Math.min(SLOTS, v + delta)));
@@ -917,8 +923,23 @@ export function FlockPanel({
                       {n === 0 ? 'none below' : armedBulk ? `Release ${n}? · sure` : `Release ${n}`}
                     </button>
                   </div>
-                  <div className="mt-1 text-[9px] text-[#7a6a4a]">
-                    matches the {target.map((g) => g).join('')} target · keeps secured + paired + Prime carriers
+                  <div className="mt-1 flex items-center gap-1.5 text-[9px] text-[#7a6a4a]">
+                    <span>matches the {target.map((g) => g).join('')} target · keeps secured + paired</span>
+                    <button
+                      onClick={() => setKeepPrime((v) => !v)}
+                      className={`rounded-full px-1.5 py-0.5 font-bold transition ${
+                        keepPrime
+                          ? 'bg-[#2a2440] text-[#cdbcff] ring-1 ring-[#4a3a6e]'
+                          : 'bg-[#241c14] text-[#6a5a3a] ring-1 ring-[#3a2e22]'
+                      }`}
+                      title={
+                        keepPrime
+                          ? `Prime carriers are spared from this sweep${spared > 0 ? ` (${spared} under the cutoff right now)` : ''} — click to include them.`
+                          : 'Prime carriers are INCLUDED in this sweep — click to spare them.'
+                      }
+                    >
+                      {keepPrime ? `keep P carriers${spared > 0 ? ` · sparing ${spared}` : ''}` : 'P carriers included'}
+                    </button>
                   </div>
                 </div>
               );
