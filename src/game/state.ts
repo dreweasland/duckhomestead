@@ -834,7 +834,7 @@ export function initialZones(): Record<string, ZoneState> {
 /** Stage 1 (Pond) provision features — arrangement drives `layoutBase`. */
 export type PondFeatureType = 'spring' | 'bathingPool' | 'plantBed' | 'deepZone';
 /** Stage 2 (Waterworks) circulation features — coverage drives `circulationHealth`. */
-export type FlowFeatureType = 'intake' | 'fountain' | 'outflow';
+export type FlowFeatureType = 'intake' | 'fountain' | 'outflow' | 'pipe';
 
 export interface PondFeature {
   x: number;

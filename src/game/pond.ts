@@ -113,6 +113,13 @@ export function pondLayoutBase(state: GameState, provs = featureProvisions(state
  * circulates, and leaves). Disconnected or dead-end fountains are inert.
  */
 export function liveFountains(state: GameState): FlowFeature[] {
+  return circulationLive(state).live;
+}
+
+/** Full circulation picture: the live (pressure-supplied) fountains AND every
+ *  cell of every POWERED network (has intake+outflow) — pipes and pumps on a
+ *  working line render live even though only fountains project coverage. */
+export function circulationLive(state: GameState): { live: FlowFeature[]; poweredKeys: Set<string> } {
   const flow = state.pond.flow;
   // Index by cell once so BFS neighbor lookups are O(1) — this was O(flow²) via a
   // per-neighbor `flow.find`, and it runs every tick (runCirculation) + per render.
@@ -121,6 +128,7 @@ export function liveFountains(state: GameState): FlowFeature[] {
   const k = (f: FlowFeature) => cellKey(f.x, f.y);
   const seen = new Set<string>();
   const live: FlowFeature[] = [];
+  const poweredKeys = new Set<string>();
   for (const start of flow) {
     if (seen.has(k(start))) continue;
     const comp: FlowFeature[] = [];
@@ -137,11 +145,41 @@ export function liveFountains(state: GameState): FlowFeature[] {
         }
       }
     }
-    if (comp.some((f) => f.type === 'intake') && comp.some((f) => f.type === 'outflow')) {
-      live.push(...comp.filter((f) => f.type === 'fountain'));
+    const intakes = comp.filter((f) => f.type === 'intake');
+    const outflows = comp.filter((f) => f.type === 'outflow');
+    if (intakes.length === 0 || outflows.length === 0) continue;
+    for (const f of comp) poweredKeys.add(k(f));
+    const fountains = comp.filter((f) => f.type === 'fountain');
+    // PUMP PRESSURE: a pump pair supplies FOUNTAINS_PER_PUMP_PAIR fountains;
+    // past budget, the fountains FURTHEST from an intake (BFS through this
+    // network) lose pressure first — the end of the line goes stagnant.
+    const budget = C.FOUNTAINS_PER_PUMP_PAIR * Math.min(intakes.length, outflows.length);
+    if (fountains.length <= budget) {
+      live.push(...fountains);
+      continue;
     }
+
+    const dist = new Map<string, number>(intakes.map((f) => [k(f), 0]));
+    const dq = [...intakes];
+    while (dq.length) {
+      const c = dq.shift()!;
+      const d = dist.get(k(c))!;
+      for (const [dx, dy] of ORTHO) {
+        const nb = at(c.x + dx, c.y + dy);
+        if (nb && comp.includes(nb) && !dist.has(k(nb))) {
+          dist.set(k(nb), d + 1);
+          dq.push(nb);
+        }
+      }
+    }
+    live.push(
+      ...fountains
+        .slice()
+        .sort((a, b) => (dist.get(k(a)) ?? Infinity) - (dist.get(k(b)) ?? Infinity))
+        .slice(0, budget),
+    );
   }
-  return live;
+  return { live, poweredKeys };
 }
 
 /** Whether a tile is kept fresh by a live fountain within the coverage radius. */
@@ -319,6 +357,9 @@ export interface PondView {
   flow: FlowFeature[];
   /** Keys "x,y" of the LIVE fountains (connected intake↔outflow). */
   liveKeys: Set<string>;
+  /** Every cell of every POWERED network (intake+outflow present) — pipes and
+   *  pumps on a working line render live; only fountains project coverage. */
+  poweredKeys: Set<string>;
   worksUnlocked: boolean;
   /** This run's blocked terrain tiles (Phase 5 juice) — render as scenery. */
   terrain: { x: number; y: number }[];
@@ -326,7 +367,7 @@ export interface PondView {
 
 export function pondView(state: GameState): PondView {
   const provs = featureProvisions(state);
-  const live = liveFountains(state);
+  const { live, poweredKeys } = circulationLive(state);
   const liveKeys = new Set(live.map((f) => cellKey(f.x, f.y)));
   const worksUnlocked = zoneUnlocked(state, WORKS_ZONE);
   const features: FeatureView[] = state.pond.features.map((f) => ({
@@ -344,6 +385,7 @@ export function pondView(state: GameState): PondView {
     features,
     flow: state.pond.flow,
     liveKeys,
+    poweredKeys,
     worksUnlocked,
     terrain: terrainForTier(state.pondTerrainTier),
   };
