@@ -50,6 +50,12 @@ function buildUnlocks(): Unlock[] {
     desc: 'A ground raider joins the owl, on its own windows. Nets won’t stop it — build HARDWARE CLOTH. Its threat and defense line are separate.',
     kind: 'predator',
   });
+  out.push({
+    rank: BALANCE.PREDATORS.SIEGE.INTRO_RANK,
+    title: 'The Great Horned (siege)',
+    desc: `A rare siege event — 3–5 dives in one long window, telegraphed a full minute out. Requires legacy tier ${BALANCE.PREDATORS.SIEGE.MIN_LEGACY_TIER}+ as well as this rank. A FLAWLESS defense (every dive scared) pays a guaranteed jackpot.`,
+    kind: 'predator',
+  });
   for (const m of MILESTONES) {
     out.push({ rank: m.rank, title: m.title, desc: m.description, kind: m.kind === 'tend' ? 'tend' : 'autohaul' });
   }
