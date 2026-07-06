@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { deserialize, looksLikeSave, serialize } from '../src/game/save';
 import { assignToWinter, placeStation } from '../src/game/actions';
-import { type DeliveryContract } from '../src/game/state';
+import { type ProvisionContract } from '../src/game/state';
 import { fullSetup, setHens, stockAll, FLAT_GENOME } from './helpers';
 
 describe('looksLikeSave — the import shape-sniff (Phase 5 juice)', () => {
@@ -36,14 +36,14 @@ describe('save export/import round-trip — a Winterstead + contract-rich state'
 
     s.contracts.active = {
       id: 'ct-roundtrip',
-      type: 'delivery',
+      type: 'provision',
       notch: 1,
       reward: { dust: 10, shards: 2 },
       completed: false,
-      quota: 500,
-      delivered: 120,
+      ingredient: 'corn',
+      amount: 500,
       limitRemaining: 999,
-    } as DeliveryContract;
+    } as ProvisionContract;
 
     // Exercise the ACTUAL import path: JSON.parse -> looksLikeSave -> deserialize.
     const json = serialize(s);

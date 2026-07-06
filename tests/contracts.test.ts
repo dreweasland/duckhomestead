@@ -5,8 +5,11 @@ import {
   acceptContract,
   abandonContract,
   claimContract,
+  deliverOrderDuck,
+  eligibleForOrder,
+  fulfilProvision,
   generateOffer,
-  onHatch,
+  orderMatches,
   onPredatorEvent,
   rerollOffers,
   runContracts,
@@ -21,29 +24,66 @@ import {
   initialContracts,
   initialState,
   type Contract,
-  type DeliveryContract,
+  type DefenseContract,
   type Duck,
+  type Gene,
   type Genotype,
+  type OrderContract,
+  type ProvisionContract,
   type GameState,
 } from '../src/game/state';
-import { build, fullSetup, stockAll, setHens, run, FLAT_GENOME } from './helpers';
+import { build, fullSetup, genome, stockAll, setHens, run, FLAT_GENOME } from './helpers';
 
 const C = BALANCE.CONTRACTS;
 const OWL = predatorDef('owl')!;
 
-/** A fixed-zero rng: deterministically rolls notch 0 and type 'delivery'
- *  (first entries by weight), and the low end of every reward band. */
+/** A fixed-zero rng: deterministically rolls notch 0 and type 'order' (first
+ *  entries by weight), and the low end of every reward band. */
 const zero = () => 0;
 
-const deliveryContract = (over: Partial<DeliveryContract> = {}): DeliveryContract => ({
+const defenseContract = (over: Partial<DefenseContract> = {}): DefenseContract => ({
   id: 'ct-test',
-  type: 'delivery',
+  type: 'defense',
   notch: 0,
   reward: { dust: 0, shards: 0 },
   completed: false,
-  quota: 100,
-  delivered: 0,
+  scareTarget: 2,
+  scareProgress: 0,
+  ...over,
+});
+
+const provisionContract = (over: Partial<ProvisionContract> = {}): ProvisionContract => ({
+  id: 'ct-test',
+  type: 'provision',
+  notch: 0,
+  reward: { dust: 0, shards: 0 },
+  completed: false,
+  ingredient: 'corn',
+  amount: 100,
   limitRemaining: 999,
+  ...over,
+});
+
+const orderContract = (over: Partial<OrderContract> = {}): OrderContract => ({
+  id: 'ct-test',
+  type: 'order',
+  notch: 0,
+  reward: { dust: 0, shards: 0 },
+  completed: false,
+  constraints: Array(BALANCE.GENOME.SLOTS).fill(null),
+  target: targetForTier(0),
+  minTargetQuality: 0,
+  ...over,
+});
+
+const duck = (id: string, g: Gene[], over: Partial<Duck> = {}): Duck => ({
+  id,
+  genotype: ['Bl', 'bl'] as Genotype,
+  genome: [...g],
+  genomeKnown: true,
+  sex: 'hen',
+  stage: 'adult',
+  ageTicks: 0,
   ...over,
 });
 
@@ -58,7 +98,7 @@ describe('The Grange — tier gate', () => {
 
   it('below UNLOCK_TIER, accepting/rerolling is rejected', () => {
     const s = initialState(0);
-    s.contracts.offers = [deliveryContract({ id: 'a' })];
+    s.contracts.offers = [defenseContract({ id: 'a' })];
     expect(acceptContract(s, 'a').ok).toBe(false);
     s.dust = 1000;
     expect(rerollOffers(s).ok).toBe(false);
@@ -72,67 +112,79 @@ describe('The Grange — tier gate', () => {
   });
 });
 
-describe('offer generation', () => {
-  it("a delivery quota scales with the run's PEAK live eggRate (self-balancing)", () => {
-    const s = setHens(stockAll(fullSetup()), 4);
-    s.legacyTier = C.UNLOCK_TIER;
-    run(s, 10); // warm up nutrition so state.nutrition.eggRate (and the peak) is real
-    const eggRate = s.nutrition!.eggRate;
-    expect(eggRate).toBeGreaterThan(0);
-    // runContracts tracked the run's peak during warm-up — quotas price off it
-    // (never the instantaneous rate a parked flock could throttle to zero).
-    const peak = s.contracts.peakEggRate ?? 0;
-    expect(peak).toBeGreaterThanOrEqual(eggRate * 0.99);
-    const offer = generateOffer(s, zero); // zero rng -> notch 0, type 'delivery'
-    expect(offer.type).toBe('delivery');
-    const d = offer as DeliveryContract;
-    const expectedQuota = Math.max(
-      C.DELIVERY.MIN_QUOTA,
-      Math.round(Math.max(eggRate, peak) * 60 * C.DELIVERY.QUOTA_MINUTES * C.DELIVERY.QUOTA_MULT_BY_NOTCH[0]),
-    );
-    expect(d.quota).toBe(expectedQuota);
-    expect(d.delivered).toBe(0);
-  });
-
-  it("a parked/culled flock can't price deliveries down to the MIN_QUOTA floor (peak pricing)", () => {
-    const s = setHens(stockAll(fullSetup()), 40); // a big flock → a real peak
-    s.legacyTier = C.UNLOCK_TIER;
-    run(s, 10);
-    const peak = s.contracts.peakEggRate ?? 0;
-    expect(peak).toBeGreaterThan(0);
-    s.ducks = []; // the exploit: park/cull everything, then roll + accept offers
-    s.nutrition = undefined;
-    const d = generateOffer(s, zero) as DeliveryContract;
-    expect(d.quota).toBeGreaterThan(C.DELIVERY.MIN_QUOTA); // still peak-priced
-    // ...and accept-time re-snapshot can't undercut it either.
-    s.contracts.offers = [d];
-    const r = acceptContract(s, d.id);
-    if (!r.ok) throw new Error('accept failed');
-    expect((s.contracts.active as DeliveryContract).quota).toBe(d.quota);
-  });
-
-  it('a delivery quota floors at MIN_QUOTA when there is no flock yet', () => {
-    const s = initialState(0);
-    s.legacyTier = C.UNLOCK_TIER;
-    const d = generateOffer(s, zero) as DeliveryContract;
-    expect(d.quota).toBe(C.DELIVERY.MIN_QUOTA);
-  });
-
-  it('hatch specs are always achievable: genes only from {L,V,H}, never D, and ≤ SPEC_MAX_SLOTS', () => {
-    const s = initialState(0);
-    s.legacyTier = C.UNLOCK_TIER;
-    // Sample many offers across many notches/types to exercise the generator.
-    for (let i = 0; i < 500; i++) {
-      const offer = generateOffer(s, Math.random);
-      if (offer.type !== 'hatch') continue;
-      const specified = offer.genePattern.filter((g) => g != null);
-      expect(specified.length).toBeGreaterThanOrEqual(2);
-      expect(specified.length).toBeLessThanOrEqual(C.HATCH.SPEC_MAX_SLOTS);
-      for (const g of specified) expect(['L', 'V', 'H']).toContain(g);
-      expect(offer.genePattern).toHaveLength(BALANCE.GENOME.SLOTS);
+describe('offer generation: BREEDING ORDER specs always cost a real detour', () => {
+  it('every order has ALL constrained slots contradicting targetForTier(tier), never demands P, and stays within SPEC_MAX_SLOTS', () => {
+    for (const tier of [C.UNLOCK_TIER, 2, 4]) {
+      const s = initialState(0);
+      s.legacyTier = tier;
+      const target = targetForTier(tier);
+      let sawOrder = false;
+      for (let i = 0; i < 400; i++) {
+        const o = generateOffer(s, Math.random);
+        if (o.type !== 'order') continue;
+        sawOrder = true;
+        const constrained = o.constraints.filter((g) => g != null);
+        expect(constrained.length).toBeGreaterThanOrEqual(2);
+        expect(constrained.length).toBeLessThanOrEqual(C.ORDER.SPEC_MAX_SLOTS);
+        o.constraints.forEach((g, slot) => {
+          if (g == null) return;
+          expect(['L', 'V', 'H']).toContain(g); // never D, never P
+          expect(g).not.toBe(target[slot]); // ALWAYS contradicts — never just "at least two"
+        });
+        expect(o.target).toEqual(target);
+      }
+      expect(sawOrder).toBe(true);
     }
   });
 
+  it('a genome that EXACTLY matches the tier target never satisfies an order — the spam is structurally dead', () => {
+    const s = initialState(0);
+    s.legacyTier = C.UNLOCK_TIER;
+    const target = targetForTier(C.UNLOCK_TIER);
+    for (let i = 0; i < 300; i++) {
+      const o = generateOffer(s, Math.random);
+      if (o.type !== 'order') continue;
+      expect(orderMatches(o, target)).toBe(false);
+    }
+  });
+
+  it('higher notches raise both the constrained-slot count and the quality floor', () => {
+    const s = initialState(0);
+    s.legacyTier = C.UNLOCK_TIER;
+    for (let i = 0; i < 300; i++) {
+      const o = generateOffer(s, Math.random);
+      if (o.type !== 'order') continue;
+      const constrained = o.constraints.filter((g) => g != null).length;
+      expect(constrained).toBe(C.ORDER.SLOTS_BY_NOTCH[o.notch]);
+      expect(o.minTargetQuality).toBe(C.ORDER.QUALITY_FLOOR_BY_NOTCH[o.notch]);
+    }
+  });
+});
+
+describe('offer generation: PROVISION orders cost a purchased Feed Store buffer', () => {
+  it('amount is priced off the live production rate, clamped to CAP_FRACTION of the Feed Store cap', () => {
+    const s = setHens(stockAll(fullSetup()), 3);
+    s.legacyTier = C.UNLOCK_TIER;
+    // Force a low cap so the clamp is actually exercised.
+    for (let i = 0; i < 300; i++) {
+      const o = generateOffer(s, Math.random);
+      if (o.type !== 'provision') continue;
+      expect(o.amount).toBeGreaterThan(0);
+      expect(o.amount).toBeLessThanOrEqual(Math.round(BALANCE.STORAGE.BASE_CAP * C.PROVISION.CAP_FRACTION) + 1);
+    }
+  });
+
+  it('a flock producing nothing never rolls a provision offer', () => {
+    const s = initialState(0); // no producers placed at all
+    s.legacyTier = C.UNLOCK_TIER;
+    for (let i = 0; i < 300; i++) {
+      const o = generateOffer(s, Math.random);
+      expect(o.type).not.toBe('provision');
+    }
+  });
+});
+
+describe('offer generation: defense', () => {
   it('defense scare targets come from the notch band', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
@@ -183,6 +235,15 @@ describe('board lifecycle: OFFER_SLOTS + the one-active rule', () => {
     expect(after.every((id) => !before.includes(id))).toBe(true); // wholesale replaced
   });
 
+  it('accepting a provision offer snapshots its deadline', () => {
+    const s = initialState(0);
+    s.legacyTier = C.UNLOCK_TIER;
+    s.contracts.offers = [provisionContract({ id: 'p1', limitRemaining: 0 })];
+    const r = acceptContract(s, 'p1');
+    expect(r.ok).toBe(true);
+    expect((s.contracts.active as ProvisionContract).limitRemaining).toBe(C.PROVISION.LIMIT_MIN * 60);
+  });
+
   it('a manual reroll costs REROLL_DUST and replaces the whole board', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
@@ -204,14 +265,14 @@ describe('claim: rewards are dust/shards/module ONLY — never eggs/resources/XP
   it('rejects claiming an incomplete contract', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = deliveryContract({ completed: false });
+    s.contracts.active = defenseContract({ completed: false });
     expect(claimContract(s).ok).toBe(false);
   });
 
   it('claiming a completed contract grants exactly dust + shards (+ module at top notch), clears the slot', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = deliveryContract({ completed: true, reward: { dust: 12, shards: 3 } });
+    s.contracts.active = defenseContract({ completed: true, reward: { dust: 12, shards: 3 } });
     const before = { ...s.resources };
     const dustBefore = s.dust;
     const shardsBefore = s.legacyCurrency;
@@ -229,7 +290,7 @@ describe('claim: rewards are dust/shards/module ONLY — never eggs/resources/XP
   it('a top-notch reward grants a module via loot.ts grantModule', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = deliveryContract({
+    s.contracts.active = defenseContract({
       completed: true,
       reward: { dust: 40, shards: 8, moduleRarity: 'rare' },
     });
@@ -242,150 +303,187 @@ describe('claim: rewards are dust/shards/module ONLY — never eggs/resources/XP
   });
 });
 
-describe('delivery: the egg sink', () => {
-  it('diverts eggs at the nutrition lay point — never double-counted via haul', () => {
-    const plain = setHens(stockAll(fullSetup()), 3);
-    plain.legacyTier = C.UNLOCK_TIER;
-    run(plain, 20);
-    const totalNoContract = plain.resources.eggs;
-    expect(totalNoContract).toBeGreaterThan(0);
-
-    const withContract = setHens(stockAll(fullSetup()), 3);
-    withContract.legacyTier = C.UNLOCK_TIER;
-    withContract.contracts.active = deliveryContract({ quota: 1_000_000 }); // never completes
-    run(withContract, 20);
-    const c = withContract.contracts.active as DeliveryContract;
-    expect(c.delivered).toBeGreaterThan(0);
-    // Conservation: every egg landed either in storage or the contract, never both.
-    expect(withContract.resources.eggs + c.delivered).toBeCloseTo(totalNoContract, 4);
+describe('order: breed to spec, then hand the duck over', () => {
+  it('orderMatches accepts a duck satisfying every constraint and the quality floor', () => {
+    const c = orderContract({
+      constraints: ['V', null, null, null, null, null],
+      target: genome('LLLLLL'),
+      minTargetQuality: 2,
+    });
+    // 'L' at slots 1-5 (5 of them) covers the floor of 2; slot 0 is the odd V.
+    expect(orderMatches(c, genome('VLLLLL'))).toBe(true);
   });
 
-  it('completes exactly at quota and stops diverting further eggs', () => {
-    const s = setHens(stockAll(fullSetup()), 3);
-    s.legacyTier = C.UNLOCK_TIER;
-    run(s, 5); // warm up
-    const rate = s.nutrition!.eggRate;
-    s.contracts.active = deliveryContract({ quota: Math.max(1, Math.round(rate * 2)) });
-    run(s, 30); // plenty of time to blow past a 2-second quota
-    const c = s.contracts.active as DeliveryContract;
-    expect(c.completed).toBe(true);
-    expect(c.delivered).toBe(c.quota); // never overshoots
+  it('orderMatches rejects a duck violating a constrained slot even if the rest is perfect', () => {
+    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    expect(orderMatches(c, genome('LLLLLL'))).toBe(false); // slot 0 is L, spec wants V
   });
 
-  it("tend()'s coop burst also diverts at the lay point (the other lay path) — no double count", () => {
-    // The burst is now derived from the flock's LIVE lay (never the raw station
-    // base), so warm a real flock up first.
-    const s = setHens(stockAll(fullSetup()), 3);
-    s.legacyTier = C.UNLOCK_TIER;
-    run(s, 5);
-    const rate = s.nutrition!.eggRate;
-    expect(rate).toBeGreaterThan(0);
-    const coop = s.stations.find((st) => st.type === 'coop')!;
-    coop.tendCooldownRemaining = 0;
-    s.contracts.active = deliveryContract({ quota: 3 });
-    const r = tend(s, coop.id);
-    if (!r.ok) throw new Error('tend failed');
-    const c = s.contracts.active as DeliveryContract;
-    expect(c.delivered).toBe(3);
-    expect(c.completed).toBe(true);
-    // 5 cycles' worth of the live flock lay, conserved across buffer + contract.
-    const totalBurst = rate * BALANCE.COOP.cycleSeconds * BALANCE.TEND_BURST_MULT;
-    expect((r.value.burst.eggs ?? 0) + c.delivered).toBeCloseTo(totalBurst, 4);
+  it('orderMatches rejects a duck below the unconstrained quality floor', () => {
+    const c = orderContract({
+      constraints: ['V', null, null, null, null, null],
+      target: genome('LLLLLL'),
+      minTargetQuality: 3,
+    });
+    expect(orderMatches(c, genome('VLLDDD'))).toBe(false); // only 2 of 5 unconstrained slots match
+    expect(orderMatches(c, genome('VLLLDD'))).toBe(true); // 3 of 5 match — floor met
   });
 
-  it('collectAll never resurrects diverted eggs into the delivered count', () => {
-    const s = setHens(stockAll(fullSetup()), 3);
-    s.legacyTier = C.UNLOCK_TIER;
-    run(s, 5); // warm up eggRate
-    const rate = s.nutrition!.eggRate;
-    s.contracts.active = deliveryContract({ quota: Math.max(1, Math.round(rate * 2)) }); // completes fast
-    run(s, 30, false); // no auto-haul: buffers accumulate for a manual check
-    const c = s.contracts.active as DeliveryContract;
-    expect(c.completed).toBe(true);
-    const deliveredAtCompletion = c.delivered;
-    const bufferedEggs = s.stations.reduce((a, st) => a + (st.buffer.eggs ?? 0), 0);
-    expect(bufferedEggs).toBeGreaterThan(0); // post-quota eggs still accumulate normally
-    const eggsBefore = s.resources.eggs;
-    collectAll(s);
-    expect((s.contracts.active as DeliveryContract).delivered).toBe(deliveredAtCompletion); // unchanged
-    expect(s.resources.eggs - eggsBefore).toBeCloseTo(bufferedEggs, 4);
+  it('a Prime gene satisfies a constrained slot exactly like the real wanted gene — the shared matcher', () => {
+    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    expect(orderMatches(c, genome('PLLLLL'))).toBe(true);
   });
 
-  it('fails cleanly at the deadline — no penalty beyond the freed slot', () => {
-    const s = setHens(stockAll(fullSetup()), 1);
-    s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = deliveryContract({ quota: 1_000_000, limitRemaining: 5 });
-    run(s, 10); // deadline (5s) blown well before the quota could ever be met
-    expect(s.contracts.active).toBeNull(); // freed — no other side effect
-    expect(s.dust).toBe(0);
-    expect(s.legacyCurrency).toBe(0);
-    // …but never SILENTLY: the expiry is flagged for the engine's toast drain.
-    expect(s.pendingContractExpired).toBe(1);
+  it('eligibleForOrder returns exactly the matching ducks in the flock', () => {
+    const s = initialState(0);
+    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    s.ducks = [duck('a', genome('VLLLLL')), duck('b', genome('LLLLLL'))];
+    expect(eligibleForOrder(s, c).map((d) => d.id)).toEqual(['a']);
   });
-});
 
-describe('hatch: breeding stock to spec', () => {
-  /** A pair ready to hatch a full clutch on the next runBreeding call. */
-  function pairReady(): GameState {
-    const s = build({ coop: 4 });
+  it('deliverOrderDuck removes the LOWEST-target-quality eligible duck by default, keeping the best', () => {
+    const s = initialState(0);
+    const target = genome('LLLLLL');
+    const c = orderContract({ constraints: ['V', null, null, null, null, null], target });
+    s.contracts.active = c;
     s.ducks = [
-      { id: 'dr', genotype: ['Bl', 'bl'] as Genotype, genome: [...FLAT_GENOME], genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 } as Duck,
-      { id: 'he', genotype: ['Bl', 'bl'] as Genotype, genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 } as Duck,
+      duck('worse', ['V', 'D', 'D', 'D', 'D', 'D']), // 0 of 5 unconstrained slots match target
+      duck('better', ['V', 'L', 'L', 'L', 'L', 'D']), // 4 of 5 match
+    ];
+    const r = deliverOrderDuck(s);
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error('unreachable');
+    expect(r.value.duckId).toBe('worse');
+    expect(s.ducks.map((d) => d.id)).toEqual(['better']); // the best stock is kept
+    expect((s.contracts.active as OrderContract).completed).toBe(true);
+  });
+
+  it('an explicit duckId delivers that duck instead of the auto-pick', () => {
+    const s = initialState(0);
+    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    s.contracts.active = c;
+    s.ducks = [duck('a', ['V', 'L', 'L', 'L', 'L', 'D']), duck('b', ['V', 'D', 'D', 'D', 'D', 'D'])];
+    const r = deliverOrderDuck(s, 'a');
+    expect(r.ok).toBe(true);
+    expect(s.ducks.map((d) => d.id)).toEqual(['b']);
+  });
+
+  it('fails cleanly with 0 eligible ducks', () => {
+    const s = initialState(0);
+    s.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    s.ducks = [duck('a', genome('LLLLLL'))]; // violates the constraint
+    const r = deliverOrderDuck(s);
+    expect(r.ok).toBe(false);
+    expect(s.ducks).toHaveLength(1);
+  });
+
+  it('fails cleanly when an explicit duckId does not match the spec', () => {
+    const s = initialState(0);
+    s.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    s.ducks = [duck('a', ['V', 'D', 'D', 'D', 'D', 'D'])];
+    const r = deliverOrderDuck(s, 'nope');
+    expect(r.ok).toBe(false);
+    expect(s.ducks).toHaveLength(1);
+  });
+
+  it('a Prime carrier is never auto-picked unless it is the ONLY eligible duck', () => {
+    const s = initialState(0);
+    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    s.contracts.active = c;
+    s.ducks = [duck('carrier', ['V', 'P', 'D', 'D', 'D', 'D']), duck('plain', ['V', 'D', 'D', 'D', 'D', 'D'])];
+    const auto = deliverOrderDuck(s);
+    expect(auto.ok).toBe(true);
+    if (!auto.ok) throw new Error('unreachable');
+    expect(auto.value.duckId).toBe('plain'); // the carrier was spared
+
+    const s2 = initialState(0);
+    s2.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    s2.ducks = [duck('onlyCarrier', ['V', 'P', 'D', 'D', 'D', 'D'])];
+    const blocked = deliverOrderDuck(s2); // only eligible duck is a carrier — auto-pick refuses
+    expect(blocked.ok).toBe(false);
+    expect(s2.ducks).toHaveLength(1);
+    const explicit = deliverOrderDuck(s2, 'onlyCarrier'); // explicit id spends it deliberately
+    expect(explicit.ok).toBe(true);
+    expect(s2.ducks).toHaveLength(0);
+  });
+
+  it('delivering a paired duck also drops its breeding pair', () => {
+    const s = initialState(0);
+    s.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    s.ducks = [
+      duck('drake', ['V', 'D', 'D', 'D', 'D', 'D'], { sex: 'drake' }),
+      duck('hen', genome('LLLLLL')),
+    ];
+    s.breedingPairs = [{ id: 'p1', drakeId: 'drake', henId: 'hen', clutchProgress: 0, incubating: [] }];
+    const r = deliverOrderDuck(s, 'drake');
+    expect(r.ok).toBe(true);
+    expect(s.breedingPairs).toEqual([]);
+  });
+
+  it('mass-hatching Standard-target ducks completes NOTHING — no passive hook fires for orders', () => {
+    const s = build({ coop: 8 });
+    const standard = targetForTier(0);
+    s.ducks = [
+      { id: 'dr', genotype: ['Bl', 'bl'] as Genotype, genome: [...standard], genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 } as Duck,
+      { id: 'he', genotype: ['Bl', 'bl'] as Genotype, genome: [...standard], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 } as Duck,
     ];
     s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
     s.legacyTier = C.UNLOCK_TIER;
-    return s;
-  }
-  const anySpec = (): Contract => ({
-    id: 'h1',
-    type: 'hatch',
-    notch: 0,
-    reward: { dust: 0, shards: 0 },
-    completed: false,
-    genePattern: Array(BALANCE.GENOME.SLOTS).fill(null), // "don't care" — matches any hatch
+    const spec = orderContract({ constraints: ['V', null, null, null, null, null], target: standard });
+    s.contracts.active = spec;
+    // Hatch several clutches' worth — every duckling from a Standard×Standard pair.
+    for (let i = 0; i < 5; i++) {
+      runBreeding(s, BALANCE.BREEDING.CLUTCH_INTERVAL_S + BALANCE.BREEDING.INCUBATE_S + 1, 1, 1);
+    }
+    expect(s.ducks.length).toBeGreaterThan(2); // hatching really happened
+    // The real guarantee: even though a rare mutation can occasionally make a
+    // hatchling eligible, nothing EVER completes the contract on its own —
+    // there is no onHatch-style hook left to spam. Only an explicit
+    // deliverOrderDuck() call (a player action) can complete it.
+    expect((s.contracts.active as OrderContract).completed).toBe(false);
+  });
+});
+
+describe('provision: hand over a produced ingredient', () => {
+  it('fulfilProvision draws the exact amount and completes', () => {
+    const s = initialState(0);
+    s.resources.corn = 500;
+    s.contracts.active = provisionContract({ amount: 300 });
+    const r = fulfilProvision(s);
+    expect(r.ok).toBe(true);
+    expect(s.resources.corn).toBe(200);
+    expect((s.contracts.active as ProvisionContract).completed).toBe(true);
   });
 
-  it('an online hatch matching the spec completes the contract', () => {
-    const s = pairReady();
-    s.contracts.active = anySpec();
-    runBreeding(s, BALANCE.BREEDING.CLUTCH_INTERVAL_S + BALANCE.BREEDING.INCUBATE_S + 1, 1, 1, true);
-    expect(s.ducks.length).toBeGreaterThan(2); // something actually hatched
-    expect(s.contracts.active?.completed).toBe(true);
+  it('fails cleanly below the required amount — no partial draw', () => {
+    const s = initialState(0);
+    s.resources.corn = 100;
+    s.contracts.active = provisionContract({ amount: 300 });
+    const r = fulfilProvision(s);
+    expect(r.ok).toBe(false);
+    expect(s.resources.corn).toBe(100);
+    expect((s.contracts.active as ProvisionContract).completed).toBe(false);
   });
 
-  it('a spec with a specified slot rejects a non-matching hatch and accepts a matching one', () => {
-    const s = pairReady();
-    const pattern: (import('../src/game/state').Gene | null)[] = Array(BALANCE.GENOME.SLOTS).fill(null);
-    pattern[0] = 'V'; // FLAT_GENOME is all-D, so a straight D-parent hatch never has a V here...
-    s.contracts.active = { ...anySpec(), genePattern: pattern };
-    const duckD: Duck = { id: 'x', genotype: ['Bl', 'bl'], genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
-    onHatch(s, duckD);
-    expect(s.contracts.active?.completed).toBe(false);
-    const duckV: Duck = { id: 'y', genotype: ['Bl', 'bl'], genome: ['V', 'D', 'D', 'D', 'D', 'D'], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
-    onHatch(s, duckV);
-    expect(s.contracts.active?.completed).toBe(true);
-  });
-
-  it('a Prime gene (Phase 6c) satisfies a specified slot exactly like the real wanted gene — the shared matcher', () => {
-    const s = pairReady();
-    const pattern: (import('../src/game/state').Gene | null)[] = Array(BALANCE.GENOME.SLOTS).fill(null);
-    pattern[0] = 'V';
-    s.contracts.active = { ...anySpec(), genePattern: pattern };
-    const duckPrime: Duck = { id: 'z', genotype: ['Bl', 'bl'], genome: ['P', 'D', 'D', 'D', 'D', 'D'], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
-    onHatch(s, duckPrime);
-    expect(s.contracts.active?.completed).toBe(true);
-  });
-
-  it('a color-gated spec only completes on a matching phenotype', () => {
+  it('respects deadline expiry — no penalty beyond the freed slot', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = { ...anySpec(), color: 'splash' };
-    const black: Duck = { id: 'b', genotype: ['bl', 'bl'], genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
-    onHatch(s, black);
-    expect(s.contracts.active?.completed).toBe(false);
-    const splash: Duck = { id: 's', genotype: ['Bl', 'Bl'], genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 };
-    onHatch(s, splash);
-    expect(s.contracts.active?.completed).toBe(true);
+    s.resources.corn = 0;
+    s.contracts.active = provisionContract({ amount: 1_000_000, limitRemaining: 5 });
+    runContracts(s, 10); // deadline blown before it could ever be fulfilled
+    expect(s.contracts.active).toBeNull();
+    expect(s.dust).toBe(0);
+    expect(s.legacyCurrency).toBe(0);
+    expect(s.pendingContractExpired).toBe(1); // never silently
+  });
+
+  it('an already-complete provision cannot be fulfilled twice', () => {
+    const s = initialState(0);
+    s.resources.corn = 1000;
+    s.contracts.active = provisionContract({ amount: 100, completed: true });
+    const r = fulfilProvision(s);
+    expect(r.ok).toBe(false);
+    expect(s.resources.corn).toBe(1000);
   });
 });
 
@@ -393,11 +491,11 @@ describe('defense: prove the watch', () => {
   it('scared events advance progress; wound/snatched reset it to 0', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = { id: 'd1', type: 'defense', notch: 0, reward: { dust: 0, shards: 0 }, completed: false, scareTarget: 2, scareProgress: 0 };
+    s.contracts.active = defenseContract({ scareTarget: 2, scareProgress: 0 });
     onPredatorEvent(s, { kind: 'scared', predatorId: 'owl', duckId: 'd0' });
-    expect((s.contracts.active as { scareProgress: number }).scareProgress).toBe(1);
+    expect((s.contracts.active as DefenseContract).scareProgress).toBe(1);
     onPredatorEvent(s, { kind: 'wound', predatorId: 'owl', duckId: 'd0' });
-    expect((s.contracts.active as { scareProgress: number }).scareProgress).toBe(0);
+    expect((s.contracts.active as DefenseContract).scareProgress).toBe(0);
     onPredatorEvent(s, { kind: 'scared', predatorId: 'owl', duckId: 'd0' });
     onPredatorEvent(s, { kind: 'scared', predatorId: 'owl', duckId: 'd0' });
     expect(s.contracts.active?.completed).toBe(true);
@@ -406,19 +504,19 @@ describe('defense: prove the watch', () => {
   it('snatched also resets progress, and irrelevant events (crowdInjury) are ignored', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = { id: 'd1', type: 'defense', notch: 0, reward: { dust: 0, shards: 0 }, completed: false, scareTarget: 3, scareProgress: 2 };
+    s.contracts.active = defenseContract({ scareTarget: 3, scareProgress: 2 });
     onPredatorEvent(s, { kind: 'crowdInjury', duckId: 'd0' });
-    expect((s.contracts.active as { scareProgress: number }).scareProgress).toBe(2); // untouched
+    expect((s.contracts.active as DefenseContract).scareProgress).toBe(2); // untouched
     onPredatorEvent(s, { kind: 'snatched', predatorId: 'owl', duckId: 'd0' });
-    expect((s.contracts.active as { scareProgress: number }).scareProgress).toBe(0);
+    expect((s.contracts.active as DefenseContract).scareProgress).toBe(0);
   });
 
   it('a siege scare (Phase 6c) feeds an active defense contract exactly like any other predator — no special-casing', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = { id: 'd1', type: 'defense', notch: 0, reward: { dust: 0, shards: 0 }, completed: false, scareTarget: 2, scareProgress: 0 };
+    s.contracts.active = defenseContract({ scareTarget: 2, scareProgress: 0 });
     onPredatorEvent(s, { kind: 'scared', predatorId: 'greatHorned', duckId: 'd0' });
-    expect((s.contracts.active as { scareProgress: number }).scareProgress).toBe(1);
+    expect((s.contracts.active as DefenseContract).scareProgress).toBe(1);
     onPredatorEvent(s, { kind: 'scared', predatorId: 'greatHorned', duckId: 'd0' });
     expect(s.contracts.active?.completed).toBe(true);
   });
@@ -429,7 +527,7 @@ describe('defense: prove the watch', () => {
     s.predatorsIntroduced = true;
     s.predators.owl = { timeToNextWindow: 0, windowRemaining: OWL.windowDurationSec, windowElapsed: 0, attacksFired: 0 };
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = { id: 'd1', type: 'defense', notch: 0, reward: { dust: 0, shards: 0 }, completed: false, scareTarget: 5, scareProgress: 2 };
+    s.contracts.active = defenseContract({ scareTarget: 5, scareProgress: 2 });
     const firstAttackAt = OWL.windowDurationSec / (OWL.attacksPerWindow + 1);
     // A hand-sequenced rng: [attack succeeds, pick the first target, DON'T resist
     // (a bare `zero` would make the wound-resist check `rng() < resistChance`
@@ -440,45 +538,43 @@ describe('defense: prove the watch', () => {
     const rng = () => (i < seq.length ? seq[i++] : 0.5);
     tick(s, firstAttackAt, { mode: 'offline', autoHaul: true, rng });
     expect(s.ducks.some((d) => d.wounded)).toBe(true); // a real attack landed
-    expect((s.contracts.active as { scareProgress: number }).scareProgress).toBe(2); // untouched offline
+    expect((s.contracts.active as DefenseContract).scareProgress).toBe(2); // untouched offline
   });
 });
 
 describe('online-only law (across every clock/progress)', () => {
-  it('offline catch-up advances no contract clock, diverts no eggs, refills no offers', () => {
+  it('offline catch-up advances no contract clock and refills no offers', () => {
     const s = setHens(stockAll(fullSetup()), 3);
     s.legacyTier = C.UNLOCK_TIER;
     s.contracts.offers = []; // even with the board unlocked, offline must not fill it
-    s.contracts.active = deliveryContract({ quota: 1_000_000, limitRemaining: 999 });
+    s.contracts.active = provisionContract({ amount: 1_000_000, limitRemaining: 999 });
     const refreshBefore = s.contracts.refreshRemaining;
     s.lastSeen = -3600 * 1000; // 1 hour ago
     const away = runOfflineCatchUp(s, 0);
     expect(away.produced.eggs ?? 0).toBeGreaterThan(0); // eggs WERE produced offline...
-    expect(s.contracts.active?.delivered).toBe(0); // ...but none diverted
-    expect(s.contracts.active?.limitRemaining).toBe(999); // deadline frozen
+    expect((s.contracts.active as ProvisionContract).limitRemaining).toBe(999); // deadline frozen
     expect(s.contracts.offers).toEqual([]); // never refilled
     expect(s.contracts.refreshRemaining).toBe(refreshBefore); // refresh timer frozen
   });
 
-  it('an offline hatch matching an active spec never completes the contract', () => {
-    const s = build({ coop: 4 });
-    s.ducks = [
-      { id: 'dr', genotype: ['Bl', 'bl'] as Genotype, genome: [...FLAT_GENOME], genomeKnown: true, sex: 'drake', stage: 'adult', ageTicks: 0 } as Duck,
-      { id: 'he', genotype: ['Bl', 'bl'] as Genotype, genome: [...FLAT_GENOME], genomeKnown: true, sex: 'hen', stage: 'adult', ageTicks: 0 } as Duck,
-    ];
-    s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
+  it('deliverOrderDuck and fulfilProvision are the ONLY paths to completion — neither is reachable from tick/offline catch-up', () => {
+    // Both are plain functions called exclusively from GameEngine action wrappers
+    // (see engine.ts) — tick.ts never imports or calls them. This is a structural
+    // guarantee, not a race to test at runtime: assert the sim can run freely
+    // (online AND offline) with an active order/provision and neither completes
+    // on its own.
+    const s = setHens(stockAll(fullSetup()), 3);
     s.legacyTier = C.UNLOCK_TIER;
-    s.contracts.active = {
-      id: 'h1',
-      type: 'hatch',
-      notch: 0,
-      reward: { dust: 0, shards: 0 },
-      completed: false,
-      genePattern: Array(BALANCE.GENOME.SLOTS).fill(null), // matches anything
-    };
-    runBreeding(s, BALANCE.BREEDING.CLUTCH_INTERVAL_S + BALANCE.BREEDING.INCUBATE_S + 1, 1, 1, false); // offline
-    expect(s.ducks.length).toBeGreaterThan(2); // the hatch really happened
-    expect(s.contracts.active?.completed).toBe(false); // but doesn't count
+    s.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
+    run(s, 20); // plenty of online ticks
+    expect((s.contracts.active as OrderContract).completed).toBe(false);
+
+    const s2 = setHens(stockAll(fullSetup()), 3);
+    s2.legacyTier = C.UNLOCK_TIER;
+    s2.resources.corn = 1_000_000;
+    s2.contracts.active = provisionContract({ amount: 10, limitRemaining: 999 });
+    run(s2, 20);
+    expect((s2.contracts.active as ProvisionContract).completed).toBe(false);
   });
 
   it('scareOff (the online scare click) is the only path to a scared event; nothing offline can produce one', () => {
@@ -500,8 +596,8 @@ describe('save round-trip + prestige', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
     s.contracts = {
-      offers: [deliveryContract({ id: 'o1' })],
-      active: deliveryContract({ id: 'a1', delivered: 42 }),
+      offers: [provisionContract({ id: 'o1' })],
+      active: provisionContract({ id: 'a1', amount: 42 }),
       nextContractId: 7,
       refreshRemaining: 123,
     };
@@ -509,17 +605,37 @@ describe('save round-trip + prestige', () => {
     expect(r.contracts.offers).toHaveLength(1);
     expect(r.contracts.offers[0].id).toBe('o1');
     expect(r.contracts.active?.id).toBe('a1');
-    expect((r.contracts.active as DeliveryContract).delivered).toBe(42);
+    expect((r.contracts.active as ProvisionContract).amount).toBe(42);
     expect(r.contracts.nextContractId).toBe(7);
     expect(r.contracts.refreshRemaining).toBe(123);
+  });
+
+  it('a saved ACTIVE contract of a retired shape (delivery/hatch) is voided on load — no penalty, no toast', () => {
+    const legacyDelivery = {
+      resources: {},
+      contracts: {
+        offers: [provisionContract({ id: 'still-good' }), { id: 'legacy-o', type: 'hatch', notch: 0, reward: { dust: 0, shards: 0 }, completed: false, genePattern: [null, null, null, null, null, null] }],
+        active: { id: 'legacy-a', type: 'delivery', notch: 0, reward: { dust: 5, shards: 1 }, completed: false, quota: 100, delivered: 50, limitRemaining: 200 },
+        nextContractId: 9,
+        refreshRemaining: 50,
+        peakEggRate: 42,
+      },
+    };
+    const r = deserialize(JSON.stringify(legacyDelivery), 0);
+    expect(r.contracts.active).toBeNull(); // voided, no penalty
+    expect(r.contracts.offers.map((o) => o.id)).toEqual(['still-good']); // the legacy hatch offer is dropped
+    expect(r.contracts.nextContractId).toBe(9); // counters survive
+    expect(r.contracts.refreshRemaining).toBe(50); // the board re-rolls on its normal clock
+    expect(r.contracts.peakEggRate).toBe(42); // clutch cost / pond pricing depend on this surviving
+    expect(r.pendingContractExpired).toBe(0); // never a toast for a migration
   });
 
   it('prestigeReset wipes the board back to the initial (empty, untiered) shape', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
     s.contracts = {
-      offers: [deliveryContract({ id: 'o1' }), deliveryContract({ id: 'o2' })],
-      active: deliveryContract({ id: 'a1', delivered: 99 }),
+      offers: [provisionContract({ id: 'o1' }), provisionContract({ id: 'o2' })],
+      active: provisionContract({ id: 'a1', amount: 99 }),
       nextContractId: 50,
       refreshRemaining: 3,
     };
@@ -540,8 +656,10 @@ describe('guardrail: contracts never touch the sim', () => {
     const s = setHens(stockAll(fullSetup()), 3);
     s.legacyTier = C.UNLOCK_TIER;
     run(s, 5);
-    s.contracts.active = deliveryContract({ quota: 5, completed: false });
-    run(s, 30);
+    s.resources.corn = 1000;
+    s.contracts.active = provisionContract({ amount: 10 });
+    const r = fulfilProvision(s);
+    expect(r.ok).toBe(true);
     if (s.contracts.active?.completed) claimContract(s);
 
     expect(JSON.stringify(BALANCE.NUTRITION)).toBe(nutritionBefore);
@@ -551,9 +669,9 @@ describe('guardrail: contracts never touch the sim', () => {
   });
 });
 
-describe('type-priced rewards + tier-aligned hatch bounties (Grange retune)', () => {
+describe('type-priced rewards (Grange 2.0 retune)', () => {
   it('rewards scale by TYPE on top of the notch band (defense-only is never optimal)', () => {
-    const s = initialState(0);
+    const s = setHens(stockAll(fullSetup()), 3);
     s.legacyTier = C.UNLOCK_TIER;
     s.contracts.peakEggRate = 5;
     for (let i = 0; i < 400; i++) {
@@ -564,21 +682,6 @@ describe('type-priced rewards + tier-aligned hatch bounties (Grange retune)', ()
       expect(o.reward.dust).toBeLessThanOrEqual(Math.round(band.dust[1] * mult));
       expect(o.reward.shards).toBeGreaterThanOrEqual(Math.round(band.shards[0] * mult));
       expect(o.reward.shards).toBeLessThanOrEqual(Math.round(band.shards[1] * mult));
-    }
-  });
-
-  it('hatch specs are bounties ON the tier target: specified slots match it exactly', () => {
-    for (const tier of [C.UNLOCK_TIER, 2, 4]) {
-      const s = initialState(0);
-      s.legacyTier = tier;
-      const target = targetForTier(tier);
-      for (let i = 0; i < 200; i++) {
-        const o = generateOffer(s, Math.random);
-        if (o.type !== 'hatch') continue;
-        o.genePattern.forEach((g, slot) => {
-          if (g != null) expect(g).toBe(target[slot]);
-        });
-      }
     }
   });
 });

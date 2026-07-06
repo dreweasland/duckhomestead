@@ -35,6 +35,12 @@ function validGenome(g: unknown): g is Genome {
   );
 }
 
+/** Phase 8 GRANGE 2.0 retired the `delivery`/`hatch` contract shapes — a saved
+ *  offer/active contract of either is silently dropped on load (see the
+ *  `contracts` block below): no penalty, no toast, the board re-rolls the
+ *  freed slot on its normal clock. */
+const KNOWN_CONTRACT_TYPES = new Set(['order', 'provision', 'defense']);
+
 export interface AwaySummary {
   /** Real seconds elapsed since last seen (uncapped, for display). */
   elapsedSeconds: number;
@@ -183,9 +189,14 @@ export function deserialize(raw: string, now: number): GameState {
       // Phase 6b: The Grange. Pre-6b saves have no `contracts` block at all —
       // merge onto the fresh default so a partial/missing shape still loads
       // with a valid (empty) board; a fresh refresh timer re-fills it shortly.
+      // Phase 8: drop any offer/active contract of a retired shape (see
+      // KNOWN_CONTRACT_TYPES) — a pre-8 save's board simply re-rolls those slots.
       contracts: {
-        offers: parsed.contracts?.offers ?? base.contracts.offers,
-        active: parsed.contracts?.active ?? base.contracts.active,
+        offers: (parsed.contracts?.offers ?? base.contracts.offers).filter((o) => KNOWN_CONTRACT_TYPES.has(o.type)),
+        active:
+          parsed.contracts?.active && KNOWN_CONTRACT_TYPES.has(parsed.contracts.active.type)
+            ? parsed.contracts.active
+            : base.contracts.active,
         nextContractId: parsed.contracts?.nextContractId ?? base.contracts.nextContractId,
         refreshRemaining: parsed.contracts?.refreshRemaining ?? base.contracts.refreshRemaining,
         peakEggRate: parsed.contracts?.peakEggRate ?? 0,

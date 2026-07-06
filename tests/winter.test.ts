@@ -408,35 +408,6 @@ describe('warmth is a LAYOUT puzzle — set-and-holds, never an upkeep loop', ()
   });
 });
 
-describe('winter lay obeys the Grange + online-only laws', () => {
-  it('an active delivery diverts ONLINE winter lay; offline lay never diverts', () => {
-    const mk = () => {
-      const s = winterSite(1);
-      s.legacyTier = 3;
-      s.ducks = [duck('w')];
-      assignToWinter(s, 'w');
-      s.contracts.active = {
-        id: 'ct1',
-        type: 'delivery',
-        notch: 0,
-        reward: { dust: 1, shards: 0 },
-        completed: false,
-        quota: 1_000_000,
-        delivered: 0,
-        limitRemaining: 9999,
-      };
-      return s;
-    };
-    const online = mk();
-    run(online, 30);
-    expect(online.contracts.active && 'delivered' in online.contracts.active ? online.contracts.active.delivered : 0).toBeGreaterThan(0);
-
-    const offline = mk();
-    for (let i = 0; i < 300; i++) tick(offline, 0.1, { mode: 'offline', autoHaul: true });
-    expect(offline.contracts.active && 'delivered' in offline.contracts.active ? offline.contracts.active.delivered : 0).toBe(0);
-  });
-});
-
 describe('save round-trip + back-compat (the union-growth sweep)', () => {
   it('a pre-6d save (no winter resources/keys) loads with the new lines at 0', () => {
     const legacy = JSON.stringify({
