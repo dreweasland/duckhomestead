@@ -116,7 +116,7 @@ export function axisTier(genome: Genome, axis: PhenoAxis): number {
 /** Whether a genome slot counts as matching a wanted gene — the ONE rule for
  *  "does this gene satisfy this target/spec slot", shared by every place a
  *  genome is judged against a profile (targetMatch below AND the Grange's
- *  hatch-spec check, contracts.ts onHatch) so they can't drift. Prime (`P`) is
+ *  order-spec check, contracts.ts orderMatches) so they can't drift. Prime (`P`) is
  *  a WILDCARD: it counts as matching ANY wanted gene. */
 export function slotMatches(gene: Gene, want: Gene): boolean {
   return gene === 'P' || gene === want;

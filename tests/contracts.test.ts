@@ -685,3 +685,40 @@ describe('type-priced rewards (Grange 2.0 retune)', () => {
     }
   });
 });
+
+it('auto-pick never hands over a SECURED or WINTERING duck (review fix, same standing as P-carriers)', () => {
+  const s = initialState(0);
+  s.legacyTier = 1;
+  s.contracts.active = {
+    id: 'o1',
+    type: 'order',
+    notch: 0,
+    reward: { dust: 5, shards: 1 },
+    completed: false,
+    constraints: ['V', null, null, null, null, null],
+    target: ['L', 'L', 'L', 'L', 'L', 'L'],
+    minTargetQuality: 0,
+  };
+  const mk = (id: string, extra: Partial<Duck> = {}): Duck => ({
+    id,
+    genotype: ['Bl', 'bl'],
+    genome: ['V', 'D', 'D', 'D', 'D', 'D'],
+    genomeKnown: true,
+    sex: 'hen',
+    stage: 'adult',
+    ageTicks: 0,
+    ...extra,
+  });
+  // The vaulted duck has the WORST quality — the old auto-pick would grab it.
+  s.ducks = [mk('vault', { secured: true }), mk('posted', { site: 'winter' }), mk('spare', { genome: ['V', 'L', 'D', 'D', 'D', 'D'] })];
+  const r = deliverOrderDuck(s);
+  expect(r.ok).toBe(true);
+  if (r.ok) expect(r.value.duckId).toBe('spare'); // kept the vault + the winter post
+  // With only protected ducks eligible, auto-pick refuses; explicit id works.
+  const s2 = initialState(0);
+  s2.legacyTier = 1;
+  s2.contracts.active = { ...(s.contracts.active as object), completed: false, id: 'o2' } as typeof s.contracts.active;
+  s2.ducks = [mk('vault2', { secured: true })];
+  expect(deliverOrderDuck(s2).ok).toBe(false);
+  expect(deliverOrderDuck(s2, 'vault2').ok).toBe(true);
+});

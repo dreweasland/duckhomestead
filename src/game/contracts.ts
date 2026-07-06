@@ -281,10 +281,11 @@ export function rerollOffers(state: GameState, rng: () => number = Math.random):
  * Deliver a duck against the active BREEDING ORDER — it is REMOVED from the
  * flock (any pairing it held is dropped too) and the contract completes.
  * Omit `duckId` for the auto-pick: the LOWEST-target-quality eligible duck,
- * so the player's best stock is kept by default. Prime carriers are never
- * auto-picked (same protection standing as the cull tools) — if every
- * eligible duck carries Prime, an explicit `duckId` is required (an active
- * choice to spend precious carrier stock).
+ * so the player's best stock is kept by default. Prime carriers, SECURED
+ * ducks (the vault is the player's own declaration of "keep"), and WINTERING
+ * ducks (posted workers — silently unstaffing Winterstead would be theft)
+ * are never auto-picked (same protection standing as the cull tools) — any
+ * of them can still be delivered by explicit `duckId` (an active choice).
  */
 export function deliverOrderDuck(state: GameState, duckId?: string): ActionResult<{ duckId: string }> {
   const c = state.contracts.active;
@@ -299,9 +300,12 @@ export function deliverOrderDuck(state: GameState, duckId?: string): ActionResul
     if (!found) return fail('That duck does not match the spec');
     target = found;
   } else {
-    const nonPrime = eligible.filter((d) => !d.genome.includes('P'));
-    if (nonPrime.length === 0) return fail('Only Prime carriers are eligible — deliver one explicitly');
-    target = nonPrime.reduce((worst, d) =>
+    const autoPickable = eligible.filter(
+      (d) => !d.genome.includes('P') && !d.secured && d.site !== 'winter',
+    );
+    if (autoPickable.length === 0)
+      return fail('Only Prime carriers / secured / wintering ducks are eligible — deliver one explicitly');
+    target = autoPickable.reduce((worst, d) =>
       targetMatch(d.genome, c.target) < targetMatch(worst.genome, c.target) ? d : worst,
     );
   }
