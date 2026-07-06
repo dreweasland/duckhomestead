@@ -34,8 +34,12 @@ describe('rack sockets grow with rank (capped)', () => {
     expect(rackSockets(s)).toBe(R.baseSockets);
     s.rank = 1 + R.ranksPerSocket;
     expect(rackSockets(s)).toBe(R.baseSockets + 1);
-    s.rank = 1000;
+    // The rank curve tops out at maxSockets…
+    s.rank = R.bonusSocketRank - 1;
     expect(rackSockets(s)).toBe(R.maxSockets);
+    // …and the rank-30 milestone grants ONE more (the ladder's power beat).
+    s.rank = 1000;
+    expect(rackSockets(s)).toBe(R.maxSockets + 1);
   });
 });
 

@@ -1188,3 +1188,55 @@ describe('one dive in the air at a time (overlapping windows must not stack stri
     expect(maxFiredTotal).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('THE PAIRED HUNT (rank 28): coordinated windows, flawless bounty', () => {
+  const PH = BALANCE.PREDATORS.PAIRED_HUNT;
+  const huntState = () => {
+    const s = flock(8);
+    s.rank = PH.INTRO_RANK;
+    s.predatorsIntroduced = true;
+    s.predatorsSeen = ['owl', 'raccoon'];
+    s.predators.owl = { timeToNextWindow: 9999, windowRemaining: 0, windowElapsed: 0, attacksFired: 0 };
+    s.predators.raccoon = { timeToNextWindow: 9999, windowRemaining: 0, windowElapsed: 0, attacksFired: 0 };
+    s.pairedHunt = { timeToNext: 1, active: false, remaining: 0, harmed: false };
+    return s;
+  };
+
+  it('opens BOTH windows together (online), and never ticks offline', () => {
+    const s = huntState();
+    runPredators(s, 2, { mode: 'online', rng: () => 0.99, activeDefense: false });
+    expect(s.pairedHunt?.active).toBe(true);
+    expect(s.predators.owl?.windowRemaining).toBeGreaterThan(0);
+    expect(s.predators.raccoon?.windowRemaining).toBeGreaterThan(0);
+    expect(events(s).some((e) => e.kind === 'huntBegins')).toBe(true);
+
+    const off = huntState();
+    runPredators(off, 2, { mode: 'offline', rng: () => 0.99, lossBudget: { remaining: 10 } });
+    expect(off.pairedHunt?.active).toBe(false); // an active set-piece — online only
+  });
+
+  it('flawless (nothing landed) pays the bounty; harm voids it', () => {
+    const s = huntState();
+    const dust0 = s.dust;
+    const mods0 = s.inventory.length + s.rack.length;
+    // rng 0.99: every guard-mode strike expiry MISSES (defenses hold) — flawless.
+    for (let t = 0; t < PH.windowDurationSec + PH.graceSec + 5; t++) {
+      runPredators(s, 1, { mode: 'online', rng: () => 0.99, activeDefense: false });
+    }
+    expect(s.pairedHunt?.active).toBe(false);
+    expect(s.dust).toBe(dust0 + PH.JACKPOT.dust);
+    expect(s.inventory.length + s.rack.length).toBe(mods0 + 1);
+    expect(events(s).some((e) => e.kind === 'huntFoiled')).toBe(true);
+
+    const h = huntState();
+    const hd0 = h.dust;
+    runPredators(h, 2, { mode: 'online', rng: () => 0.99, activeDefense: false });
+    h.pairedHunt!.harmed = true; // a landed hit mid-hunt (landHit marks this)
+    for (let t = 0; t < PH.windowDurationSec + PH.graceSec + 5; t++) {
+      runPredators(h, 1, { mode: 'online', rng: () => 0.99, activeDefense: false });
+    }
+    expect(h.pairedHunt?.active).toBe(false);
+    expect(h.dust).toBe(hd0); // no bounty
+    expect(h.pairedHunt?.timeToNext).toBeGreaterThan(PH.everySec - 30); // rescheduled either way (ticks down as the loop runs on)
+  });
+});

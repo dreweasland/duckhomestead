@@ -130,12 +130,20 @@ export function currencyAtSize(state: GameState, size: number): number {
   if (!canPrestige(state)) return 0;
   const sizeOver = size / sizeTarget(state); // ≥ 1 (size met)
   const qualityOver = meanQuality(state) / qualityGate(state); // ≥ 1 (quality met)
-  return Math.round(
-    P.CURRENCY_AT_THRESHOLD *
-      Math.pow(P.TIER_CURRENCY_GROWTH, state.legacyTier) *
-      Math.pow(sizeOver, P.CURRENCY_OVERSHOOT_EXP) *
-      Math.pow(qualityOver, P.CURRENCY_QUALITY_EXP),
+  return (
+    Math.round(
+      P.CURRENCY_AT_THRESHOLD *
+        Math.pow(P.TIER_CURRENCY_GROWTH, state.legacyTier) *
+        Math.pow(sizeOver, P.CURRENCY_OVERSHOOT_EXP) *
+        Math.pow(qualityOver, P.CURRENCY_QUALITY_EXP),
+    ) + rankRenownShards(state)
   );
+}
+
+/** RANK OVERSHOOT PAYS: flat shards per rank above the floor — the tend
+ *  engine's contribution to the prestige payout (see RENOWN_RANK_FLOOR). */
+export function rankRenownShards(state: GameState): number {
+  return Math.max(0, state.rank - P.RENOWN_RANK_FLOOR) * P.SHARDS_PER_RANK_ABOVE;
 }
 
 /** Legacy currency this run would grant — scales with how far the flock overshoots

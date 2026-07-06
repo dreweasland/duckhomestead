@@ -911,6 +911,9 @@ export interface TendResult {
   /** Burst output deposited into the station buffer (before any haul). */
   burst: Partial<Record<Resource, number>>;
   xp: XpResult;
+  /** MASTER TEND (rank ≥ TEND_CRIT.RANK): this tend critted — the burst was
+   *  doubled. Pure juice flag for the UI's pops. */
+  crit?: boolean;
 }
 
 /**
@@ -974,9 +977,24 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
   }
 
   station.tendCooldownRemaining = BALANCE.TEND_COOLDOWN_S * tendCooldownMult(state);
+
+  // MASTER TEND (rank ladder): past the rank gate, a tend can CRIT — every
+  // burst amount doubles, in the buffer AND the reported burst (the pop shows
+  // the doubled number). Throughput-only juice on the core verb.
+  const TC = BALANCE.TEND_CRIT;
+  let crit = false;
+  if (state.rank >= TC.RANK && Math.random() < TC.CHANCE) {
+    crit = true;
+    for (const key of Object.keys(burst) as Resource[]) {
+      const extra = (burst[key] ?? 0) * (TC.MULT - 1);
+      burst[key] = (burst[key] ?? 0) + extra;
+      station.buffer[key] = (station.buffer[key] ?? 0) + extra;
+    }
+  }
+
   // Renown (legacy boost) scales active-action XP — online-only law holds.
   // XP rides the station's LEVEL: an L1 plot pays the same 20 as ever, an L14
   // producer pays 280 — upgrades feed progression, matching the kneed curve.
   const xp = gainXP(state, Math.round(BALANCE.TEND_XP * station.level * renownBoostMult(state)));
-  return done({ station, burst, xp });
+  return done({ station, burst, xp, crit });
 }

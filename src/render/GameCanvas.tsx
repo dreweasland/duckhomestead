@@ -370,6 +370,13 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           stroke: { color: 0x143010, width: 2 },
           fontFamily: 'monospace',
         });
+        // MASTER TEND crit pops — gold, unmissable.
+        const CRIT_STYLE = new TextStyle({
+          fontSize: 12,
+          fontWeight: 'bold',
+          fill: 0xffd23f,
+          stroke: { color: 0x3a2000, width: 3 },
+        });
         const RES_STYLE = new TextStyle({
           fontSize: 13,
           fontWeight: 'bold',
@@ -422,11 +429,16 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           amount: number,
           xp: number | undefined,
           life = 0.9,
+          crit = false,
         ) => {
           const showRes = resource !== undefined && Math.round(amount) > 0;
           const showXp = !!xp && xp > 0;
           if (!showRes && !showXp) return;
           const segs: { node: Container; w: number; icon: boolean }[] = [];
+          if (crit) {
+            const t = new Text({ text: 'CRIT ×2', style: CRIT_STYLE });
+            segs.push({ node: t, w: t.width + 4, icon: false });
+          }
           if (showRes) {
             segs.push({ node: makeResIcon(resource!), w: 9, icon: true });
             const t = new Text({ text: `+${fmtPop(amount)}`, style: RES_STYLE });
@@ -452,6 +464,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         };
 
         interface PendingPop {
+          crit?: boolean;
           stationId?: string;
           xp?: number;
           resources?: Partial<Record<Resource, number>>;
@@ -460,7 +473,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         const unsubTend = engine.onTend((e) => {
           const s = engine.state.stations.find((st) => st.id === e.stationId);
           if (!s || s.zoneId !== zoneId) return; // only pop on the visible zone
-          pending.push({ stationId: e.stationId, xp: e.xp, resources: e.burst });
+          pending.push({ stationId: e.stationId, xp: e.xp, resources: e.burst, crit: e.crit });
         });
         cleanups.push(() => unsubTend());
         const unsubCollect = engine.onCollect((e) => {
@@ -710,19 +723,21 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
             const s = zoneStations.find((st) => st.id === p.stationId);
             if (s) {
               const [resource, amount] = primaryResource(p.resources);
-              spawnPop(OX + s.x * TILE + TILE / 2, OY + s.y * TILE + 6, resource, amount, p.xp);
+              spawnPop(OX + s.x * TILE + TILE / 2, OY + s.y * TILE + 6, resource, amount, p.xp, p.crit ? 1.2 : 0.9, p.crit);
             }
           } else if (pending.length > 0) {
             let xp = 0;
             const totals: Partial<Record<Resource, number>> = {};
+            let anyCrit = false;
             for (const p of pending) {
+              anyCrit = anyCrit || !!p.crit;
               xp += p.xp ?? 0;
               for (const key of Object.keys(p.resources ?? {}) as Resource[]) {
                 totals[key] = (totals[key] ?? 0) + (p.resources?.[key] ?? 0);
               }
             }
             const [resource, amount] = primaryResource(totals);
-            spawnPop(OX + (GRID.width * TILE) / 2, OY + (GRID.height * TILE) / 2, resource, amount, xp, 1.1);
+            spawnPop(OX + (GRID.width * TILE) / 2, OY + (GRID.height * TILE) / 2, resource, amount, xp, anyCrit ? 1.3 : 1.1, anyCrit);
           }
           pending = [];
 

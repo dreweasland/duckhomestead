@@ -189,8 +189,24 @@ export const BALANCE = {
   TEND_BURST_MULT: 5,
   /** Rank XP granted per tend. Online-only — offline never grants XP. */
   TEND_XP: 20,
+  /** MASTER TEND (rank ladder, 2026-07-06): from this rank, a tend has a
+   *  chance to CRIT — the burst doubles. Juice on the verb you press ten
+   *  thousand times; throughput-only, never a requirement. */
+  TEND_CRIT: { RANK: 35, CHANCE: 0.15, MULT: 2 },
 
   // ── Homestead Rank + the DING ───────────────────────────────────────
+  /** RANK TITLES (playtest, 2026-07-06): a name for where you are, folded
+   *  onto ranks that carry no other unlock. Shown on the HUD rank bar and
+   *  DING'd like any milestone — a promotion, not a mechanic. */
+  RANK_TITLES: [
+    { rank: 1, title: 'Homesteader' },
+    { rank: 15, title: 'Keeper' },
+    { rank: 20, title: 'Warden' },
+    { rank: 27, title: 'Reeve' },
+    { rank: 33, title: 'Grange Elder' },
+    { rank: 40, title: 'Master of the Standard' },
+  ] as { rank: number; title: string }[],
+
   /** XP needed for level n = BASE * GROWTH^(n-1)… up to the KNEE, then the
    *  gentler TAIL_GROWTH takes over (playtest, 2026-07-05: geometric-forever
    *  requirements against flat tend income walled rank 22 at ~246k XP/level —
@@ -665,6 +681,20 @@ export const BALANCE = {
      * flawless defense (every committed dive scared, nothing landed) pays a
      * guaranteed jackpot; see PredatorDef.jackpot + runPredators (Step 2).
      */
+    /** THE PAIRED HUNT (rank ladder, 2026-07-06): a rare coordinated window —
+     *  the owl and raccoon open TOGETHER and their strikes queue back-to-back
+     *  (the one-dive-at-a-time rule provides the choreography). Online-only
+     *  (an active set-piece, like contracts); flawless (nothing landed while
+     *  the hunt runs) pays a guaranteed bounty. Requires BOTH base predators
+     *  established plus the rank. */
+    PAIRED_HUNT: {
+      INTRO_RANK: 28,
+      everySec: 2400, // ~40 min online between hunts — an event, not a chore
+      windowDurationSec: 60,
+      attacksEach: 2, // dives per predator — up to 4 back-to-back
+      graceSec: 15, // grading waits out dives queued at the window's edge
+      JACKPOT: { dust: 40, moduleRarity: 'rare' as string },
+    },
     SIEGE: {
       MIN_LEGACY_TIER: 2,
       INTRO_RANK: 25, // debuts where the rank ramp tops out (RANK_DIFF_TO)
@@ -700,7 +730,11 @@ export const BALANCE = {
     RACK: {
       baseSockets: 3, // sockets at rank 1
       ranksPerSocket: 4, // +1 socket every this many ranks
-      maxSockets: 8, // hard ceiling
+      maxSockets: 8, // the rank curve's ceiling (hit at rank 29)…
+      /** …and ONE more at this rank (playtest, 2026-07-06: the ladder above the
+       *  XP-retune knee needed real beats). A ninth socket is a rare, loud
+       *  power spike in the scarcest currency the module game has. */
+      bonusSocketRank: 30,
     },
     /**
      * Relative value weight per stat for the Auto-fill optimizer — what to prefer
@@ -916,6 +950,14 @@ export const BALANCE = {
     QUALITY_GATE_BASE: 4.5,
     QUALITY_GATE_PER_TIER: 0.1,
     QUALITY_GATE_MAX: 5.7,
+    /** RANK OVERSHOOT PAYS (rank ladder, 2026-07-06): every rank above this
+     *  floor adds flat shards to the prestige payout — the county remembers a
+     *  famous homesteader. Wires the tend engine into push-vs-reset: deep
+     *  ranks are worth currency on EVERY run, and Renown (which accelerates
+     *  XP) compounds across runs. Flat per-rank (not scaled by overshoot
+     *  exponents) so it's a steady drip, never the main course. */
+    RENOWN_RANK_FLOOR: 20,
+    SHARDS_PER_RANK_ABOVE: 2,
     /** Flock-size target at tier 0; each tier multiplies it by SIZE_GROWTH.
      *  A real grind that forces deep coop upgrades, not a formality
      *  (≈100, 150, 225, 337, …). */

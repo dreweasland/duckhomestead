@@ -168,6 +168,8 @@ export function deserialize(raw: string, now: number): GameState {
       hardwareCloth: parsed.hardwareCloth ?? 0,
       hardwareClothIntegrity: parsed.hardwareClothIntegrity ?? 1,
       predatorsSeen: parsed.predatorsSeen ?? [],
+      // THE PAIRED HUNT clock persists (else every reload resets the ~40min timer).
+      pairedHunt: parsed.pairedHunt ?? undefined,
       // Phase 4e prestige meta — persists across resets; pre-4e saves load at
       // tier 0 with no currency/boosts/hall.
       legacyTier: parsed.legacyTier ?? 0,
