@@ -121,8 +121,12 @@ export const GUIDE_DEFS: GuideDef[] = [
     title: 'The coops are full',
     icon: DuckIcon,
     body: 'Every housing slot is taken — a bigger flock needs more room. Upgrade or build another Coop to raise capacity, or open Flock and release your weakest ducks; selection is the whole game, so a thoughtful cull can matter as much as a new coop.',
-    when: (state) =>
-      state.ducks.length > 0 && coopCapacity(state) > 0 && state.ducks.length >= coopCapacity(state),
+    when: (state) => {
+      // Home ducks only — wintering ducks occupy Winterstead housing, exactly
+      // as the sim's hatch gate counts (breeding.ts homeCount).
+      const home = state.ducks.filter((d) => d.site !== 'winter').length;
+      return home > 0 && coopCapacity(state) > 0 && home >= coopCapacity(state);
+    },
     cta: { label: 'Open Flock', open: 'flock' },
   },
 

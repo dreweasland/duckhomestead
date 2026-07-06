@@ -749,8 +749,13 @@ function FlockPanelInner({
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-black text-[#ffe9a8]">Flock</h2>
           <div className="flex items-center gap-3">
-            <span className="rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#c9b88f]">
-              {state.ducks.length}/{cap} housed
+            <span
+              className="rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#c9b88f]"
+              title="Wintering ducks live in Winterstead housing — they don't occupy home coops (the sim's hatch gate counts the same way)."
+            >
+              {state.ducks.filter((d) => d.site !== 'winter').length}/{cap} home
+              {state.ducks.some((d) => d.site === 'winter') &&
+                ` · ${state.ducks.filter((d) => d.site === 'winter').length}/${winterCap} winter`}
             </span>
             <button
               onClick={onClose}
