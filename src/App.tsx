@@ -65,6 +65,10 @@ export default function App() {
   }, []);
 
   const { engine, version } = useGame(onDing);
+  // Dev-build console access to the live engine (repairs/inspection) — the
+  // debounced autosave persists edits made THROUGH the engine, whereas raw
+  // localStorage writes race it and get clobbered.
+  if (import.meta.env.DEV) (window as unknown as { __engine: unknown }).__engine = engine;
   // version is read so the component re-renders on each engine notify.
   void version;
 
