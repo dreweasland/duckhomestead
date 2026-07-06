@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BALANCE } from '../src/config/balance';
 import { serialize, deserialize } from '../src/game/save';
-import { type Duck, type Module } from '../src/game/state';
+import { initialState, type Duck, type Module } from '../src/game/state';
 import { fullSetup } from './helpers';
 
 const N = BALANCE.NUTRITION;
@@ -255,4 +255,15 @@ describe('loot save round-trip', () => {
     expect(r.rack.map((m) => m.id).sort()).toEqual(['a', 'b']);
     expect(r.stations.every((st) => (st.modules ?? []).length === 0)).toBe(true);
   });
+});
+
+it('legacyHall round-trips the PRIME DUCK mark (the dropped-field regression)', () => {
+  const s = initialState(0);
+  s.legacyHall = [
+    { tier: 3, meanQuality: 5.2, bestQuality: 6, flockSize: 1088, primeDuck: true, colors: ['black'], timestamp: 1 },
+    { tier: 2, meanQuality: 4.1, bestQuality: 6, flockSize: 200, colors: ['blue'], timestamp: 0 },
+  ];
+  const r = deserialize(serialize(s), 0);
+  expect(r.legacyHall[0].primeDuck).toBe(true);
+  expect(r.legacyHall[1].primeDuck).toBeUndefined();
 });

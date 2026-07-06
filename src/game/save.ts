@@ -171,6 +171,12 @@ export function deserialize(raw: string, now: number): GameState {
         meanQuality: typeof c.meanQuality === 'number' ? c.meanQuality : 0,
         bestQuality: typeof c.bestQuality === 'number' ? c.bestQuality : 0,
         flockSize: c.flockSize ?? 0,
+        // THE PRIME DUCK mark — this explicit field list DROPPED it for a day
+        // (2026-07-06 playtest: 'my prime gene badge disappeared'): the flag
+        // survived in memory, then one reload lost it and the next autosave
+        // wrote the hall without it. Lesson (again): when a persistent shape
+        // gains a field, grep for explicit-list deserializers over that shape.
+        primeDuck: c.primeDuck || undefined,
         colors: c.colors ?? [],
         timestamp: c.timestamp ?? 0,
       })),
