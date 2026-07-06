@@ -108,7 +108,7 @@ export function HUD({ state }: { state: GameState }) {
               the bar itself — playtest: give the promotion its real estate). */}
           <span className="font-bold text-[#b59a5a]">{rankTitle(state.rank)}</span>
         </div>
-        <div className="relative h-4 overflow-hidden rounded-full bg-[#1a1410]">
+        <div className="relative h-5 overflow-hidden rounded-full bg-[#1a1410]">
           <div
             className="h-full rounded-full bg-gradient-to-r from-[#e2b94f] to-[#8fe388] transition-[width] duration-150"
             style={{ width: `${prog * 100}%` }}
@@ -116,7 +116,7 @@ export function HUD({ state }: { state: GameState }) {
           {/* A dark chip under the text — readable over the bright fill AND
               the empty track, no shadow tricks. */}
           <span className="absolute inset-0 grid place-items-center">
-            <span className="rounded-full bg-[#1a1410]/75 px-2 py-[1px] text-[9px] font-bold tabular-nums leading-none text-[#ffe9a8]">
+            <span className="rounded-full bg-[#1a1410]/75 px-2 py-[2px] text-[11px] font-bold tabular-nums leading-none text-[#ffe9a8]">
               {Math.floor(state.xp)} / {need} XP
             </span>
           </span>

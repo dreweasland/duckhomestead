@@ -4,7 +4,7 @@ import type { GameEngine } from '../game/engine';
 import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotMatches, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
 import { clutchCost } from '../game/breeding';
 import { targetForTier } from '../game/prestige';
-import { COLORS, coopCapacity, flockRatio, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState } from '../game/state';
+import { COLORS, coopCapacity, flockRatio, watererSupport, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState } from '../game/state';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, DuckIcon, HealIcon, PencilIcon, ShieldIcon, SnowflakeIcon, WoundIcon } from './icons';
@@ -749,14 +749,36 @@ function FlockPanelInner({
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-black text-[#ffe9a8]">Flock</h2>
           <div className="flex items-center gap-3">
-            <span
-              className="rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#c9b88f]"
-              title="Wintering ducks live in Winterstead housing — they don't occupy home coops (the sim's hatch gate counts the same way)."
-            >
-              {state.ducks.filter((d) => d.site !== 'winter').length}/{cap} home
-              {state.ducks.some((d) => d.site === 'winter') &&
-                ` · ${state.ducks.filter((d) => d.site === 'winter').length}/${winterCap} winter`}
-            </span>
+            {(() => {
+              const home = state.ducks.filter((d) => d.site !== 'winter').length;
+              const wintering = state.ducks.length - home;
+              const watered = watererSupport(state);
+              const overHome = home > cap;
+              return (
+                <span
+                  className="rounded bg-[#1f1812] px-2 py-1 text-xs font-bold text-[#c9b88f]"
+                  title={
+                    (overHome
+                      ? 'Home is OVER housing (recall from Winterstead is always allowed) — hatching pauses until space frees. '
+                      : 'Wintering ducks live in Winterstead housing — they don’t occupy home coops. ') +
+                    (wintering > 0
+                      ? `Winter shows assigned/HOUSING (coops × 4); heated waterers separately support ${watered} — unwatered winter hens lay throttled, they don’t block assignment.`
+                      : '')
+                  }
+                >
+                  <span className={overHome ? 'text-[#e8c45a]' : undefined}>
+                    {home}/{cap} home
+                  </span>
+                  {wintering > 0 && (
+                    <>
+                      {' '}
+                      · {wintering}/{winterCap} winter
+                      {watered < wintering && <span className="text-[#e8c45a]"> ({watered} watered)</span>}
+                    </>
+                  )}
+                </span>
+              );
+            })()}
             <button
               onClick={onClose}
               className="rounded p-1.5 text-[#9a8a6a] hover:bg-[#1f1812] hover:text-[#f5ecd8]"
