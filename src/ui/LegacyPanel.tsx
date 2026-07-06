@@ -10,6 +10,7 @@ import {
   championGoal,
   currencyAtSize,
   prestigeCurrency,
+  rankRenownShards,
   targetForTier,
   type BoostId,
 } from '../game/prestige';
@@ -241,8 +242,11 @@ export function LegacyPanel({
         </button>
         {ready && (
           <div className="mb-1 text-center text-[10px] text-[#8fae6a]">
-            Push or reset? Now <span className="font-bold tabular-nums">+{grant}</span> · at{' '}
-            <span className="tabular-nums">{pushSize}</span> ducks ≈{' '}
+            Push or reset? Now <span className="font-bold tabular-nums">+{grant}</span>
+            {rankRenownShards(state) > 0 && (
+              <span className="text-[#b59a5a]"> (incl. +{rankRenownShards(state)} renown — rank {state.rank})</span>
+            )}{' '}
+            · at <span className="tabular-nums">{pushSize}</span> ducks ≈{' '}
             <span className="font-bold tabular-nums">+{pushGrant}</span>. Overshooting the size
             target and quality gate pays superlinearly — a deeper run banks more.
           </div>

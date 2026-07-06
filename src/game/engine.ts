@@ -96,6 +96,8 @@ export interface TendEvent {
   xp: number;
   /** The station's tend burst, for a resource-amount pop alongside the XP one. */
   burst?: Partial<Record<Resource, number>>;
+  /** MASTER TEND: this tend critted (burst doubled) — the pop goes gold. */
+  crit?: boolean;
 }
 
 /** Emitted when a station's buffer is collected/hauled into storage — the
@@ -570,7 +572,7 @@ export class GameEngine {
   tend(stationId: string): ActionResult<unknown> {
     const r = tend(this.state, stationId);
     if (r.ok) {
-      this.emitTend({ stationId, xp: r.value.xp.xpGained, burst: r.value.burst });
+      this.emitTend({ stationId, xp: r.value.xp.xpGained, burst: r.value.burst, crit: r.value.crit });
       this.fireXp(r.value.xp);
       // Active-only loot drop — the chance gate + roll live in loot.ts. Passive
       // and offline production never call this. A keeper fires the loot banner; a
@@ -600,7 +602,7 @@ export class GameEngine {
       if (!r.ok) continue;
       tended++;
       xpGained += r.value.xp.xpGained;
-      this.emitTend({ stationId: s.id, xp: r.value.xp.xpGained, burst: r.value.burst });
+      this.emitTend({ stationId: s.id, xp: r.value.xp.xpGained, burst: r.value.burst, crit: r.value.crit });
       this.fireXp(r.value.xp);
       const drop = tryTendDrop(this.state);
       if (drop?.outcome === 'keep') this.emitLoot({ module: drop.module, source: 'drop' });

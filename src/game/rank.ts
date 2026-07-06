@@ -23,11 +23,38 @@ export interface Milestone {
   title: string;
   description: string;
   /** Picks the banner icon. Defaults to the Auto-Haul cart. */
-  kind?: 'autohaul' | 'zone' | 'tend' | 'predator' | 'breeding';
+  kind?: 'autohaul' | 'zone' | 'tend' | 'predator' | 'breeding' | 'title' | 'module';
 }
 
 /** Milestones earned at given ranks. */
 export const MILESTONES: Milestone[] = [
+  {
+    rank: BALANCE.PREDATORS.PAIRED_HUNT.INTRO_RANK,
+    title: 'The Paired Hunt',
+    description:
+      'The owl and the raccoon have started hunting TOGETHER — rare coordinated windows where their dives come back-to-back. Foil every dive of a hunt and the Grange pays a guaranteed bounty.',
+    kind: 'predator',
+  },
+  {
+    rank: BALANCE.LOOT.RACK.bonusSocketRank,
+    title: 'A Ninth Socket',
+    description:
+      'The homestead rack gains one more socket — room for one more module. Sockets are the scarcest thing in the rig; spend it well.',
+    kind: 'module',
+  },
+  {
+    rank: BALANCE.TEND_CRIT.RANK,
+    title: 'Master Tend',
+    description:
+      'Your hands know the work now: every tend has a chance to CRIT, doubling its burst. The pop goes gold when it happens.',
+    kind: 'tend',
+  },
+  ...BALANCE.RANK_TITLES.filter((t) => t.rank > 1).map((t) => ({
+    rank: t.rank,
+    title: `A promotion: ${t.title.toUpperCase()}`,
+    description: `The county now knows you as a ${t.title}. It changes nothing and it means everything.`,
+    kind: 'title' as const,
+  })),
   {
     rank: BALANCE.MILESTONE_AUTOHAUL_RANK,
     title: 'Auto-Haul Cart',
@@ -45,4 +72,12 @@ export const MILESTONES: Milestone[] = [
 
 export function milestoneAtRank(rank: number): Milestone | undefined {
   return MILESTONES.find((m) => m.rank === rank);
+}
+
+/** The highest rank title earned at `rank` (there is always one — rank 1 is
+ *  'Homesteader'). */
+export function rankTitle(rank: number): string {
+  let best = BALANCE.RANK_TITLES[0].title;
+  for (const t of BALANCE.RANK_TITLES) if (rank >= t.rank) best = t.title;
+  return best;
 }

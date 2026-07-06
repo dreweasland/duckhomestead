@@ -296,7 +296,8 @@ export function phenotype(g: Genotype): Color {
 /** How many module-rack sockets the homestead has (grows with rank, capped). */
 export function rackSockets(state: GameState): number {
   const R = BALANCE.LOOT.RACK;
-  return Math.min(R.maxSockets, R.baseSockets + Math.floor((state.rank - 1) / R.ranksPerSocket));
+  const base = Math.min(R.maxSockets, R.baseSockets + Math.floor((state.rank - 1) / R.ranksPerSocket));
+  return base + (state.rank >= R.bonusSocketRank ? 1 : 0);
 }
 
 /** Total housing across all coops (capacity scales with coop level). */
@@ -535,6 +536,9 @@ export interface GameState {
    *  def.jackpot.streakForLegendary it upgrades the grant to the streak rarity.
    *  Resets to 0 on prestige for free (a fresh initialState omits it). */
   predatorFlawlessStreak?: number;
+  /** THE PAIRED HUNT (rank ladder): the coordinated-window clock. Run-scoped;
+   *  ticks online only (an active set-piece). */
+  pairedHunt?: { timeToNext: number; active: boolean; remaining: number; harmed: boolean };
 
   // ── Phase 4e: prestige (META — the ONLY state that survives a reset) ──
   /** Times prestiged. Drives the current Legacy Score threshold. */
@@ -655,7 +659,10 @@ export type PredatorEvent =
   // Phase 6c: a jackpot-eligible siege window closed flawless (≥1 committed
   // dive, zero landed) — grantModule already ran sim-side; the engine drain
   // surfaces this as the loot banner (the module is already in state.inventory).
-  | { kind: 'siegeFoiled'; predatorId: string; dust: number; moduleId: string };
+  | { kind: 'siegeFoiled'; predatorId: string; dust: number; moduleId: string }
+  // THE PAIRED HUNT (rank ladder): the coordinated owl+raccoon window.
+  | { kind: 'huntBegins' }
+  | { kind: 'huntFoiled'; dust: number; moduleId: string };
 
 // ── Phase 8: THE GRANGE 2.0 (contracts become JOBS) ───────────────────
 /** The three contract shapes — a discriminated union so a new type later is a

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { isMuted, setMuted } from '../audio/sfx';
 import type { GameState, Resource } from '../game/state';
-import { rankProgress, xpForLevel } from '../game/rank';
+import { rankProgress, rankTitle, xpForLevel } from '../game/rank';
 import { fmt } from './format';
 import { DuckIcon, MuteIcon, RESOURCE_ICON, SpeakerIcon } from './icons';
 import { RankPanel } from './RankPanel';
@@ -100,6 +100,7 @@ export function HUD({ state }: { state: GameState }) {
         <div className="mb-1 flex items-center justify-between text-xs">
           <span className="inline-flex items-center gap-1.5 font-bold text-[#ffe9a8]">
             Homestead Rank {state.rank}
+            <span className="ml-1.5 font-normal text-[#b59a5a]">· {rankTitle(state.rank)}</span>
             <span className="grid h-4 w-4 place-items-center rounded-full bg-[#5a4a32] text-[10px] font-black text-[#ffe9a8]">
               ?
             </span>

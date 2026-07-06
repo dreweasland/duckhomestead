@@ -221,6 +221,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   // Brutality dial: a rare landed attack may skip the wound and take the duck
   // outright. Default OFF — every death otherwise passes through a wound.
   if (P.ALLOW_INSTANT_SNATCH && rng() < P.INSTANT_SNATCH_CHANCE && permitPermanentLoss(opts)) {
+    if (state.pairedHunt?.active) state.pairedHunt.harmed = true;
     emit(state, { kind: 'snatched', predatorId: def.id, duckId: target.id, duckName: target.name });
     removeDuck(state, target.id);
     drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.loss); // a taken duck rattles the flock
@@ -234,6 +235,9 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
     emit(state, { kind: 'shrugged', predatorId: def.id, duckId: target.id, duckName: target.name });
     return;
   }
+
+  // THE PAIRED HUNT: actual harm (not a shrug) voids the bounty.
+  if (state.pairedHunt?.active) state.pairedHunt.harmed = true;
 
   target.wounded = true;
   target.woundSource = 'predator';
@@ -315,6 +319,47 @@ function pickSpot(rng: () => number, exclude = -1): number {
  *  STRIKE_WINDUP_SEC to scare the owl off, and the strike may need up to 3 clicks
  *  (each non-final one jukes it to another spot). The roll happens only when a
  *  wind-up expires un-foiled (resolveStrike). */
+/**
+ * THE PAIRED HUNT (rank ladder, 2026-07-06): on its clock, force-open the owl
+ * AND raccoon windows together — the one-dive-at-a-time rule queues their
+ * strikes back-to-back. Online-only (nothing here runs during catch-up);
+ * flawless (no landed harm while the hunt runs, tracked via landHit) pays a
+ * guaranteed bounty. Requires the rank plus BOTH base predators established.
+ */
+function runPairedHunt(state: GameState, dt: number, rng: () => number): void {
+  const PH = P.PAIRED_HUNT;
+  if (state.rank < PH.INTRO_RANK) return;
+  const seen = state.predatorsSeen ?? [];
+  if (!seen.includes('owl') || !seen.includes('raccoon')) return;
+  const h = (state.pairedHunt ??= { timeToNext: PH.everySec, active: false, remaining: 0, harmed: false });
+  if (!h.active) {
+    h.timeToNext -= dt;
+    if (h.timeToNext > 0) return;
+    for (const id of ['owl', 'raccoon'] as const) {
+      const ps = state.predators[id];
+      if (!ps) return; // schedules not initialised — try again next tick
+      ps.windowRemaining = PH.windowDurationSec;
+      ps.windowElapsed = 0;
+      ps.attacksFired = 0;
+      ps.windowAttacks = PH.attacksEach;
+    }
+    h.active = true;
+    h.remaining = PH.windowDurationSec + PH.graceSec;
+    h.harmed = false;
+    emit(state, { kind: 'huntBegins' });
+    return;
+  }
+  h.remaining -= dt;
+  if (h.remaining > 0) return;
+  h.active = false;
+  h.timeToNext = PH.everySec;
+  if (!h.harmed) {
+    state.dust += PH.JACKPOT.dust;
+    const module = grantModule(state, PH.JACKPOT.moduleRarity as Rarity, rng);
+    emit(state, { kind: 'huntFoiled', dust: PH.JACKPOT.dust, moduleId: module.id });
+  }
+}
+
 /** Any predator's dive currently in flight (the UI can only present one). */
 export function anyStrikeInFlight(state: GameState): boolean {
   for (const ps of Object.values(state.predators)) if (ps?.strike) return true;
@@ -644,6 +689,7 @@ export function runPredators(state: GameState, dt: number, opts: PredatorOpts): 
       for (const def of PREDATOR_DEFS) state.predators[def.id] = freshSchedule(def);
       emit(state, { kind: 'introduced', predatorId: PREDATOR_DEFS[0].id });
     }
+    if (opts.mode === 'online') runPairedHunt(state, dt, rng);
     for (const def of PREDATOR_DEFS) {
       if (state.rank < def.introRank) continue; // not yet at this predator's rank
       // Siege predators (Phase 6c) additionally never schedule/resolve below

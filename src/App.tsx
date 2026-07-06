@@ -120,7 +120,22 @@ export default function App() {
         if (e.kind === 'scared') return; // the scare's own whoosh plays at the click
         if (e.kind === 'winding' || e.kind === 'feint') playDive(); // a dive (re)commits — scare it!
         else if (e.kind === 'incoming' || e.kind === 'open') playThreat();
-        else if (e.kind === 'repelled' || e.kind === 'shrugged') {
+        else if (e.kind === 'huntBegins') {
+          playThreat();
+          setDuckNews({ id: Date.now(), text: 'A PAIRED HUNT — the owl and raccoon strike together. Scare every dive for the bounty!', grave: false });
+        } else if (e.kind === 'huntFoiled' || e.kind === 'siegeFoiled') {
+          // Victories — the triumphant whoosh, never the attack screech
+          // (siegeFoiled previously fell into the harm branch and SCREECHED).
+          playScare();
+          setDuckNews({
+            id: Date.now(),
+            text:
+              e.kind === 'huntFoiled'
+                ? `Paired hunt FOILED — the Grange sends a bounty (+${e.dust} dust, a module).`
+                : `Siege FOILED — flawless. The bounty is yours (+${e.dust} dust, a module).`,
+            grave: false,
+          });
+        } else if (e.kind === 'repelled' || e.kind === 'shrugged') {
           // Good outcomes get the scare's own triumphant whoosh, not the screech —
           // and a named Hardy duck's shrug is a story worth a toast.
           playScare();

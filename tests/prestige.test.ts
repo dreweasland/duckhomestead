@@ -13,6 +13,7 @@ import {
 import {
   championGoal,
   meanQuality,
+  rankRenownShards,
   sizeTarget,
   qualityGate,
   canPrestige,
@@ -523,4 +524,10 @@ describe('boosts feed the production math as global scalars (and nowhere else)',
       expect(boosted.nutrition!.satisfaction[a]).toBeCloseTo(plain.nutrition!.satisfaction[a], 5);
     }
   });
+});
+
+it('RANK OVERSHOOT PAYS: ranks above the floor add flat shards to the payout', () => {
+  const P2 = BALANCE.PRESTIGE;
+  expect(rankRenownShards({ rank: P2.RENOWN_RANK_FLOOR } as GameState)).toBe(0);
+  expect(rankRenownShards({ rank: P2.RENOWN_RANK_FLOOR + 8 } as GameState)).toBe(8 * P2.SHARDS_PER_RANK_ABOVE);
 });
