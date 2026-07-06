@@ -1,19 +1,31 @@
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { type Contract, type GameState } from '../game/state';
-import { ColorSwatch, GENE_META } from './FlockPanel';
+import { eligibleForOrder } from '../game/contracts';
+import { type Contract, type GameState, type Ingredient } from '../game/state';
+import { GENE_META } from './FlockPanel';
 import { useEscapeKey } from './useEscapeKey';
-import { CheckIcon, CloseIcon, DustIcon, EggIcon, GrangeIcon, LegacyIcon, OwlIcon } from './icons';
+import { CheckIcon, CloseIcon, DustIcon, GrangeIcon, HandoverIcon, LegacyIcon, OwlIcon, RESOURCE_ICON } from './icons';
 
 const C = BALANCE.CONTRACTS;
+
+const ING_LABEL: Record<Ingredient, string> = {
+  corn: 'Corn',
+  peas: 'Peas',
+  mealworms: 'Mealworms',
+  brewersYeast: "Brewer's Yeast",
+  oysterShell: 'Oyster Shell',
+  sunflowerSeeds: 'Sunflower Seeds',
+  fodderSprouts: 'Fodder Sprouts',
+};
 
 const mmss = (secs: number): string => {
   const s = Math.max(0, Math.ceil(secs));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-/** A hatch spec's gene pattern: specified slots read as gene pips, "don't care"
- *  slots read as dim placeholders — never reveals more than the spec asks for. */
+/** An order's spec: constrained slots read as gene pips (always the odd gene
+ *  out against the Standard), "don't care" slots read as dim placeholders —
+ *  never reveals more than the spec asks for. */
 function SpecPips({ pattern, size = 13 }: { pattern: (string | null)[]; size?: number }) {
   return (
     <span className="inline-flex gap-0.5 align-middle">
@@ -28,7 +40,7 @@ function SpecPips({ pattern, size = 13 }: { pattern: (string | null)[]; size?: n
             background: g ? GENE_META[g as 'L' | 'V' | 'H'].color : '#2a2018',
             color: g ? '#171009' : '#5a4d3a',
           }}
-          title={g ? `Slot ${i + 1}: ${GENE_META[g as 'L' | 'V' | 'H'].label}` : `Slot ${i + 1}: any`}
+          title={g ? `Slot ${i + 1}: ${GENE_META[g as 'L' | 'V' | 'H'].label} (odd blood)` : `Slot ${i + 1}: any`}
         >
           {g ?? '·'}
         </span>
@@ -39,11 +51,12 @@ function SpecPips({ pattern, size = 13 }: { pattern: (string | null)[]; size?: n
 
 /** One contract's goal, rendered by type — used for both offers and the active card. */
 function ContractGoal({ c }: { c: Contract }) {
-  if (c.type === 'delivery') {
+  if (c.type === 'provision') {
+    const Icon = RESOURCE_ICON[c.ingredient];
     return (
       <span className="inline-flex items-center gap-1">
-        <EggIcon size={12} /> Deliver {Math.round(c.quota).toLocaleString()} eggs
-        <span className="text-[#7a6a4a]">· {C.DELIVERY.LIMIT_MIN}m limit</span>
+        <Icon size={12} /> Provide {c.amount.toLocaleString()} {ING_LABEL[c.ingredient]}
+        <span className="text-[#7a6a4a]">· {C.PROVISION.LIMIT_MIN}m limit</span>
       </span>
     );
   }
@@ -56,9 +69,8 @@ function ContractGoal({ c }: { c: Contract }) {
   }
   return (
     <span className="inline-flex items-center gap-1.5">
-      Hatch to spec
-      {c.color && <ColorSwatch color={c.color} size={10} />}
-      <SpecPips pattern={c.genePattern} />
+      WANTED: odd blood
+      <SpecPips pattern={c.constraints} />
     </span>
   );
 }
@@ -73,25 +85,39 @@ function RewardTag({ c }: { c: Contract }) {
   );
 }
 
-/** Progress for the active contract: a bar for delivery/defense, a waiting note
- *  for hatch (a binary "matched yet?" goal has no meaningful fractional bar). */
-function ActiveProgress({ c }: { c: Contract }) {
-  if (c.type === 'delivery') {
-    const pct = Math.min(1, c.delivered / Math.max(1, c.quota));
+/** Progress + the completing action for the active contract: a stock bar +
+ *  Fulfil for provision, a live eligible-count + Deliver for an order, a scare
+ *  bar for defense (no action — the sim itself completes it). */
+function ActiveJob({ c, state, engine }: { c: Contract; state: GameState; engine: GameEngine }) {
+  if (c.type === 'provision') {
+    const stock = state.resources[c.ingredient];
+    const pct = Math.min(1, stock / Math.max(1, c.amount));
+    const canFulfil = !c.completed && stock >= c.amount;
     return (
       <div>
         <div className="mb-0.5 flex items-center justify-between text-[10px] text-[#c9b88f]">
           <span className="tabular-nums">
-            {Math.round(c.delivered).toLocaleString()} / {Math.round(c.quota).toLocaleString()} eggs
+            {Math.floor(stock).toLocaleString()} / {c.amount.toLocaleString()} {ING_LABEL[c.ingredient]} on hand
           </span>
           <span className="tabular-nums text-[#e8c45a]">{mmss(c.limitRemaining)} left</span>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-[#0f0b07]">
+        <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-[#0f0b07]">
           <div
             className="h-full rounded-full bg-[#8fe388] transition-[width]"
             style={{ width: `${Math.round(pct * 100)}%` }}
           />
         </div>
+        <button
+          onClick={() => engine.fulfilProvision()}
+          disabled={!canFulfil}
+          className={`flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+            canFulfil
+              ? 'bg-[#3a2e22] text-[#ffe9a8] hover:bg-[#4a3a2a]'
+              : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+          }`}
+        >
+          <HandoverIcon size={11} /> Fulfil
+        </button>
       </div>
     );
   }
@@ -111,7 +137,27 @@ function ActiveProgress({ c }: { c: Contract }) {
       </div>
     );
   }
-  return <div className="text-[10px] text-[#c9b88f]">Awaiting a matching hatch — no time limit.</div>;
+  const eligible = eligibleForOrder(state, c).length;
+  const canDeliver = !c.completed && eligible > 0;
+  return (
+    <div>
+      <div className="mb-2 text-[10px] tabular-nums text-[#c9b88f]">
+        {eligible} eligible in the flock — no time limit
+      </div>
+      <button
+        onClick={() => engine.deliverOrderDuck()}
+        disabled={!canDeliver}
+        className={`flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+          canDeliver
+            ? 'bg-[#3a2e22] text-[#ffe9a8] hover:bg-[#4a3a2a]'
+            : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+        }`}
+        title="Hands over your lowest-target-quality eligible duck — your best stock is kept"
+      >
+        <HandoverIcon size={11} /> Deliver
+      </button>
+    </div>
+  );
 }
 
 export function GrangePanel({
@@ -158,22 +204,23 @@ export function GrangePanel({
         </div>
 
         <p className="mb-3 text-[10px] text-[#9a8a6a]">
-          One contract at a time. Rewards are dust + a trickle of legacy shards (a top-tier offer
-          also grants a module) — never eggs, resources, or XP. Everything here runs only while
-          you're online.
+          The county's notice board: one job at a time, and every job costs a real detour — a
+          dedicated breeding pair, a purchased buffer, or a defended window. Rewards are dust + a
+          trickle of legacy shards (a top-tier job also grants a module) — never eggs, resources,
+          or XP. Everything here runs only while you're online.
         </p>
 
         {/* Active contract */}
         {cs.active ? (
           <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5">
             <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
-              <span>Active contract</span>
+              <span>Active job</span>
               <RewardTag c={cs.active} />
             </div>
             <div className="mb-2 text-xs font-bold text-[#f5ecd8]">
               <ContractGoal c={cs.active} />
             </div>
-            <ActiveProgress c={cs.active} />
+            <ActiveJob c={cs.active} state={state} engine={engine} />
             <div className="mt-2 flex gap-2">
               <button
                 onClick={() => engine.claimContract()}
@@ -196,7 +243,7 @@ export function GrangePanel({
           </div>
         ) : (
           <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2.5 text-center text-[11px] text-[#7a6a4a]">
-            No active contract — accept an offer below.
+            No active job — accept an offer below.
           </div>
         )}
 

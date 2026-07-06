@@ -41,6 +41,8 @@ import {
   acceptContract,
   abandonContract,
   claimContract,
+  deliverOrderDuck,
+  fulfilProvision,
   onPredatorEvent as onContractPredatorEvent,
   rerollOffers,
   type ClaimResult,
@@ -893,7 +895,7 @@ export class GameEngine {
     return lvl;
   }
 
-  // ── The Grange (Phase 6b: contracts board) ─────────────────────────
+  // ── The Grange (Phase 6b/8: contracts board) ────────────────────────
   /** Accept an offer as the one active contract (fails if one is already running). */
   acceptContract(contractId: string): ActionResult<unknown> {
     const r = acceptContract(this.state, contractId);
@@ -916,6 +918,20 @@ export class GameEngine {
   claimContract(): ActionResult<unknown> {
     const r = claimContract(this.state);
     if (r.ok) this.emitContractClaim(r.value);
+    this.notify();
+    return r;
+  }
+  /** Deliver a duck against the active BREEDING ORDER — hands over (removes)
+   *  the lowest-target-quality eligible duck by default; pass `duckId` to pick
+   *  explicitly (required if every eligible duck is a Prime carrier). */
+  deliverOrderDuck(duckId?: string): ActionResult<unknown> {
+    const r = deliverOrderDuck(this.state, duckId);
+    this.notify();
+    return r;
+  }
+  /** Fulfil the active PROVISION ORDER — draws the full amount from central storage. */
+  fulfilProvision(): ActionResult<unknown> {
+    const r = fulfilProvision(this.state);
     this.notify();
     return r;
   }

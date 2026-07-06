@@ -304,6 +304,17 @@ export const CloseIcon = (p: PixProps) => (
   />
 );
 
+/** Handover — a crate's edge with an arrow sending something out of it. Used
+ *  on the Grange's Deliver/Fulfil buttons (Phase 8): the job completes by
+ *  handing something OVER, never by a passive receipt. */
+export const HandoverIcon = (p: PixProps) => (
+  <Pix
+    {...p}
+    palette={{ x: 'currentColor' }}
+    rows={['.xx....', '.xx..x.', '.xx.xx.', '.xxxxxx', '.xx.xx.', '.xx..x.']}
+  />
+);
+
 /** A drawn question mark — the help affordance. */
 export const HelpIcon = (p: PixProps) => (
   <Pix
