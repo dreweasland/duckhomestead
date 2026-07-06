@@ -100,20 +100,25 @@ export function HUD({ state }: { state: GameState }) {
         <div className="mb-1 flex items-center justify-between text-xs">
           <span className="inline-flex items-center gap-1.5 font-bold text-[#ffe9a8]">
             Homestead Rank {state.rank}
-            <span className="ml-1.5 font-normal text-[#b59a5a]">· {rankTitle(state.rank)}</span>
             <span className="grid h-4 w-4 place-items-center rounded-full bg-[#5a4a32] text-[10px] font-black text-[#ffe9a8]">
               ?
             </span>
           </span>
-          <span className="tabular-nums text-[#c9b88f]">
-            {Math.floor(state.xp)} / {need} XP
-          </span>
+          {/* The TITLE gets the row's right side (the XP readout moved onto
+              the bar itself — playtest: give the promotion its real estate). */}
+          <span className="font-bold text-[#b59a5a]">{rankTitle(state.rank)}</span>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-[#1a1410]">
+        <div className="relative h-4 overflow-hidden rounded-full bg-[#1a1410]">
           <div
             className="h-full rounded-full bg-gradient-to-r from-[#e2b94f] to-[#8fe388] transition-[width] duration-150"
             style={{ width: `${prog * 100}%` }}
           />
+          <span
+            className="absolute inset-0 grid place-items-center text-[9px] font-bold tabular-nums leading-none text-[#f5ecd8]"
+            style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+          >
+            {Math.floor(state.xp)} / {need} XP
+          </span>
         </div>
         <div className="mt-1 flex items-center justify-between text-[10px]">
           <span className="text-[#9a8a6a]">XP comes only from tending.</span>
