@@ -41,7 +41,7 @@ import {
   acceptContract,
   abandonContract,
   claimContract,
-  deliverOrderDuck,
+  deliverOrder,
   fulfilProvision,
   onPredatorEvent as onContractPredatorEvent,
   rerollOffers,
@@ -921,11 +921,11 @@ export class GameEngine {
     this.notify();
     return r;
   }
-  /** Deliver a duck against the active BREEDING ORDER — hands over (removes)
-   *  the lowest-target-quality eligible duck by default; pass `duckId` to pick
-   *  explicitly (required if every eligible duck is a Prime carrier). */
-  deliverOrderDuck(duckId?: string): ActionResult<unknown> {
-    const r = deliverOrderDuck(this.state, duckId);
+  /** Deliver against the active BREEDING COMMISSION — every line at once;
+   *  auto-picks the worst qualifying fresh ducks per line (never Prime/
+   *  secured/wintering). */
+  deliverOrder(): ActionResult<unknown> {
+    const r = deliverOrder(this.state);
     this.notify();
     return r;
   }

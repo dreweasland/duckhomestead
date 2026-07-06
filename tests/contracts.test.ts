@@ -5,11 +5,11 @@ import {
   acceptContract,
   abandonContract,
   claimContract,
-  deliverOrderDuck,
-  eligibleForOrder,
+  deliverOrder,
+  duckQualifies,
+  eligibleForLine,
   fulfilProvision,
   generateOffer,
-  orderMatches,
   onPredatorEvent,
   rerollOffers,
   runContracts,
@@ -21,6 +21,7 @@ import { deserialize, serialize, runOfflineCatchUp } from '../src/game/save';
 import { tick } from '../src/game/tick';
 import { scareOff } from '../src/game/predators';
 import {
+  COLORS,
   initialContracts,
   initialState,
   type Contract,
@@ -112,52 +113,45 @@ describe('The Grange — tier gate', () => {
   });
 });
 
-describe('offer generation: BREEDING ORDER specs always cost a real detour', () => {
-  it('every order has ALL constrained slots contradicting targetForTier(tier), never demands P, and stays within SPEC_MAX_SLOTS', () => {
-    for (const tier of [C.UNLOCK_TIER, 2, 4]) {
-      const s = initialState(0);
-      s.legacyTier = tier;
-      const target = targetForTier(tier);
-      let sawOrder = false;
-      for (let i = 0; i < 400; i++) {
-        const o = generateOffer(s, Math.random);
-        if (o.type !== 'order') continue;
-        sawOrder = true;
-        const constrained = o.constraints.filter((g) => g != null);
-        expect(constrained.length).toBeGreaterThanOrEqual(2);
-        expect(constrained.length).toBeLessThanOrEqual(C.ORDER.SPEC_MAX_SLOTS);
-        o.constraints.forEach((g, slot) => {
-          if (g == null) return;
-          expect(['L', 'V', 'H']).toContain(g); // never D, never P
-          expect(g).not.toBe(target[slot]); // ALWAYS contradicts — never just "at least two"
-        });
-        expect(o.target).toEqual(target);
+describe('offer generation: BREEDING COMMISSIONS (color lines, fresh stock only)', () => {
+  it('lines stay within notch bounds, are distinct color+sex combos, and never demand quality above 6', () => {
+    const s = initialState(0);
+    s.legacyTier = C.UNLOCK_TIER;
+    let sawOrder = false;
+    for (let i = 0; i < 400; i++) {
+      const o = generateOffer(s, Math.random);
+      if (o.type !== 'order') continue;
+      sawOrder = true;
+      expect(o.lines.length).toBeGreaterThanOrEqual(1);
+      expect(o.lines.length).toBeLessThanOrEqual(3);
+      const combos = new Set(o.lines.map((l) => `${l.color}/${l.sex}`));
+      expect(combos.size).toBe(o.lines.length); // distinct
+      for (const l of o.lines) {
+        expect(COLORS).toContain(l.color);
+        expect(['hen', 'drake']).toContain(l.sex);
+        expect(l.count).toBeGreaterThanOrEqual(1);
+        expect(l.count).toBeLessThanOrEqual(2);
       }
-      expect(sawOrder).toBe(true);
+      expect(o.minQuality).toBeGreaterThanOrEqual(2);
+      expect(o.minQuality).toBeLessThanOrEqual(6);
+      expect(o.sinceDuckId).toBe(-1); // unaccepted offers show no eligibility
     }
+    expect(sawOrder).toBe(true);
   });
 
-  it('a genome that EXACTLY matches the tier target never satisfies an order — the spam is structurally dead', () => {
+  it('acceptance stamps the hatch watermark from nextDuckId', () => {
     const s = initialState(0);
     s.legacyTier = C.UNLOCK_TIER;
-    const target = targetForTier(C.UNLOCK_TIER);
-    for (let i = 0; i < 300; i++) {
+    s.nextDuckId = 500;
+    s.contracts.offers = [];
+    let order: Contract | null = null;
+    while (!order) {
       const o = generateOffer(s, Math.random);
-      if (o.type !== 'order') continue;
-      expect(orderMatches(o, target)).toBe(false);
+      if (o.type === 'order') order = o;
     }
-  });
-
-  it('higher notches raise both the constrained-slot count and the quality floor', () => {
-    const s = initialState(0);
-    s.legacyTier = C.UNLOCK_TIER;
-    for (let i = 0; i < 300; i++) {
-      const o = generateOffer(s, Math.random);
-      if (o.type !== 'order') continue;
-      const constrained = o.constraints.filter((g) => g != null).length;
-      expect(constrained).toBe(C.ORDER.SLOTS_BY_NOTCH[o.notch]);
-      expect(o.minTargetQuality).toBe(C.ORDER.QUALITY_FLOOR_BY_NOTCH[o.notch]);
-    }
+    s.contracts.offers = [order];
+    expect(acceptContract(s, order.id).ok).toBe(true);
+    expect((s.contracts.active as OrderContract).sinceDuckId).toBe(500);
   });
 });
 
@@ -303,124 +297,93 @@ describe('claim: rewards are dust/shards/module ONLY — never eggs/resources/XP
   });
 });
 
-describe('order: breed to spec, then hand the duck over', () => {
-  it('orderMatches accepts a duck satisfying every constraint and the quality floor', () => {
-    const c = orderContract({
-      constraints: ['V', null, null, null, null, null],
-      target: genome('LLLLLL'),
-      minTargetQuality: 2,
-    });
-    // 'L' at slots 1-5 (5 of them) covers the floor of 2; slot 0 is the odd V.
-    expect(orderMatches(c, genome('VLLLLL'))).toBe(true);
+describe('order: the BREEDING COMMISSION — fresh color stock, handed over', () => {
+  const commission = (over: Partial<OrderContract> = {}): OrderContract => ({
+    id: 'o1',
+    type: 'order',
+    notch: 0,
+    reward: { dust: 5, shards: 1 },
+    completed: false,
+    lines: [{ color: 'blue', sex: 'hen', count: 1 }],
+    minQuality: 2,
+    target: genome('LLLLLL'),
+    sinceDuckId: 0,
+    ...over,
+  });
+  const mk = (id: string, over: Partial<Duck> = {}): Duck => ({
+    id,
+    genotype: ['Bl', 'bl'], // blue
+    genome: genome('LLDDDD'), // quality 2 vs LLLLLL
+    genomeKnown: true,
+    sex: 'hen',
+    stage: 'adult',
+    ageTicks: 0,
+    ...over,
   });
 
-  it('orderMatches rejects a duck violating a constrained slot even if the rest is perfect', () => {
-    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    expect(orderMatches(c, genome('LLLLLL'))).toBe(false); // slot 0 is L, spec wants V
-  });
-
-  it('orderMatches rejects a duck below the unconstrained quality floor', () => {
-    const c = orderContract({
-      constraints: ['V', null, null, null, null, null],
-      target: genome('LLLLLL'),
-      minTargetQuality: 3,
-    });
-    expect(orderMatches(c, genome('VLLDDD'))).toBe(false); // only 2 of 5 unconstrained slots match
-    expect(orderMatches(c, genome('VLLLDD'))).toBe(true); // 3 of 5 match — floor met
-  });
-
-  it('a Prime gene satisfies a constrained slot exactly like the real wanted gene — the shared matcher', () => {
-    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    expect(orderMatches(c, genome('PLLLLL'))).toBe(true);
-  });
-
-  it('eligibleForOrder returns exactly the matching ducks in the flock', () => {
+  it('THE ANTI-SHELF RULE: ducks hatched before acceptance never qualify', () => {
+    const c = commission({ sinceDuckId: 100 });
     const s = initialState(0);
-    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    s.ducks = [duck('a', genome('VLLLLL')), duck('b', genome('LLLLLL'))];
-    expect(eligibleForOrder(s, c).map((d) => d.id)).toEqual(['a']);
+    s.ducks = [mk('d50'), mk('d99')]; // banked shelf birds
+    expect(eligibleForLine(s, c, c.lines[0])).toHaveLength(0);
+    s.ducks.push(mk('d100'), mk('d150')); // hatched under the commission
+    expect(eligibleForLine(s, c, c.lines[0])).toHaveLength(2);
   });
 
-  it('deliverOrderDuck removes the LOWEST-target-quality eligible duck by default, keeping the best', () => {
+  it('duckQualifies enforces color, sex, and the quality floor (Prime counts via the shared matcher)', () => {
+    const c = commission();
+    expect(duckQualifies(c, c.lines[0], mk('d1'))).toBe(true);
+    expect(duckQualifies(c, c.lines[0], mk('d2', { sex: 'drake' }))).toBe(false);
+    expect(duckQualifies(c, c.lines[0], mk('d3', { genotype: ['Bl', 'Bl'] }))).toBe(false); // black
+    expect(duckQualifies(c, c.lines[0], mk('d4', { genome: genome('LDDDDD') }))).toBe(false); // quality 1 < 2
+    expect(duckQualifies(c, c.lines[0], mk('d5', { genome: genome('PLDDDD') }))).toBe(true); // P wildcards the slot
+    const unaccepted = commission({ sinceDuckId: -1 });
+    expect(duckQualifies(unaccepted, unaccepted.lines[0], mk('d6'))).toBe(false);
+  });
+
+  it('deliverOrder takes the WORST qualifying ducks per line and keeps the best', () => {
     const s = initialState(0);
-    const target = genome('LLLLLL');
-    const c = orderContract({ constraints: ['V', null, null, null, null, null], target });
-    s.contracts.active = c;
+    s.contracts.active = commission({ lines: [{ color: 'blue', sex: 'hen', count: 2 }] });
     s.ducks = [
-      duck('worse', ['V', 'D', 'D', 'D', 'D', 'D']), // 0 of 5 unconstrained slots match target
-      duck('better', ['V', 'L', 'L', 'L', 'L', 'D']), // 4 of 5 match
+      mk('d1', { genome: genome('LLLLLD') }), // quality 5 — the keeper
+      mk('d2'), // quality 2
+      mk('d3', { genome: genome('LLLDDD') }), // quality 3
     ];
-    const r = deliverOrderDuck(s);
+    const r = deliverOrder(s);
     expect(r.ok).toBe(true);
-    if (!r.ok) throw new Error('unreachable');
-    expect(r.value.duckId).toBe('worse');
-    expect(s.ducks.map((d) => d.id)).toEqual(['better']); // the best stock is kept
+    if (r.ok) expect(new Set(r.value.duckIds)).toEqual(new Set(['d2', 'd3']));
+    expect(s.ducks.map((d) => d.id)).toEqual(['d1']);
     expect((s.contracts.active as OrderContract).completed).toBe(true);
   });
 
-  it('an explicit duckId delivers that duck instead of the auto-pick', () => {
+  it('fails cleanly when a line is short — including when only PROTECTED ducks qualify', () => {
     const s = initialState(0);
-    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    s.contracts.active = c;
-    s.ducks = [duck('a', ['V', 'L', 'L', 'L', 'L', 'D']), duck('b', ['V', 'D', 'D', 'D', 'D', 'D'])];
-    const r = deliverOrderDuck(s, 'a');
+    s.contracts.active = commission();
+    s.ducks = [];
+    expect(deliverOrder(s).ok).toBe(false);
+    s.ducks = [mk('d1', { secured: true }), mk('d2', { site: 'winter' }), mk('d3', { genome: genome('PLDDDD') })];
+    const r = deliverOrder(s);
+    expect(r.ok).toBe(false); // vault + posted + Prime carrier: never auto-handed
+    if (!r.ok) expect(r.reason).toMatch(/never handed over/i);
+  });
+
+  it('multi-line: fills every line at once, never double-spends a duck, drops pairings', () => {
+    const s = initialState(0);
+    s.contracts.active = commission({
+      lines: [
+        { color: 'blue', sex: 'hen', count: 1 },
+        { color: 'blue', sex: 'drake', count: 1 },
+      ],
+    });
+    s.ducks = [mk('d1'), mk('d2', { sex: 'drake' })];
+    s.breedingPairs = [{ id: 'p1', drakeId: 'd2', henId: 'd1', clutchProgress: 0, incubating: [] }];
+    const r = deliverOrder(s);
     expect(r.ok).toBe(true);
-    expect(s.ducks.map((d) => d.id)).toEqual(['b']);
-  });
-
-  it('fails cleanly with 0 eligible ducks', () => {
-    const s = initialState(0);
-    s.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    s.ducks = [duck('a', genome('LLLLLL'))]; // violates the constraint
-    const r = deliverOrderDuck(s);
-    expect(r.ok).toBe(false);
-    expect(s.ducks).toHaveLength(1);
-  });
-
-  it('fails cleanly when an explicit duckId does not match the spec', () => {
-    const s = initialState(0);
-    s.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    s.ducks = [duck('a', ['V', 'D', 'D', 'D', 'D', 'D'])];
-    const r = deliverOrderDuck(s, 'nope');
-    expect(r.ok).toBe(false);
-    expect(s.ducks).toHaveLength(1);
-  });
-
-  it('a Prime carrier is never auto-picked unless it is the ONLY eligible duck', () => {
-    const s = initialState(0);
-    const c = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    s.contracts.active = c;
-    s.ducks = [duck('carrier', ['V', 'P', 'D', 'D', 'D', 'D']), duck('plain', ['V', 'D', 'D', 'D', 'D', 'D'])];
-    const auto = deliverOrderDuck(s);
-    expect(auto.ok).toBe(true);
-    if (!auto.ok) throw new Error('unreachable');
-    expect(auto.value.duckId).toBe('plain'); // the carrier was spared
-
-    const s2 = initialState(0);
-    s2.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    s2.ducks = [duck('onlyCarrier', ['V', 'P', 'D', 'D', 'D', 'D'])];
-    const blocked = deliverOrderDuck(s2); // only eligible duck is a carrier — auto-pick refuses
-    expect(blocked.ok).toBe(false);
-    expect(s2.ducks).toHaveLength(1);
-    const explicit = deliverOrderDuck(s2, 'onlyCarrier'); // explicit id spends it deliberately
-    expect(explicit.ok).toBe(true);
-    expect(s2.ducks).toHaveLength(0);
-  });
-
-  it('delivering a paired duck also drops its breeding pair', () => {
-    const s = initialState(0);
-    s.contracts.active = orderContract({ constraints: ['V', null, null, null, null, null], target: genome('LLLLLL') });
-    s.ducks = [
-      duck('drake', ['V', 'D', 'D', 'D', 'D', 'D'], { sex: 'drake' }),
-      duck('hen', genome('LLLLLL')),
-    ];
-    s.breedingPairs = [{ id: 'p1', drakeId: 'drake', henId: 'hen', clutchProgress: 0, incubating: [] }];
-    const r = deliverOrderDuck(s, 'drake');
-    expect(r.ok).toBe(true);
+    expect(s.ducks).toHaveLength(0);
     expect(s.breedingPairs).toEqual([]);
   });
 
-  it('mass-hatching Standard-target ducks completes NOTHING — no passive hook fires for orders', () => {
+  it('mass-hatching toward the Standard completes NOTHING on its own — delivery is always a click', () => {
     const s = build({ coop: 8 });
     const standard = targetForTier(0);
     s.ducks = [
@@ -429,17 +392,12 @@ describe('order: breed to spec, then hand the duck over', () => {
     ];
     s.breedingPairs = [{ id: 'p1', drakeId: 'dr', henId: 'he', clutchProgress: 0, incubating: [] }];
     s.legacyTier = C.UNLOCK_TIER;
-    const spec = orderContract({ constraints: ['V', null, null, null, null, null], target: standard });
-    s.contracts.active = spec;
-    // Hatch several clutches' worth — every duckling from a Standard×Standard pair.
+    s.contracts.active = commission({ sinceDuckId: 0 }); // everything qualifies by watermark
     for (let i = 0; i < 5; i++) {
       runBreeding(s, BALANCE.BREEDING.CLUTCH_INTERVAL_S + BALANCE.BREEDING.INCUBATE_S + 1, 1, 1);
     }
     expect(s.ducks.length).toBeGreaterThan(2); // hatching really happened
-    // The real guarantee: even though a rare mutation can occasionally make a
-    // hatchling eligible, nothing EVER completes the contract on its own —
-    // there is no onHatch-style hook left to spam. Only an explicit
-    // deliverOrderDuck() call (a player action) can complete it.
+    // Ducks may QUALIFY — but nothing ever completes without deliverOrder().
     expect((s.contracts.active as OrderContract).completed).toBe(false);
   });
 });
@@ -684,41 +642,4 @@ describe('type-priced rewards (Grange 2.0 retune)', () => {
       expect(o.reward.shards).toBeLessThanOrEqual(Math.round(band.shards[1] * mult));
     }
   });
-});
-
-it('auto-pick never hands over a SECURED or WINTERING duck (review fix, same standing as P-carriers)', () => {
-  const s = initialState(0);
-  s.legacyTier = 1;
-  s.contracts.active = {
-    id: 'o1',
-    type: 'order',
-    notch: 0,
-    reward: { dust: 5, shards: 1 },
-    completed: false,
-    constraints: ['V', null, null, null, null, null],
-    target: ['L', 'L', 'L', 'L', 'L', 'L'],
-    minTargetQuality: 0,
-  };
-  const mk = (id: string, extra: Partial<Duck> = {}): Duck => ({
-    id,
-    genotype: ['Bl', 'bl'],
-    genome: ['V', 'D', 'D', 'D', 'D', 'D'],
-    genomeKnown: true,
-    sex: 'hen',
-    stage: 'adult',
-    ageTicks: 0,
-    ...extra,
-  });
-  // The vaulted duck has the WORST quality — the old auto-pick would grab it.
-  s.ducks = [mk('vault', { secured: true }), mk('posted', { site: 'winter' }), mk('spare', { genome: ['V', 'L', 'D', 'D', 'D', 'D'] })];
-  const r = deliverOrderDuck(s);
-  expect(r.ok).toBe(true);
-  if (r.ok) expect(r.value.duckId).toBe('spare'); // kept the vault + the winter post
-  // With only protected ducks eligible, auto-pick refuses; explicit id works.
-  const s2 = initialState(0);
-  s2.legacyTier = 1;
-  s2.contracts.active = { ...(s.contracts.active as object), completed: false, id: 'o2' } as typeof s.contracts.active;
-  s2.ducks = [mk('vault2', { secured: true })];
-  expect(deliverOrderDuck(s2).ok).toBe(false);
-  expect(deliverOrderDuck(s2, 'vault2').ok).toBe(true);
 });

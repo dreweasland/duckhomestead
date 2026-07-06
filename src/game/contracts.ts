@@ -1,22 +1,24 @@
 import { BALANCE } from '../config/balance';
 import { resourceFlow } from './actions';
-import { slotMatches, targetMatch } from './genetics';
+import { targetMatch } from './genetics';
 import { targetForTier } from './prestige';
 import { grantModule } from './loot';
 import {
+  COLORS,
   INGREDIENTS,
   ingredientCap,
+  phenotype,
+  type Color,
   type Contract,
   type ContractReward,
   type ContractType,
   type DefenseContract,
   type Duck,
-  type Gene,
   type GameState,
-  type Genome,
   type Ingredient,
   type Module,
   type OrderContract,
+  type OrderLine,
   type PredatorEvent,
   type ProvisionContract,
   type Rarity,
@@ -102,28 +104,26 @@ function liveEggRate(state: GameState): number {
   return (state.nutrition?.eggRate ?? 0) + (state.winter?.eggRate ?? 0);
 }
 
-// ── ORDER (breed to spec, then hand the duck over — the flagship detour) ──
-const CONTRA_GENES: Gene[] = ['L', 'V', 'H'];
-
+// ── ORDER (the BREEDING COMMISSION — breed fresh color stock, hand it over) ──
 /**
- * A BREEDING ORDER's spec: 2–3 slots (by notch) where the required gene ALWAYS
- * contradicts the tier target snapshotted here (never just "at least two") —
- * picked from {L,V,H} minus the target's own gene at that position, so a
- * Standard-line pair can never fill it by accident. Higher notches also raise
- * `minTargetQuality`, a floor on how many of the UNCONSTRAINED slots must
- * still match the target — the order wants odd blood, not junk everywhere
- * else. Never touches Dud or Prime.
+ * COMMISSION v2 (playtest, 2026-07-06 — see BALANCE.CONTRACTS.ORDER): color+sex
+ * line items at a target-quality floor, and only ducks hatched UNDER the
+ * commission count. The v1 odd-blood gene spec was impossible at endgame
+ * (dominance fixes every slot; a contradicting gene is a mutation lottery).
+ * Colors are Mendelian and plannable — the job is re-pairing by color
+ * genotype and running real clutch cycles, not fighting inheritance.
  */
 function generateOrder(state: GameState, notch: number, id: string, rng: () => number): OrderContract {
   const target = targetForTier(state.legacyTier);
-  const SLOTS = BALANCE.GENOME.SLOTS;
-  const count = Math.min(C.ORDER.SPEC_MAX_SLOTS, C.ORDER.SLOTS_BY_NOTCH[notch]);
-  const positions = new Set<number>();
-  while (positions.size < count) positions.add(Math.floor(rng() * SLOTS));
-  const constraints: (Gene | null)[] = Array.from({ length: SLOTS }, () => null);
-  for (const p of positions) {
-    const options = CONTRA_GENES.filter((g) => g !== target[p]);
-    constraints[p] = options[Math.floor(rng() * options.length)];
+  const lineCount = C.ORDER.LINES_BY_NOTCH[notch];
+  // Distinct color+sex combos (6 possible) — sample without replacement.
+  const combos: { color: Color; sex: 'hen' | 'drake' }[] = [];
+  for (const color of COLORS) for (const sex of ['hen', 'drake'] as const) combos.push({ color, sex });
+  const lines: OrderLine[] = [];
+  for (let i = 0; i < lineCount; i++) {
+    const pick = Math.floor(rng() * combos.length);
+    const [combo] = combos.splice(pick, 1);
+    lines.push({ ...combo, count: 1 + Math.floor(rng() * C.ORDER.MAX_PER_LINE_BY_NOTCH[notch]) });
   }
   return {
     id,
@@ -131,33 +131,33 @@ function generateOrder(state: GameState, notch: number, id: string, rng: () => n
     notch,
     reward: rollReward(notch, 'order', rng),
     completed: false,
-    constraints,
+    lines,
+    minQuality: C.ORDER.QUALITY_FLOOR_BY_NOTCH[notch],
     target,
-    minTargetQuality: C.ORDER.QUALITY_FLOOR_BY_NOTCH[notch],
+    sinceDuckId: -1, // set at acceptance — board offers show no false eligibility
   };
 }
 
-/** Whether a genome satisfies an order's spec — the ONE match rule
- *  (slotMatches) at every constrained slot, so a Prime gene satisfies any
- *  constraint exactly like everywhere else, plus the unconstrained-slot
- *  quality floor. */
-export function orderMatches(c: OrderContract, genome: Genome): boolean {
-  let floorHits = 0;
-  for (let i = 0; i < c.constraints.length; i++) {
-    const want = c.constraints[i];
-    if (want != null) {
-      if (!slotMatches(genome[i], want)) return false;
-    } else if (slotMatches(genome[i], c.target[i])) {
-      floorHits += 1;
-    }
-  }
-  return floorHits >= c.minTargetQuality;
+/** Numeric tail of a duck id ("d213" → 213) — hatch ORDER is id order. */
+const duckIdNum = (d: Duck): number => parseInt(d.id.replace(/^\D+/, ''), 10) || 0;
+
+/** Whether one duck qualifies for one commission line: right color + sex,
+ *  hatched under the commission (id ≥ the acceptance snapshot), and good
+ *  enough against the snapshotted Standard (slotMatches — Prime counts, as
+ *  everywhere). */
+export function duckQualifies(c: OrderContract, line: OrderLine, d: Duck): boolean {
+  return (
+    c.sinceDuckId >= 0 &&
+    duckIdNum(d) >= c.sinceDuckId &&
+    d.sex === line.sex &&
+    phenotype(d.genotype) === line.color &&
+    targetMatch(d.genome, c.target) >= c.minQuality
+  );
 }
 
-/** Ducks in the flock that currently satisfy an active order's spec — the
- *  Grange card's live "N eligible" count. */
-export function eligibleForOrder(state: GameState, c: OrderContract): Duck[] {
-  return state.ducks.filter((d) => orderMatches(c, d.genome));
+/** Per-line eligible ducks for the Grange card's "ready x/y" rows. */
+export function eligibleForLine(state: GameState, c: OrderContract, line: OrderLine): Duck[] {
+  return state.ducks.filter((d) => duckQualifies(c, line, d));
 }
 
 // ── PROVISION (hand over a produced ingredient — the Feed Store's first customer) ──
@@ -238,6 +238,11 @@ export function acceptContract(state: GameState, contractId: string): ActionResu
   if (contract.type === 'provision') {
     contract.limitRemaining = C.PROVISION.LIMIT_MIN * 60;
   }
+  if (contract.type === 'order') {
+    // Only ducks hatched from THIS moment on count — a shelf of banked
+    // off-color ducks fills nothing (the anti-shelf-clearing rule).
+    contract.sinceDuckId = state.nextDuckId;
+  }
   state.contracts.active = contract;
   refillOffers(state); // the emptied slot regenerates immediately
   return done(contract);
@@ -278,43 +283,44 @@ export function rerollOffers(state: GameState, rng: () => number = Math.random):
 // ── Player actions that complete a job (both are explicit clicks — the
 // online-only law holds by construction: neither is ever called from tick) ──
 /**
- * Deliver a duck against the active BREEDING ORDER — it is REMOVED from the
- * flock (any pairing it held is dropped too) and the contract completes.
- * Omit `duckId` for the auto-pick: the LOWEST-target-quality eligible duck,
- * so the player's best stock is kept by default. Prime carriers, SECURED
- * ducks (the vault is the player's own declaration of "keep"), and WINTERING
- * ducks (posted workers — silently unstaffing Winterstead would be theft)
- * are never auto-picked (same protection standing as the cull tools) — any
- * of them can still be delivered by explicit `duckId` (an active choice).
+ * Deliver against the active BREEDING COMMISSION — every line at once. For
+ * each line the auto-pick takes the LOWEST-target-quality qualifying ducks
+ * (the player's best fresh stock is kept by default), never a Prime carrier,
+ * a SECURED duck (the vault is the player's own declaration of "keep"), or a
+ * WINTERING duck (posted workers) — the same protection standing as the cull
+ * tools. If any line can't be filled from unprotected stock, the delivery
+ * fails with the reason; freeing protected ducks (unsecure/recall) is the
+ * explicit path to spending them. Delivered ducks are REMOVED (pairings
+ * dropped) and the commission completes.
  */
-export function deliverOrderDuck(state: GameState, duckId?: string): ActionResult<{ duckId: string }> {
+export function deliverOrder(state: GameState): ActionResult<{ duckIds: string[] }> {
   const c = state.contracts.active;
   if (!c || c.type !== 'order') return fail('No active order');
   if (c.completed) return fail('Contract already complete');
-  const eligible = eligibleForOrder(state, c);
-  if (eligible.length === 0) return fail('No eligible duck');
 
-  let target: Duck;
-  if (duckId != null) {
-    const found = eligible.find((d) => d.id === duckId);
-    if (!found) return fail('That duck does not match the spec');
-    target = found;
-  } else {
-    const autoPickable = eligible.filter(
-      (d) => !d.genome.includes('P') && !d.secured && d.site !== 'winter',
+  const chosen: Duck[] = [];
+  const taken = new Set<string>();
+  for (const line of c.lines) {
+    const pool = eligibleForLine(state, c, line).filter(
+      (d) => !taken.has(d.id) && !d.genome.includes('P') && !d.secured && d.site !== 'winter',
     );
-    if (autoPickable.length === 0)
-      return fail('Only Prime carriers / secured / wintering ducks are eligible — deliver one explicitly');
-    target = autoPickable.reduce((worst, d) =>
-      targetMatch(d.genome, c.target) < targetMatch(worst.genome, c.target) ? d : worst,
-    );
+    if (pool.length < line.count) {
+      return fail(`Not enough fresh ${line.color} ${line.sex}s (need ${line.count} — Prime/secured/wintering ducks are never handed over)`);
+    }
+    pool.sort((a, b) => targetMatch(a.genome, c.target) - targetMatch(b.genome, c.target));
+    for (const d of pool.slice(0, line.count)) {
+      chosen.push(d);
+      taken.add(d.id);
+    }
   }
 
-  const idx = state.ducks.findIndex((d) => d.id === target.id);
-  state.ducks.splice(idx, 1);
-  state.breedingPairs = state.breedingPairs.filter((p) => p.drakeId !== target.id && p.henId !== target.id);
+  for (const d of chosen) {
+    const idx = state.ducks.findIndex((x) => x.id === d.id);
+    state.ducks.splice(idx, 1);
+    state.breedingPairs = state.breedingPairs.filter((p) => p.drakeId !== d.id && p.henId !== d.id);
+  }
   c.completed = true;
-  return done({ duckId: target.id });
+  return done({ duckIds: chosen.map((d) => d.id) });
 }
 
 /** Fulfil the active PROVISION ORDER — draws the full amount from central

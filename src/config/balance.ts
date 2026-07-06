@@ -1011,18 +1011,26 @@ export const BALANCE = {
      */
     TYPE_REWARD_MULT: { order: 2.5, provision: 1.5, defense: 1 } as Record<string, number>,
     ORDER: {
-      /** Hard ceiling on constrained slots — never all 6, always leaves room for
-       *  a quality floor on the rest. */
-      SPEC_MAX_SLOTS: 3,
-      /** Constrained-slot COUNT by notch. EVERY constrained slot contradicts the
-       *  tier target (never just "at least two") — the generator picks from
-       *  {L,V,H} minus the target's own gene there, so a spec can never be
-       *  filled by a Standard-line pair breeding by accident. */
-      SLOTS_BY_NOTCH: [2, 2, 3],
-      /** Min count of the UNCONSTRAINED slots that must still match the
-       *  snapshotted target, by notch — 0 at entry (any junk fills the rest),
-       *  rising so a top order also asks for real quality, not just odd genes. */
-      QUALITY_FLOOR_BY_NOTCH: [0, 1, 2],
+      /**
+       * BREEDING COMMISSION v2 (playtest, 2026-07-06): the odd-blood gene spec
+       * was IMPOSSIBLE at endgame — dominance fixes every slot to the target
+       * in a mature flock, so a contradicting gene at a position is a mutation
+       * lottery, not a program. Colors are the right detour axis instead:
+       * Mendelian and plannable (splash×black → all blue), orthogonal to the
+       * genome target, and directly opposed to "pair my best regardless of
+       * color". The commission asks for COLOR+SEX line items at a target-
+       * quality floor — and ONLY DUCKS HATCHED UNDER THE COMMISSION COUNT
+       * (nextDuckId snapshot at acceptance), so a shelf of banked off-color
+       * ducks fills nothing. The job: re-pair by color genotype, run the
+       * clutch cycles, hand over good fresh stock.
+       */
+      /** Line-item count by notch (1–3 distinct color+sex lines). */
+      LINES_BY_NOTCH: [1, 2, 3],
+      /** Ducks demanded per line, by notch (rolled 1..this). */
+      MAX_PER_LINE_BY_NOTCH: [1, 2, 2],
+      /** Target-quality floor (slots matching the CURRENT Standard) by notch —
+       *  the Grange wants good fresh stock, not junk in the right feathers. */
+      QUALITY_FLOOR_BY_NOTCH: [2, 3, 4],
     },
     PROVISION: {
       /** Amount = this many seconds of the player's CURRENT production rate for
