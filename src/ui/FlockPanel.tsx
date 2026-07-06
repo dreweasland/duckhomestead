@@ -1173,26 +1173,46 @@ function FlockPanelInner({
                       >
                         <ShieldIcon size={12} />
                       </button>
-                      {winterOpen && d.stage === 'adult' && d.sex === 'hen' && (
-                        <button
-                          onClick={() => {
-                            if (d.site === 'winter') engine.recallFromWinter(d.id);
-                            else if (engine.assignToWinter(d.id).ok) playTend();
-                          }}
-                          className={`inline-flex items-center rounded px-1 py-0.5 ${
-                            d.site === 'winter'
-                              ? 'text-[#9fd4e8]'
-                              : 'text-[#5a6a7a] hover:bg-[#33271c] hover:text-[#9fd4e8]'
-                          }`}
-                          title={
-                            d.site === 'winter'
-                              ? 'Wintering over — laying premium eggs at Winterstead. Click to bring her home.'
-                              : `Assign to Winterstead (${winterUsed}/${winterCap} slots) — Hardy hens earn a premium out there`
-                          }
-                        >
-                          <SnowflakeIcon size={12} />
-                        </button>
-                      )}
+                      {winterOpen && d.stage === 'adult' && d.sex === 'hen' && (() => {
+                        // Mirror assignToWinter's gates HERE so a refusal is
+                        // never a silent no-op (playtest: clicking a paired
+                        // hen's snowflake did nothing, with no reason shown).
+                        const blocked =
+                          d.site === 'winter'
+                            ? null
+                            : pairedIds.has(d.id)
+                              ? 'she’s in a breeding pair — unpair her first'
+                              : d.wounded || d.recovering
+                                ? 'she needs to heal first'
+                                : winterUsed >= winterCap
+                                  ? 'winter coops are full — build another'
+                                  : null;
+                        return (
+                          <button
+                            onClick={() => {
+                              if (blocked) return;
+                              if (d.site === 'winter') engine.recallFromWinter(d.id);
+                              else if (engine.assignToWinter(d.id).ok) playTend();
+                            }}
+                            className={`inline-flex items-center rounded px-1 py-0.5 ${
+                              d.site === 'winter'
+                                ? 'text-[#9fd4e8]'
+                                : blocked
+                                  ? 'cursor-not-allowed text-[#3a4650] opacity-60'
+                                  : 'text-[#5a6a7a] hover:bg-[#33271c] hover:text-[#9fd4e8]'
+                            }`}
+                            title={
+                              d.site === 'winter'
+                                ? 'Wintering over — laying premium eggs at Winterstead. Click to bring her home.'
+                                : blocked
+                                  ? `Can’t winter her: ${blocked}`
+                                  : `Assign to Winterstead (${winterUsed}/${winterCap} slots) — Hardy hens earn a premium out there`
+                            }
+                          >
+                            <SnowflakeIcon size={12} />
+                          </button>
+                        );
+                      })()}
                       <button
                         onClick={() => {
                           if (armedCull !== d.id) {
