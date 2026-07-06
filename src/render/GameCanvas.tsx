@@ -95,6 +95,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           ducks: [],
           duckTints: { black: [], blue: [], splash: [] },
           ground: [],
+          groundSnow: [],
           water: [],
         };
         try {
@@ -123,9 +124,11 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         const fieldX0 = OX + 6, fieldX1 = OX + GRID.width * TILE - 6;
         const fieldY0 = OY + 6, fieldY1 = OY + GRID.height * TILE - 6;
 
-        // Ground: real grass tiles when available, else a flat checker. Blocked
-        // (pond) tiles get animated water; the shore is drawn once around it.
-        const haveGround = textures.ground.some(Boolean);
+        // Ground: real grass tiles when available, else a flat checker — SNOW
+        // for winter zones (zoneDef.winter; Winterstead stood on grass until
+        // playtest 2026-07-05). Blocked (pond) tiles get animated water.
+        const groundSet = zoneDef(zoneId)?.winter ? textures.groundSnow : textures.ground;
+        const haveGround = groundSet.some(Boolean);
         const haveWater = textures.water.some(Boolean);
         const waterTiles: Sprite[] = [];
         for (let gy = 0; gy < GRID.height; gy++) {
@@ -140,7 +143,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
               waterTiles.push(tile);
             } else if (haveGround) {
               const v = groundVariant(gx, gy, GROUND_URLS.length);
-              const tex = textures.ground[v] ?? textures.ground.find(Boolean)!;
+              const tex = groundSet[v] ?? groundSet.find(Boolean)!;
               const tile = new Sprite(tex);
               tile.position.set(px, py);
               tile.scale.set(SCALE);

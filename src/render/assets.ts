@@ -44,10 +44,23 @@ export const GROUND_URLS = [
   `${GROUND}/ground_grass_flowers.png`,
 ];
 
+/** Winterstead ground (baked via .asset-src/ground.cjs — the winter zone stood
+ *  on grass until playtest 2026-07-05). Same variant-scatter scheme as grass:
+ *  mostly plain snow, occasional drift. */
+export const GROUND_SNOW_URLS = [
+  '/assets/ground/ground_snow.png',
+  '/assets/ground/ground_snow.png',
+  '/assets/ground/ground_snow.png',
+  '/assets/ground/ground_snow.png',
+  '/assets/ground/ground_snow.png',
+  '/assets/ground/ground_snow_drift.png',
+];
+
 export interface GameTextures {
   stations: Partial<Record<StationType, Texture>>;
   millSails: Texture | null;
   ducks: Texture[];
+  groundSnow: Texture[];
   /** Per-phenotype recolored duck frames (black/blue/splash Swedish), so the
    *  ambient ducks reflect the flock's colors. Falls back to `ducks` if recolor
    *  fails. */
@@ -154,6 +167,7 @@ export async function loadTextures(): Promise<GameTextures> {
   const stations: Partial<Record<StationType, Texture>> = {};
   const ducks: Texture[] = [];
   const ground: Texture[] = [];
+  const groundSnow: Texture[] = [];
   const water: Texture[] = [];
   let millSails: Texture | null = null;
 
@@ -177,6 +191,10 @@ export async function loadTextures(): Promise<GameTextures> {
       const t = await tryLoad(url);
       if (t) ground[i] = t;
     }),
+    ...GROUND_SNOW_URLS.map(async (url, i) => {
+      const t = await tryLoad(url);
+      if (t) groundSnow[i] = t;
+    }),
   ]);
 
   // Recolored ambient-duck frames per phenotype (from the raw PNGs, so we have
@@ -191,7 +209,7 @@ export async function loadTextures(): Promise<GameTextures> {
     });
   }
 
-  return { stations, millSails, ducks, duckTints, ground, water };
+  return { stations, millSails, ducks, duckTints, ground, groundSnow, water };
 }
 
 /** Recolored duck frames as data URLs, per phenotype — for plain-DOM (non-

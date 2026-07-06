@@ -1,0 +1,1 @@
+Hand-drawn snow ground tiles (see .asset-src/ground.cjs). Original work — free to use.
