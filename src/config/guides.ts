@@ -241,7 +241,7 @@ export const GUIDE_DEFS: GuideDef[] = [
     id: 'grange',
     title: 'The Grange is open',
     icon: GrangeIcon,
-    body: 'The Grange posts real JOBS, not receipts — breed a duck to a spec that always runs against your Standard line and hand it over, provision a chunk of your Feed Store buffer, or defend a window — and get paid in dust and legacy shards (sometimes a module). Accept one job at a time; each one costs a genuine detour.',
+    body: 'The Grange posts real JOBS, not receipts — breed a commission of fresh color stock (only ducks hatched under the job count, so pairing by color matters), provision a chunk of your Feed Store buffer, or defend a window — and get paid in dust and legacy shards (sometimes a module). Accept one job at a time; each one costs a genuine detour.',
     when: (state) => state.legacyTier >= BALANCE.CONTRACTS.UNLOCK_TIER,
     cta: { label: 'Open The Grange', open: 'grange' },
   },

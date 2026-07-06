@@ -693,11 +693,26 @@ interface ContractCommon {
  * also raise `minTargetQuality`, a floor on how many of the UNCONSTRAINED
  * slots must still match `target` — the order wants odd blood, not junk.
  */
+/** One line item of a breeding commission: N ducks of a color+sex. */
+export interface OrderLine {
+  color: Color;
+  sex: 'hen' | 'drake';
+  count: number;
+}
+
 export interface OrderContract extends ContractCommon {
   type: 'order';
-  constraints: (Gene | null)[];
+  /** 1–3 distinct color+sex line items (see contracts.ts generateOrder). */
+  lines: OrderLine[];
+  /** Every delivered duck must match the generation-time Standard at ≥ this
+   *  many slots — good fresh stock, not junk in the right feathers. */
+  minQuality: number;
+  /** The target snapshotted at generation (quality is scored against it). */
   target: Genome;
-  minTargetQuality: number;
+  /** Only ducks hatched AFTER acceptance count: their numeric id must be ≥
+   *  this snapshot of nextDuckId (set in acceptContract; -1 = not yet
+   *  accepted, under which nothing is eligible — JSON-safe sentinel). */
+  sinceDuckId: number;
 }
 
 /** Hand over a fixed amount of one produced ingredient from central storage —

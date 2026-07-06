@@ -1,8 +1,8 @@
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { eligibleForOrder } from '../game/contracts';
-import { type Contract, type GameState, type Ingredient } from '../game/state';
-import { GENE_META } from './FlockPanel';
+import { eligibleForLine } from '../game/contracts';
+import { ColorSwatch } from './FlockPanel';
+import { type OrderContract, type Contract, type GameState, type Ingredient } from '../game/state';
 import { useEscapeKey } from './useEscapeKey';
 import { CheckIcon, CloseIcon, DustIcon, GrangeIcon, HandoverIcon, LegacyIcon, OwlIcon, RESOURCE_ICON } from './icons';
 
@@ -23,26 +23,15 @@ const mmss = (secs: number): string => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-/** An order's spec: constrained slots read as gene pips (always the odd gene
- *  out against the Standard), "don't care" slots read as dim placeholders —
- *  never reveals more than the spec asks for. */
-function SpecPips({ pattern, size = 13 }: { pattern: (string | null)[]; size?: number }) {
+/** A commission's line items, compact: swatch + count + sex per line. */
+function CommissionLines({ c, size = 11 }: { c: OrderContract; size?: number }) {
   return (
-    <span className="inline-flex gap-0.5 align-middle">
-      {pattern.map((g, i) => (
-        <span
-          key={i}
-          className="inline-flex items-center justify-center rounded-[2px] font-bold leading-none"
-          style={{
-            width: size,
-            height: size,
-            fontSize: size - 5,
-            background: g ? GENE_META[g as 'L' | 'V' | 'H'].color : '#2a2018',
-            color: g ? '#171009' : '#5a4d3a',
-          }}
-          title={g ? `Slot ${i + 1}: ${GENE_META[g as 'L' | 'V' | 'H'].label} (odd blood)` : `Slot ${i + 1}: any`}
-        >
-          {g ?? '·'}
+    <span className="inline-flex items-center gap-2 align-middle">
+      {c.lines.map((l, i) => (
+        <span key={i} className="inline-flex items-center gap-1 text-[10px] text-[#c9b88f]">
+          <ColorSwatch color={l.color} size={size} />
+          {l.count} {l.color} {l.sex}
+          {l.count > 1 ? 's' : ''}
         </span>
       ))}
     </span>
@@ -68,9 +57,10 @@ function ContractGoal({ c }: { c: Contract }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5">
-      WANTED: odd blood
-      <SpecPips pattern={c.constraints} />
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      WANTED: new stock, true colors
+      <CommissionLines c={c} />
+      <span className="text-[#7a6a4a]">· quality ≥{c.minQuality}/6 · hatched under this commission</span>
     </span>
   );
 }
@@ -137,24 +127,47 @@ function ActiveJob({ c, state, engine }: { c: Contract; state: GameState; engine
       </div>
     );
   }
-  const eligible = eligibleForOrder(state, c).length;
-  const canDeliver = !c.completed && eligible > 0;
+  // Commission: per-line ready counts (unprotected fresh stock only — what the
+  // delivery can actually take), one Deliver-all button when every line fills.
+  const lineStates = c.lines.map((l) => {
+    const ready = eligibleForLine(state, c, l).filter(
+      (d) => !d.genome.includes('P') && !d.secured && d.site !== 'winter',
+    ).length;
+    return { line: l, ready };
+  });
+  const allReady = lineStates.every((ls) => ls.ready >= ls.line.count);
+  const canDeliver = !c.completed && allReady;
   return (
     <div>
-      <div className="mb-2 text-[10px] tabular-nums text-[#c9b88f]">
-        {eligible} eligible in the flock — no time limit
+      <div className="mb-2 flex flex-col gap-1">
+        {lineStates.map(({ line, ready }, i) => (
+          <div key={i} className="flex items-center gap-1.5 text-[10px] tabular-nums text-[#c9b88f]">
+            <ColorSwatch color={line.color} size={11} />
+            <span>
+              {line.color} {line.sex}
+              {line.count > 1 ? 's' : ''}
+            </span>
+            <span className={ready >= line.count ? 'font-bold text-[#8fe388]' : 'text-[#e8c45a]'}>
+              {Math.min(ready, line.count)}/{line.count} ready
+            </span>
+          </div>
+        ))}
+        <div className="text-[9px] text-[#7a6a4a]">
+          counts ducks hatched after acceptance, quality ≥{c.minQuality}/6 · Prime, secured &amp;
+          wintering ducks are never handed over
+        </div>
       </div>
       <button
-        onClick={() => engine.deliverOrderDuck()}
+        onClick={() => engine.deliverOrder()}
         disabled={!canDeliver}
         className={`flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${
           canDeliver
             ? 'bg-[#3a2e22] text-[#ffe9a8] hover:bg-[#4a3a2a]'
             : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
         }`}
-        title="Hands over your lowest-target-quality eligible duck — your best stock is kept"
+        title="Hands over the lowest-quality qualifying ducks per line — your best fresh stock is kept"
       >
-        <HandoverIcon size={11} /> Deliver
+        <HandoverIcon size={11} /> Deliver all
       </button>
     </div>
   );

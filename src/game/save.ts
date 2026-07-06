@@ -38,8 +38,12 @@ function validGenome(g: unknown): g is Genome {
 /** Phase 8 GRANGE 2.0 retired the `delivery`/`hatch` contract shapes — a saved
  *  offer/active contract of either is silently dropped on load (see the
  *  `contracts` block below): no penalty, no toast, the board re-rolls the
- *  freed slot on its normal clock. */
+ *  freed slot on its normal clock. Commission v2 (same day) reshaped `order`
+ *  from a gene spec to color LINES — a v1 order (has `constraints`, no
+ *  `lines`) is likewise a retired shape. */
 const KNOWN_CONTRACT_TYPES = new Set(['order', 'provision', 'defense']);
+const contractShapeValid = (o: { type?: string; lines?: unknown }): boolean =>
+  KNOWN_CONTRACT_TYPES.has(o?.type ?? '') && (o.type !== 'order' || Array.isArray(o.lines));
 
 export interface AwaySummary {
   /** Real seconds elapsed since last seen (uncapped, for display). */
@@ -192,9 +196,9 @@ export function deserialize(raw: string, now: number): GameState {
       // Phase 8: drop any offer/active contract of a retired shape (see
       // KNOWN_CONTRACT_TYPES) — a pre-8 save's board simply re-rolls those slots.
       contracts: {
-        offers: (parsed.contracts?.offers ?? base.contracts.offers).filter((o) => KNOWN_CONTRACT_TYPES.has(o.type)),
+        offers: (parsed.contracts?.offers ?? base.contracts.offers).filter(contractShapeValid),
         active:
-          parsed.contracts?.active && KNOWN_CONTRACT_TYPES.has(parsed.contracts.active.type)
+          parsed.contracts?.active && contractShapeValid(parsed.contracts.active)
             ? parsed.contracts.active
             : base.contracts.active,
         nextContractId: parsed.contracts?.nextContractId ?? base.contracts.nextContractId,
