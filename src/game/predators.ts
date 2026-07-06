@@ -315,6 +315,12 @@ function pickSpot(rng: () => number, exclude = -1): number {
  *  STRIKE_WINDUP_SEC to scare the owl off, and the strike may need up to 3 clicks
  *  (each non-final one jukes it to another spot). The roll happens only when a
  *  wind-up expires un-foiled (resolveStrike). */
+/** Any predator's dive currently in flight (the UI can only present one). */
+export function anyStrikeInFlight(state: GameState): boolean {
+  for (const ps of Object.values(state.predators)) if (ps?.strike) return true;
+  return false;
+}
+
 function beginStrike(state: GameState, def: PredatorDef, ps: PredatorState, rng: () => number): void {
   if (ps.strike) return; // a dive is already in flight — don't stack
   const target = pickTarget(state, rng);
@@ -476,6 +482,13 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     // attack opens a visible, scareable dive; offline it resolves at once.
     const n = ps.windowAttacks ?? def.attacksPerWindow;
     while (ps.attacksFired < n && ps.windowElapsed >= ((ps.attacksFired + 1) * def.windowDurationSec) / (n + 1)) {
+      // ONE DIVE IN THE AIR AT A TIME (playtest: overlapping owl+raccoon
+      // windows both committed strikes; the UI can only show one, so the
+      // hidden dive expired unclickable and wounded 'without landing').
+      // A due attack DEFERS while any strike is in flight — the schedule
+      // check re-fires it the moment the lane clears; attacks still pending
+      // when the window closes are simply forfeited (player-favorable).
+      if (opts.mode === 'online' && anyStrikeInFlight(state)) break;
       ps.attacksFired += 1;
       if (opts.mode === 'online') beginStrike(state, def, ps, rng);
       else resolveAttack(state, def, opts, rng);

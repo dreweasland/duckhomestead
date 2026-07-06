@@ -1159,3 +1159,32 @@ describe('net/cloth pricing: kneed flat curve, then seconds-of-peak (flock-propo
     expect(secureCoopCost(s)).toBe(Math.round(P.SECURE_COOP_COST_EGGS * P.DEFENSE_COST_GROWTH ** 10));
   });
 });
+
+describe('one dive in the air at a time (overlapping windows must not stack strikes)', () => {
+  it('a second predator DEFERS its due attack while a strike is in flight, then fires when clear', () => {
+    const s = flock(8);
+    s.rank = 25;
+    s.predatorsIntroduced = true;
+    s.predatorsSeen = ['owl', 'raccoon'];
+    // Both windows open simultaneously — the exact playtest collision.
+    s.predators.owl = { timeToNextWindow: 0, windowRemaining: 60, windowElapsed: 0, attacksFired: 0, windowAttacks: 2 };
+    s.predators.raccoon = { timeToNextWindow: 0, windowRemaining: 60, windowElapsed: 0, attacksFired: 0, windowAttacks: 2 };
+    const strikes = () => Object.values(s.predators).filter((p) => p?.strike).length;
+    let maxConcurrent = 0;
+    let maxFiredTotal = 0;
+    // Drive far enough that both schedules come due repeatedly; never scare, so
+    // every strike runs its full windup before resolving. (Read counters DURING
+    // the loop — a closed window reschedules and zeroes them.)
+    for (let t = 0; t < 120; t++) {
+      runPredators(s, 1, { mode: 'online', rng: () => 0.99, activeDefense: true });
+      maxConcurrent = Math.max(maxConcurrent, strikes());
+      maxFiredTotal = Math.max(
+        maxFiredTotal,
+        (s.predators.owl?.attacksFired ?? 0) + (s.predators.raccoon?.attacksFired ?? 0),
+      );
+    }
+    expect(maxConcurrent).toBe(1); // never two dives on screen
+    // Both predators still got to act across the window (deferral, not loss).
+    expect(maxFiredTotal).toBeGreaterThanOrEqual(2);
+  });
+});
