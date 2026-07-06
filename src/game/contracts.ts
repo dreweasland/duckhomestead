@@ -1,43 +1,58 @@
 import { BALANCE } from '../config/balance';
-import { slotMatches } from './genetics';
+import { resourceFlow } from './actions';
+import { slotMatches, targetMatch } from './genetics';
 import { targetForTier } from './prestige';
 import { grantModule } from './loot';
 import {
-  COLORS,
-  phenotype,
-  type Color,
+  INGREDIENTS,
+  ingredientCap,
   type Contract,
   type ContractReward,
   type ContractType,
   type DefenseContract,
-  type DeliveryContract,
   type Duck,
   type Gene,
   type GameState,
-  type HatchContract,
+  type Genome,
+  type Ingredient,
   type Module,
+  type OrderContract,
   type PredatorEvent,
+  type ProvisionContract,
   type Rarity,
 } from './state';
 import type { ActionResult } from './actions';
 
 /**
- * contracts.ts — Phase 6b: THE GRANGE.
+ * contracts.ts — Phase 6b/8: THE GRANGE.
  *
  * A rotating offer board unlocked at legacy tier 1. Exactly ONE contract is
  * active at a time; the player picks which offer to run. Three shapes (a
  * discriminated union — a new type later is a new generator, not new
- * architecture): `delivery` (the egg sink), `hatch` (breeding to spec), and
- * `defense` (foil the watch). Rewards are dust / legacy shards / a module —
- * NEVER eggs, resources, or XP.
+ * architecture): `order` (breed a duck off the Standard and hand it over),
+ * `provision` (hand over a produced ingredient from storage), and `defense`
+ * (foil the watch). Rewards are dust / legacy shards / a module — NEVER eggs,
+ * resources, or XP.
+ *
+ * Phase 8 GRANGE 2.0 (playtest, 2026-07-06): the old `delivery`/`hatch` shapes
+ * were receipts for default play — a hatch bounty paid for the exact genes
+ * mass breeding produces anyway (self-completing at scale with zero marginal
+ * effort), and egg delivery just banked eggs already being banked. Every job
+ * on this board now costs a genuine DETOUR: an order can only be filled by a
+ * dedicated off-Standard side pair (the spec always contradicts the tier
+ * target), and a provision costs a real chunk of a PURCHASED Feed Store
+ * buffer. Neither completes passively — both require an explicit player
+ * action (deliverOrderDuck / fulfilProvision), so there is no sim hook left to
+ * spam.
  *
  * Locked guardrail: contracts never touch the sim. They only OBSERVE existing
- * lay/hatch/predator events and divert already-produced eggs — never a rate,
- * requirement, ration, water, genome odds, or predator schedule.
+ * predator events and spend resources/ducks the player already owns — never a
+ * rate, requirement, ration, water, genome odds, or predator schedule.
  *
- * ALL contract clocks and progress are ONLINE-ONLY: `runContracts` is called
- * from tick.ts only when `opts.mode === 'online'`; `onEggsLaid`/`onHatch` are
- * only invoked from online lay/hatch paths by their callers.
+ * ALL contract clocks are ONLINE-ONLY: `runContracts` is called from tick.ts
+ * only when `opts.mode === 'online'`. Order/provision completion is always a
+ * direct player click (never a passive sim hook), so it can't run offline by
+ * construction.
  */
 
 const fail = (reason: string): ActionResult<never> => ({ ok: false, reason });
@@ -57,16 +72,17 @@ function pickNotch(rng: () => number): number {
   return weights.length - 1;
 }
 
-function pickType(rng: () => number): ContractType {
+/** Weighted pick among only the CURRENTLY AVAILABLE types — `provision` is
+ *  excluded by the caller when the player produces no tradeable ingredient. */
+function pickType(types: ContractType[], rng: () => number): ContractType {
   const weights = C.TYPE_WEIGHTS as Record<ContractType, number>;
-  const entries = Object.entries(weights) as [ContractType, number][];
-  const total = entries.reduce((a, [, w]) => a + w, 0);
+  const total = types.reduce((a, t) => a + (weights[t] ?? 0), 0);
   let r = rng() * total;
-  for (const [k, w] of entries) {
-    r -= w;
-    if (r < 0) return k;
+  for (const t of types) {
+    r -= weights[t] ?? 0;
+    if (r < 0) return t;
   }
-  return entries[entries.length - 1][0];
+  return types[types.length - 1];
 }
 
 function rollReward(notch: number, type: ContractType, rng: () => number): ContractReward {
@@ -79,64 +95,107 @@ function rollReward(notch: number, type: ContractType, rng: () => number): Contr
   return band.moduleRarity ? { dust, shards, moduleRarity: band.moduleRarity as Rarity } : { dust, shards };
 }
 
-/** The flock's LIVE egg rate — home lay + the premium winter lay. One shared
- *  egg pool: deliveries divert at BOTH lay points (nutrition.ts), so the quota
- *  must price against both, or a winter-heavy homestead gets permanently
- *  under-scaled quotas. */
+/** The flock's LIVE egg rate — home lay + the premium winter lay. Still read
+ *  by runContracts to track the run's peak (clutch costs, pond upgrades, net
+ *  pricing all read that peak) even though nothing diverts eggs anymore. */
 function liveEggRate(state: GameState): number {
   return (state.nutrition?.eggRate ?? 0) + (state.winter?.eggRate ?? 0);
 }
 
-/**
- * The self-balancing delivery quota. Priced off the RUN'S PEAK egg rate (see
- * runContracts), not the instantaneous one — the live rate reads 0 while the
- * hens are parked at Winterstead / the ration is unset, so pricing off it let
- * a player throttle the flock, reroll every delivery down to MIN_QUOTA, accept
- * a top-notch offer, and un-park (a rare-module lottery ticket per ~300 eggs).
- * The peak resets with the run (prestige composes fresh contracts state).
- * Tradeoff: a flock deliberately downsized mid-run keeps peak-priced quotas —
- * abandon/reroll covers that rare case.
- */
-function deliveryQuota(state: GameState, notch: number): number {
-  const rate = Math.max(liveEggRate(state), state.contracts.peakEggRate ?? 0);
-  const base = rate * 60 * C.DELIVERY.QUOTA_MINUTES * C.DELIVERY.QUOTA_MULT_BY_NOTCH[notch];
-  return Math.max(C.DELIVERY.MIN_QUOTA, Math.round(base));
-}
+// ── ORDER (breed to spec, then hand the duck over — the flagship detour) ──
+const CONTRA_GENES: Gene[] = ['L', 'V', 'H'];
 
-function generateDelivery(state: GameState, notch: number, id: string, rng: () => number): DeliveryContract {
-  const quota = deliveryQuota(state, notch);
+/**
+ * A BREEDING ORDER's spec: 2–3 slots (by notch) where the required gene ALWAYS
+ * contradicts the tier target snapshotted here (never just "at least two") —
+ * picked from {L,V,H} minus the target's own gene at that position, so a
+ * Standard-line pair can never fill it by accident. Higher notches also raise
+ * `minTargetQuality`, a floor on how many of the UNCONSTRAINED slots must
+ * still match the target — the order wants odd blood, not junk everywhere
+ * else. Never touches Dud or Prime.
+ */
+function generateOrder(state: GameState, notch: number, id: string, rng: () => number): OrderContract {
+  const target = targetForTier(state.legacyTier);
+  const SLOTS = BALANCE.GENOME.SLOTS;
+  const count = Math.min(C.ORDER.SPEC_MAX_SLOTS, C.ORDER.SLOTS_BY_NOTCH[notch]);
+  const positions = new Set<number>();
+  while (positions.size < count) positions.add(Math.floor(rng() * SLOTS));
+  const constraints: (Gene | null)[] = Array.from({ length: SLOTS }, () => null);
+  for (const p of positions) {
+    const options = CONTRA_GENES.filter((g) => g !== target[p]);
+    constraints[p] = options[Math.floor(rng() * options.length)];
+  }
   return {
     id,
-    type: 'delivery',
+    type: 'order',
     notch,
-    reward: rollReward(notch, 'delivery', rng),
+    reward: rollReward(notch, 'order', rng),
     completed: false,
-    quota,
-    delivered: 0,
-    limitRemaining: 0, // the deadline only starts ticking once accepted
+    constraints,
+    target,
+    minTargetQuality: C.ORDER.QUALITY_FLOOR_BY_NOTCH[notch],
   };
 }
 
+/** Whether a genome satisfies an order's spec — the ONE match rule
+ *  (slotMatches) at every constrained slot, so a Prime gene satisfies any
+ *  constraint exactly like everywhere else, plus the unconstrained-slot
+ *  quality floor. */
+export function orderMatches(c: OrderContract, genome: Genome): boolean {
+  let floorHits = 0;
+  for (let i = 0; i < c.constraints.length; i++) {
+    const want = c.constraints[i];
+    if (want != null) {
+      if (!slotMatches(genome[i], want)) return false;
+    } else if (slotMatches(genome[i], c.target[i])) {
+      floorHits += 1;
+    }
+  }
+  return floorHits >= c.minTargetQuality;
+}
+
+/** Ducks in the flock that currently satisfy an active order's spec — the
+ *  Grange card's live "N eligible" count. */
+export function eligibleForOrder(state: GameState, c: OrderContract): Duck[] {
+  return state.ducks.filter((d) => orderMatches(c, d.genome));
+}
+
+// ── PROVISION (hand over a produced ingredient — the Feed Store's first customer) ──
+/** Ingredients the player currently produces at all (rate > 0) — a provision
+ *  is only ever offered for one of these; the type drops from the roll
+ *  entirely (see generateOffer) when the list is empty. */
+function producedIngredients(state: GameState): Ingredient[] {
+  return INGREDIENTS.filter((ing) => resourceFlow(state, ing).in > 0);
+}
+
 /**
- * A hatch spec is a BOUNTY ON THE TIER'S CHAMPION TARGET (playtest, 2026-07-02):
- * the required gene at each specified position is the tier target's gene THERE,
- * so contracts pay for checkpoints of the program you're already running instead
- * of derailing it toward random genes ("too focused on breeding for a side
- * quest"). The color roll stays as the optional detour spice. Tier targets are
- * Dud-free by invariant, so specs remain always breedable-toward — and they
- * follow the target rotation each tier for free.
+ * A PROVISION ORDER: hand over `amount` of one produced ingredient in a
+ * single click. Amount = PROVISION.SECONDS of the player's CURRENT production
+ * rate for that ingredient, clamped to PROVISION.CAP_FRACTION of the live
+ * Feed Store cap — always fulfillable with enough silo investment, never a
+ * request for the whole store.
  */
-function generateHatch(state: GameState, notch: number, id: string, rng: () => number): HatchContract {
-  const slots = Math.min(C.HATCH.SPEC_MAX_SLOTS, C.HATCH.SLOTS_BY_NOTCH[notch]);
-  const target = targetForTier(state.legacyTier);
-  const SLOTS = BALANCE.GENOME.SLOTS;
-  const positions = new Set<number>();
-  while (positions.size < slots) positions.add(Math.floor(rng() * SLOTS));
-  const genePattern: (Gene | null)[] = Array.from({ length: SLOTS }, () => null);
-  for (const p of positions) genePattern[p] = target[p];
-  const color: Color | undefined =
-    rng() < C.HATCH.COLOR_CHANCE ? COLORS[Math.floor(rng() * COLORS.length)] : undefined;
-  return { id, type: 'hatch', notch, reward: rollReward(notch, 'hatch', rng), completed: false, color, genePattern };
+function generateProvision(
+  state: GameState,
+  notch: number,
+  id: string,
+  candidates: Ingredient[],
+  rng: () => number,
+): ProvisionContract {
+  const ingredient = candidates[Math.floor(rng() * candidates.length)];
+  const rate = resourceFlow(state, ingredient).in;
+  const cap = ingredientCap(state) * C.PROVISION.CAP_FRACTION;
+  const amount = Math.max(1, Math.round(Math.min(rate * C.PROVISION.SECONDS, cap)));
+  return {
+    id,
+    type: 'provision',
+    notch,
+    reward: rollReward(notch, 'provision', rng),
+    completed: false,
+    ingredient,
+    amount,
+    limitRemaining: 0, // the deadline only starts ticking once accepted
+  };
 }
 
 function generateDefense(notch: number, id: string, rng: () => number): DefenseContract {
@@ -154,9 +213,12 @@ function generateDefense(notch: number, id: string, rng: () => number): DefenseC
 export function generateOffer(state: GameState, rng: () => number = Math.random): Contract {
   const id = `ct${state.contracts.nextContractId++}`;
   const notch = pickNotch(rng);
-  const type = pickType(rng);
-  if (type === 'delivery') return generateDelivery(state, notch, id, rng);
-  if (type === 'hatch') return generateHatch(state, notch, id, rng);
+  const provisionCandidates = producedIngredients(state);
+  const availableTypes: ContractType[] =
+    provisionCandidates.length > 0 ? ['order', 'provision', 'defense'] : ['order', 'defense'];
+  const type = pickType(availableTypes, rng);
+  if (type === 'order') return generateOrder(state, notch, id, rng);
+  if (type === 'provision') return generateProvision(state, notch, id, provisionCandidates, rng);
   return generateDefense(notch, id, rng);
 }
 
@@ -173,11 +235,8 @@ export function acceptContract(state: GameState, contractId: string): ActionResu
   const idx = state.contracts.offers.findIndex((o) => o.id === contractId);
   if (idx < 0) return fail('No such offer');
   const [contract] = state.contracts.offers.splice(idx, 1);
-  if (contract.type === 'delivery') {
-    contract.limitRemaining = C.DELIVERY.LIMIT_MIN * 60;
-    // Re-snapshot at ACCEPT: an offer that aged on the board must price against
-    // the flock that will actually run it, not the one that generated it.
-    contract.quota = deliveryQuota(state, contract.notch);
+  if (contract.type === 'provision') {
+    contract.limitRemaining = C.PROVISION.LIMIT_MIN * 60;
   }
   state.contracts.active = contract;
   refillOffers(state); // the emptied slot regenerates immediately
@@ -216,34 +275,54 @@ export function rerollOffers(state: GameState, rng: () => number = Math.random):
   return done(true);
 }
 
-// ── Progress hooks (called from the sim's existing lay/hatch/predator paths) ──
-/** Divert up to `n` laid eggs into an active delivery contract's quota. Returns
- *  how much was diverted (the caller deposits only the remainder to storage).
- *  Callers MUST gate this to online lay moments only (the online-only law). */
-export function onEggsLaid(state: GameState, n: number): number {
+// ── Player actions that complete a job (both are explicit clicks — the
+// online-only law holds by construction: neither is ever called from tick) ──
+/**
+ * Deliver a duck against the active BREEDING ORDER — it is REMOVED from the
+ * flock (any pairing it held is dropped too) and the contract completes.
+ * Omit `duckId` for the auto-pick: the LOWEST-target-quality eligible duck,
+ * so the player's best stock is kept by default. Prime carriers are never
+ * auto-picked (same protection standing as the cull tools) — if every
+ * eligible duck carries Prime, an explicit `duckId` is required (an active
+ * choice to spend precious carrier stock).
+ */
+export function deliverOrderDuck(state: GameState, duckId?: string): ActionResult<{ duckId: string }> {
   const c = state.contracts.active;
-  if (!c || c.type !== 'delivery' || c.completed || n <= 0) return 0;
-  const remaining = c.quota - c.delivered;
-  if (remaining <= 0) return 0;
-  const diverted = Math.min(n, remaining);
-  c.delivered += diverted;
-  if (c.delivered >= c.quota) c.completed = true;
-  return diverted;
+  if (!c || c.type !== 'order') return fail('No active order');
+  if (c.completed) return fail('Contract already complete');
+  const eligible = eligibleForOrder(state, c);
+  if (eligible.length === 0) return fail('No eligible duck');
+
+  let target: Duck;
+  if (duckId != null) {
+    const found = eligible.find((d) => d.id === duckId);
+    if (!found) return fail('That duck does not match the spec');
+    target = found;
+  } else {
+    const nonPrime = eligible.filter((d) => !d.genome.includes('P'));
+    if (nonPrime.length === 0) return fail('Only Prime carriers are eligible — deliver one explicitly');
+    target = nonPrime.reduce((worst, d) =>
+      targetMatch(d.genome, c.target) < targetMatch(worst.genome, c.target) ? d : worst,
+    );
+  }
+
+  const idx = state.ducks.findIndex((d) => d.id === target.id);
+  state.ducks.splice(idx, 1);
+  state.breedingPairs = state.breedingPairs.filter((p) => p.drakeId !== target.id && p.henId !== target.id);
+  c.completed = true;
+  return done({ duckId: target.id });
 }
 
-/** Check an online hatch against an active hatch-spec contract. Callers MUST
- *  only call this for hatches that occurred online (the online-only law). */
-export function onHatch(state: GameState, duck: Duck): void {
+/** Fulfil the active PROVISION ORDER — draws the full amount from central
+ *  storage in one shot (fails cleanly, no partial draw, if stock is short). */
+export function fulfilProvision(state: GameState): ActionResult<unknown> {
   const c = state.contracts.active;
-  if (!c || c.type !== 'hatch' || c.completed) return;
-  if (c.color && phenotype(duck.genotype) !== c.color) return;
-  for (let i = 0; i < c.genePattern.length; i++) {
-    const want = c.genePattern[i];
-    // null = "don't care" slot; otherwise the SAME wildcard rule as targetMatch
-    // (a Prime gene satisfies any wanted slot) — one shared matcher, no drift.
-    if (want != null && !slotMatches(duck.genome[i], want)) return;
-  }
+  if (!c || c.type !== 'provision') return fail('No active provision order');
+  if (c.completed) return fail('Contract already complete');
+  if (state.resources[c.ingredient] < c.amount) return fail(`Need ${c.amount} ${c.ingredient}`);
+  state.resources[c.ingredient] -= c.amount;
   c.completed = true;
+  return done(true);
 }
 
 /** Feed one predator event into an active defense contract: a foiled dive
@@ -267,17 +346,18 @@ export function onPredatorEvent(state: GameState, e: PredatorEvent): void {
 // ── Per-tick board upkeep (online-only; called from tick.ts) ──────────
 /**
  * Advance the board by `dt` seconds: fill any empty offer slots, roll a full
- * refresh on the timer, and tick the active delivery deadline (expiry frees
- * the slot with no penalty). The caller (tick.ts) must only invoke this in
- * online mode — nothing here may run during offline catch-up. (The defense
- * contract's scare-count hook is fed separately, from GameEngine's predator-
- * event drain — see onPredatorEvent's doc comment.)
+ * refresh on the timer, and tick an active provision's deadline (expiry frees
+ * the slot with no penalty — orders and defense have no clock; both run until
+ * the player either fills or abandons them). The caller (tick.ts) must only
+ * invoke this in online mode — nothing here may run during offline catch-up.
+ * (The defense contract's scare-count hook is fed separately, from
+ * GameEngine's predator-event drain — see onPredatorEvent's doc comment.)
  */
 export function runContracts(state: GameState, dt: number): void {
   // Track the run's peak egg rate ABOVE the tier gate: it's the honest base for
-  // delivery quotas AND (all tiers) the clutch egg cost (breeding.ts clutchCost)
-  // — a parked/throttled flock can't talk its way down to the floors. Online-
-  // only like every other contract clock; wiped with the run by prestige.
+  // the clutch egg cost (breeding.ts clutchCost) and other net pricing (pond.ts
+  // upgrades) — a parked/throttled flock can't talk its way down to the floors.
+  // Online-only like every other contract clock; wiped with the run by prestige.
   const rate = liveEggRate(state);
   if (rate > (state.contracts.peakEggRate ?? 0)) state.contracts.peakEggRate = rate;
 
@@ -293,7 +373,7 @@ export function runContracts(state: GameState, dt: number): void {
     cs.refreshRemaining = C.OFFER_REFRESH_S;
   }
 
-  if (cs.active && cs.active.type === 'delivery' && !cs.active.completed) {
+  if (cs.active && cs.active.type === 'provision' && !cs.active.completed) {
     cs.active.limitRemaining -= dt;
     if (cs.active.limitRemaining <= 0) {
       // Expired — freed slot, no penalty. Flag it so the engine surfaces a quiet

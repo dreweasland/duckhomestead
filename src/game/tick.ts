@@ -148,10 +148,8 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
 
   // The nutrition grid: feed the flock from storage per the active ration and
   // lay eggs throttled by per-axis satisfaction (buffered by flock condition).
-  // `online` gates the Grange's egg-diversion hook (Phase 6b) — the online-only
-  // law: offline catch-up never diverts a laid egg to a contract.
   const online = opts.mode === 'online';
-  runNutrition(state, dt, rateMult, willHaul, online);
+  runNutrition(state, dt, rateMult, willHaul);
 
   // Duckling grow-out ration consumes the leftover ingredients (layers eat first)
   // and gates maturation speed.
@@ -161,15 +159,13 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   const breedRate = runDrakeNutrition(state, dt, rateMult);
   // Winterstead (6d) eats LAST — scarcity throttles the premium satellite first,
   // never the core engine. Also lays the premium winter eggs.
-  runWinterNutrition(state, dt, rateMult, willHaul, online);
+  runWinterNutrition(state, dt, rateMult, willHaul);
 
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
   // Husbandry (legacy boost) is a pure SPEED scalar on both rates — it never
   // touches the rations that produced them, clutch size, or genome odds.
-  // `online` also gates the Grange's hatch-spec hook — offline hatches never
-  // count toward a contract.
   const husbandry = husbandryBoostMult(state);
-  runBreeding(state, dt * rateMult, matureRate * husbandry, breedRate * husbandry, online);
+  runBreeding(state, dt * rateMult, matureRate * husbandry, breedRate * husbandry);
   // Flock ratio health: an over-drake flock injures its own (online & offline).
   runOvercrowding(state, dt * rateMult);
 
@@ -195,8 +191,8 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
     activeDefense,
   });
 
-  // The Grange (Phase 6b): offer board upkeep (refill/refresh) + the active
-  // delivery contract's deadline. Online-only, top to bottom — offline catch-up
+  // The Grange (Phase 6b/8): offer board upkeep (refill/refresh) + an active
+  // provision order's deadline. Online-only, top to bottom — offline catch-up
   // never advances a contract clock. NOTE: the defense contract's scare-count
   // hook (onPredatorEvent) is NOT wired here — 'scared' only ever originates
   // from an out-of-band player scare (GameEngine.scare()), never from inside a

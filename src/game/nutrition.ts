@@ -1,6 +1,5 @@
 import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
-import { onEggsLaid } from './contracts';
 import { hardinessMult, layMult } from './genetics';
 import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
 import { waterConditionMult } from './water';
@@ -47,16 +46,9 @@ export function conditionTarget(state: GameState): number {
  * active ration (stock-limited — supply IS the stock read this tick), compute
  * per-axis satisfaction, update the flock-condition battery, and lay eggs for
  * each coop at base × throttle (buffered by condition). Mutates state and stores
- * the snapshot on state.nutrition. Never grants XP (offline-safe). `online`
- * gates the Grange's egg-diversion hook (Phase 6b) — offline never diverts.
+ * the snapshot on state.nutrition. Never grants XP (offline-safe).
  */
-export function runNutrition(
-  state: GameState,
-  dt: number,
-  rateMult: number,
-  willHaul: boolean,
-  online: boolean,
-): void {
+export function runNutrition(state: GameState, dt: number, rateMult: number, willHaul: boolean): void {
   const coops = state.stations.filter((s) => s.type === 'coop');
   const mills = state.stations.filter((s) => s.type === 'mill');
   // Phase 4a: the layer ration now feeds ADULT DUCKS (requirement driver) and
@@ -192,7 +184,7 @@ export function runNutrition(
     state.niacinShortfall = Math.max(0, state.niacinShortfall - step);
   }
 
-  layNutritionTail(state, willHaul, coops, eggMult, layers, coopCycle, step, online);
+  layNutritionTail(state, willHaul, coops, eggMult, layers, coopCycle, step);
 }
 
 // Split out so runDucklingNutrition can sit beside the layer logic below.
@@ -204,7 +196,6 @@ function layNutritionTail(
   layers: ReturnType<typeof adultLayers>,
   coopCycle: number,
   step: number,
-  online: boolean,
 ): void {
   // Lay eggs: sum over adult hens of base × GENOME layMult × nutrition throttle ×
   // leg debuff × predator wound, then × the flock-wide eggOutput module bonus.
@@ -230,10 +221,7 @@ function layNutritionTail(
     const share = eggsThisStep / coops.length;
     for (const coop of coops) {
       coop.cycleProgress = (coop.cycleProgress + step) % coopCycle; // cosmetic lay bar
-      // The Grange (Phase 6b): an active delivery contract diverts eggs at the
-      // LAY moment, online only — the remainder still flows to storage as before.
-      const diverted = online ? onEggsLaid(state, share) : 0;
-      coop.buffer.eggs = (coop.buffer.eggs ?? 0) + (share - diverted);
+      coop.buffer.eggs = (coop.buffer.eggs ?? 0) + share;
       if (willHaul) {
         state.resources.eggs += coop.buffer.eggs ?? 0;
         coop.buffer = {};
@@ -361,17 +349,10 @@ export function runDrakeNutrition(state: GameState, dt: number, rateMult: number
  *
  * into the winter coops' buffers (shared egg pool on haul). `warmth`/`support`
  * arrive in Step 3 (heater layout + waterers) — 1 until then. Cold/hunger only
- * ever THROTTLE (floors, never walls, no death path). Online lay is diverted to
- * an active Grange delivery via the same onEggsLaid hook as home lay. Runs
- * online & offline; never grants XP.
+ * ever THROTTLE (floors, never walls, no death path). Runs online & offline;
+ * never grants XP.
  */
-export function runWinterNutrition(
-  state: GameState,
-  dt: number,
-  rateMult: number,
-  willHaul: boolean,
-  online: boolean,
-): void {
+export function runWinterNutrition(state: GameState, dt: number, rateMult: number, willHaul: boolean): void {
   const W = BALANCE.WINTER;
   // Head count first (O(ducks), cheap): no assigned hens ⇒ no pool at all.
   let n = 0;
@@ -439,9 +420,7 @@ export function runWinterNutrition(
     const share = eggsThisStep / winterCoops.length;
     for (const coop of winterCoops) {
       coop.cycleProgress = (coop.cycleProgress + step) % coopCycle; // cosmetic lay bar
-      // Same lay-point diversion law as home lay: online only, remainder to buffer.
-      const diverted = online ? onEggsLaid(state, share) : 0;
-      coop.buffer.eggs = (coop.buffer.eggs ?? 0) + (share - diverted);
+      coop.buffer.eggs = (coop.buffer.eggs ?? 0) + share;
       if (willHaul) {
         state.resources.eggs += coop.buffer.eggs ?? 0;
         coop.buffer = {};

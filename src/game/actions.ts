@@ -1,6 +1,5 @@
 import { BALANCE, EXCLUSIVE_STATIONS, STATION_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/balance';
 import { clutchCost } from './breeding';
-import { onEggsLaid } from './contracts';
 import {
   activeStatWeights,
   cycleMult,
@@ -943,12 +942,8 @@ export function tend(state: GameState, stationId: string): ActionResult<TendResu
     const rate =
       station.type === 'coop' ? (state.nutrition?.eggRate ?? 0) : (state.winter?.eggRate ?? 0);
     const coops = state.stations.filter((s) => s.type === station.type).length;
-    let out = (rate / Math.max(1, coops)) * BALANCE.COOP.cycleSeconds * BALANCE.TEND_BURST_MULT * tendPower;
-    // The Grange (Phase 6b): tend() is always online, so an active delivery
-    // contract diverts eggs here too (the coop's other lay point) — the
-    // remainder is what actually lands in the buffer/burst feedback.
+    const out = (rate / Math.max(1, coops)) * BALANCE.COOP.cycleSeconds * BALANCE.TEND_BURST_MULT * tendPower;
     if (out > 0) {
-      out -= onEggsLaid(state, out);
       station.buffer.eggs = (station.buffer.eggs ?? 0) + out;
       burst.eggs = out;
     }

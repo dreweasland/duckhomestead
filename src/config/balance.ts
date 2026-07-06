@@ -966,22 +966,26 @@ export const BALANCE = {
     } as Record<string, { perLevel: number; baseCost: number; costGrowth: number }>,
   },
 
-  // ── Phase 6b: THE GRANGE (contracts board, unlocks at legacy tier 1) ─
-  // A rotating offer board: ONE active contract at a time diverts laid eggs /
-  // breeds to spec / defends a window, paying dust + a trickle of legacy
-  // shards (+ a guaranteed module at the top notch). ALL contract clocks and
-  // progress are ONLINE-ONLY (see game/contracts.ts) — offline catch-up never
-  // advances a deadline, diverts an egg, or counts a hatch/scare. Contracts
-  // NEVER touch the sim: they only observe existing lay/hatch/predator events
-  // and divert already-produced eggs. Rewards are dust/shards/modules ONLY —
-  // never eggs, resources, or XP.
+  // ── Phase 6b/8: THE GRANGE (contracts board, unlocks at legacy tier 1) ─
+  // A rotating offer board: ONE active contract at a time — breed a duck to an
+  // off-Standard spec and hand it over, provision a produced ingredient from
+  // storage, or defend a window — paying dust + a trickle of legacy shards (+ a
+  // guaranteed module at the top notch). ALL contract clocks and progress are
+  // ONLINE-ONLY (see game/contracts.ts) — offline catch-up never advances a
+  // deadline or counts a scare, and every completion (order delivery, provision
+  // fulfilment) is itself a player click, never a passive sim hook. Contracts
+  // NEVER touch the sim: they only observe existing predator events and spend
+  // resources/ducks the player already owns. Rewards are dust/shards/modules
+  // ONLY — never eggs, resources, or XP.
   CONTRACTS: {
     UNLOCK_TIER: 1,
     OFFER_SLOTS: 3,
     OFFER_REFRESH_S: 600,
     REROLL_DUST: 5,
-    /** Relative weights for the offer's TYPE roll. */
-    TYPE_WEIGHTS: { delivery: 1, hatch: 1, defense: 1 } as Record<string, number>,
+    /** Relative weights for the offer's TYPE roll. `provision` drops out of the
+     *  pool entirely when the player produces none of the tradeable ingredients
+     *  (rate 0 for all of them) — see contracts.ts generateOffer. */
+    TYPE_WEIGHTS: { order: 1, provision: 1, defense: 1 } as Record<string, number>,
     /** Relative weights for the offer's difficulty NOTCH roll (easy-leaning). */
     NOTCH_WEIGHTS: [50, 35, 15],
     /** Per-notch reward band: dust (the bulk) + a small legacy-shard trickle.
@@ -995,29 +999,40 @@ export const BALANCE = {
       { dust: [35, 50], shards: [6, 9], moduleRarity: 'rare' },
     ] as { dust: [number, number]; shards: [number, number]; moduleRarity?: string }[],
     /**
-     * Per-TYPE reward multiplier on the notch bands (playtest, 2026-07-02):
-     * the three types have wildly different REAL costs at the same notch —
-     * defense free-rides on scares you'd make anyway, delivery charges ~10 min
-     * of peak production in actual eggs, and hatch charges your breeding
-     * program's direction — so notch-only pricing made defense strictly
-     * optimal. Delivery pays like the treasure it costs; hatch like the
-     * program time it costs; defense stays the "you were playing anyway" tier.
+     * Phase 8 GRANGE 2.0 (playtest, 2026-07-06): the old `delivery`/`hatch`
+     * shapes were receipts for default play — hatch bounties paid for the exact
+     * genes mass breeding produces anyway (self-completing at scale), and egg
+     * delivery just banked eggs already being banked. `order` and `provision`
+     * replace them with genuine JOBS: an order costs a dedicated off-Standard
+     * side pair (real breeding investment, real generations), a provision costs
+     * a purchased Feed Store buffer (real silo investment, a lean-night
+     * tradeoff). Defense was already a job (be present, click well, for a whole
+     * window) and keeps its ×1 baseline; the new types are priced above it.
      */
-    TYPE_REWARD_MULT: { delivery: 2.25, hatch: 1.75, defense: 1 } as Record<string, number>,
-    DELIVERY: {
-      QUOTA_MINUTES: 10,
-      MIN_QUOTA: 300,
-      LIMIT_MIN: 15,
-      /** Notch scales the snapshotted quota (self-balancing to live eggRate). */
-      QUOTA_MULT_BY_NOTCH: [0.7, 1, 1.4],
+    TYPE_REWARD_MULT: { order: 2.5, provision: 1.5, defense: 1 } as Record<string, number>,
+    ORDER: {
+      /** Hard ceiling on constrained slots — never all 6, always leaves room for
+       *  a quality floor on the rest. */
+      SPEC_MAX_SLOTS: 3,
+      /** Constrained-slot COUNT by notch. EVERY constrained slot contradicts the
+       *  tier target (never just "at least two") — the generator picks from
+       *  {L,V,H} minus the target's own gene there, so a spec can never be
+       *  filled by a Standard-line pair breeding by accident. */
+      SLOTS_BY_NOTCH: [2, 2, 3],
+      /** Min count of the UNCONSTRAINED slots that must still match the
+       *  snapshotted target, by notch — 0 at entry (any junk fills the rest),
+       *  rising so a top order also asks for real quality, not just odd genes. */
+      QUALITY_FLOOR_BY_NOTCH: [0, 1, 2],
     },
-    HATCH: {
-      /** Hard ceiling on specified slots — never all 6, always breedable-toward. */
-      SPEC_MAX_SLOTS: 4,
-      /** Specified-slot COUNT by notch (unspecified slots are "don't care"). */
-      SLOTS_BY_NOTCH: [2, 3, 4],
-      /** Chance a spec also requires a specific color, on top of the pattern. */
-      COLOR_CHANCE: 0.4,
+    PROVISION: {
+      /** Amount = this many seconds of the player's CURRENT production rate for
+       *  the picked ingredient — the "hand over the overnight cushion" amount. */
+      SECONDS: 240,
+      /** Amount never exceeds this fraction of the live Feed Store cap
+       *  (ingredientCap) — always fulfillable with silo investment, never a
+       *  request for literally the whole store. */
+      CAP_FRACTION: 0.7,
+      LIMIT_MIN: 15,
     },
     DEFENSE: {
       SCARE_COUNT_BY_NOTCH: [2, 3, 5],

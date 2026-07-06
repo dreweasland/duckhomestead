@@ -1,5 +1,4 @@
 import { BALANCE } from '../config/balance';
-import { onHatch } from './contracts';
 import { breedGenome, breedGenotype, isPrimeDuck, isTruebred, maturationMult, recordColor } from './genetics';
 import { targetForTier } from './prestige';
 import { rollWoundSeverity } from './predators';
@@ -68,18 +67,9 @@ export function runOvercrowding(state: GameState, step: number, rng: () => numbe
  * parents); ducklings mature duckling -> juvenile -> adult. Runs online & offline
  * (offline at the reduced step). `matureRate` lets Step 5's duckling ration slow
  * maturation; it's 1 until then. New colors are pushed to state.pendingDex.
- * Never grants XP. Hatching is gated by housing capacity. `online` gates the
- * Grange's hatch-spec hook (Phase 6b) — defaults true so existing direct
- * callers (tests, offline-agnostic call sites) keep counting as before;
- * tick.ts passes the real mode so offline hatches never count toward a contract.
+ * Never grants XP. Hatching is gated by housing capacity.
  */
-export function runBreeding(
-  state: GameState,
-  step: number,
-  matureRate = 1,
-  breedRate = 1,
-  online = true,
-): void {
+export function runBreeding(state: GameState, step: number, matureRate = 1, breedRate = 1): void {
   const capacity = coopCapacity(state);
   // Home housing houses the HOME flock: winter-assigned ducks (6d) occupy
   // winter-coop slots at their own site (gated at assignment), so they must not
@@ -187,9 +177,6 @@ export function runBreeding(
       } else if (!hadTruebred && isTruebred(genome, standardTarget)) {
         state.pendingTruebred = (state.pendingTruebred ?? 0) + 1;
       }
-      // The Grange (Phase 6b): only an ONLINE hatch may complete a hatch-spec
-      // contract — offline catch-up hatches never count (the online-only law).
-      if (online) onHatch(state, duckling);
     }
   }
 

@@ -657,10 +657,13 @@ export type PredatorEvent =
   // surfaces this as the loot banner (the module is already in state.inventory).
   | { kind: 'siegeFoiled'; predatorId: string; dust: number; moduleId: string };
 
-// ── Phase 6b: THE GRANGE (contracts board) ───────────────────────────
+// ── Phase 8: THE GRANGE 2.0 (contracts become JOBS) ───────────────────
 /** The three contract shapes — a discriminated union so a new type later is a
- *  new generator, not new architecture. See game/contracts.ts. */
-export type ContractType = 'delivery' | 'hatch' | 'defense';
+ *  new generator, not new architecture. See game/contracts.ts. Phase 8 retired
+ *  the old `delivery` (egg-banking receipt) and `hatch` (spammable-by-mass-
+ *  breeding bounty) shapes for `order` and `provision` — jobs that cost a real
+ *  detour, never a receipt for default play. */
+export type ContractType = 'order' | 'provision' | 'defense';
 
 /** Dust (the bulk) + a small legacy-shard trickle; a module only at the top
  *  difficulty notch. NEVER eggs/resources/XP — the online-only law's payout side. */
@@ -673,30 +676,41 @@ export interface ContractReward {
 interface ContractCommon {
   id: string;
   /** Difficulty notch this contract rolled (0..NOTCH_WEIGHTS.length-1) — sets
-   *  its reward band and, per type, its quota/slot-count/scare-count. */
+   *  its reward band and, per type, its constraint-count/amount/scare-count. */
   notch: number;
   reward: ContractReward;
   /** True once the active contract's goal has been met — awaiting Claim. */
   completed: boolean;
 }
 
-/** The egg sink: divert laid eggs (at the two lay points) toward a quota,
- *  snapshotted from the live eggRate, under an online time limit. */
-export interface DeliveryContract extends ContractCommon {
-  type: 'delivery';
-  quota: number;
-  delivered: number;
-  /** Seconds left once ACCEPTED (0 while still just an offer). */
-  limitRemaining: number;
+/**
+ * A duck bred to the Grange's spec, delivered (removed from the flock) in
+ * exchange for the reward. `constraints` (length GENOME.SLOTS; null =
+ * unconstrained) always CONTRADICT `target` at every constrained slot — the
+ * generator snapshots `target` (the tier Standard at generation time) and
+ * picks a DIFFERENT {L,V,H} gene there, so a Standard-line pair can never
+ * fill the order by accident (see contracts.ts generateOrder). Higher notches
+ * also raise `minTargetQuality`, a floor on how many of the UNCONSTRAINED
+ * slots must still match `target` — the order wants odd blood, not junk.
+ */
+export interface OrderContract extends ContractCommon {
+  type: 'order';
+  constraints: (Gene | null)[];
+  target: Genome;
+  minTargetQuality: number;
 }
 
-/** Breeding stock to spec: an optional color + an optional positional gene
- *  pattern (length GENOME.SLOTS; null = unspecified/"don't care" slot). Genes
- *  only ever draw from {L,V,H} — never D — so a spec is always achievable. */
-export interface HatchContract extends ContractCommon {
-  type: 'hatch';
-  color?: Color;
-  genePattern: (Gene | null)[];
+/** Hand over a fixed amount of one produced ingredient from central storage —
+ *  the Feed Store's first customer. Amount is priced off the player's OWN
+ *  production rate at generation (see contracts.ts generateProvision), capped
+ *  well under the Feed Store ceiling so it's always fulfillable with silo
+ *  investment, never a request for more than the store could ever hold. */
+export interface ProvisionContract extends ContractCommon {
+  type: 'provision';
+  ingredient: Ingredient;
+  amount: number;
+  /** Seconds left once ACCEPTED (0 while still just an offer). */
+  limitRemaining: number;
 }
 
 /** Prove the watch: foil `scareTarget` committed dives (the 'scared' event)
@@ -707,7 +721,7 @@ export interface DefenseContract extends ContractCommon {
   scareProgress: number;
 }
 
-export type Contract = DeliveryContract | HatchContract | DefenseContract;
+export type Contract = OrderContract | ProvisionContract | DefenseContract;
 
 /** The board: a few open offers + at most ONE active contract (choosing which
  *  offer to run is the decision). Wiped by prestige (part of initialState()). */
@@ -719,9 +733,11 @@ export interface ContractsState {
   /** Seconds until every offer fully refreshes (a manual reroll is separate,
    *  costs dust, and doesn't reset this timer). */
   refreshRemaining: number;
-  /** The run's PEAK egg rate (home + winter, eggs/sec) — the honest base for
-   *  delivery quotas, so a parked/throttled flock can't price them down to the
-   *  floor. Updated online-only (runContracts); wiped with the run by prestige. */
+  /** The run's PEAK egg rate (home + winter, eggs/sec) — the honest base clutch
+   *  costs (breeding.ts), net pricing, and pond upgrade costs price against, so
+   *  a parked/throttled flock can't talk its way down to the floor. Survived
+   *  Phase 8's egg-delivery retirement (it's hoisted above the tier gate in
+   *  runContracts on purpose). Updated online-only; wiped with the run by prestige. */
   peakEggRate?: number;
 }
 
