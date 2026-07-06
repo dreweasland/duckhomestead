@@ -113,11 +113,12 @@ export function HUD({ state }: { state: GameState }) {
             className="h-full rounded-full bg-gradient-to-r from-[#e2b94f] to-[#8fe388] transition-[width] duration-150"
             style={{ width: `${prog * 100}%` }}
           />
-          <span
-            className="absolute inset-0 grid place-items-center text-[9px] font-bold tabular-nums leading-none text-[#f5ecd8]"
-            style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
-          >
-            {Math.floor(state.xp)} / {need} XP
+          {/* A dark chip under the text — readable over the bright fill AND
+              the empty track, no shadow tricks. */}
+          <span className="absolute inset-0 grid place-items-center">
+            <span className="rounded-full bg-[#1a1410]/75 px-2 py-[1px] text-[9px] font-bold tabular-nums leading-none text-[#ffe9a8]">
+              {Math.floor(state.xp)} / {need} XP
+            </span>
           </span>
         </div>
         <div className="mt-1 flex items-center justify-between text-[10px]">
