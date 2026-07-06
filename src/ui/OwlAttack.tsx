@@ -112,7 +112,17 @@ export function OwlAttack({ engine, state }: { engine: GameEngine; state: GameSt
   const isRaccoon = strike?.predatorId === 'raccoon';
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[70] overflow-hidden">
+    // While a dive is LIVE the overlay becomes a full-screen click SHIELD:
+    // everything except the attacker is unclickable (playtest: fast dives +
+    // near-miss clicks kept opening panels/build tools mid-scare). Stray
+    // clicks are swallowed — they don't count as scares; the owl stays the
+    // target, the crosshair cursor says "hunt mode". Once the dive resolves
+    // (puff only), clicks pass through again.
+    <div
+      className={`fixed inset-0 z-[70] overflow-hidden ${
+        s && spot ? 'pointer-events-auto cursor-crosshair' : 'pointer-events-none'
+      }`}
+    >
       {s && spot && (
         <>
           {/* Unmissable "attack NOW" cue: a pulsing red edge-glow over the board. */}
