@@ -27,7 +27,12 @@ export function useGame(onDing: (e: DingEvent) => void): UseGame {
 
     const onUnload = () => engine.saveNow();
     const onVisibility = () => {
+      // Hide: stamp lastSeen so the resume path knows how long we were dark.
+      // Show: browsers paused the rAF sim while hidden/occluded — credit the
+      // gap through the SAME offline catch-up a page load gets (engine no-ops
+      // for blips under VISIBILITY_CATCHUP_MIN_S).
       if (document.visibilityState === 'hidden') engine.saveNow();
+      else engine.resumeFromHidden(Date.now());
     };
     window.addEventListener('beforeunload', onUnload);
     document.addEventListener('visibilitychange', onVisibility);

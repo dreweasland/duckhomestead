@@ -429,6 +429,11 @@ export interface GameState {
    *  player is clearly here, so predator dives drop the passive floor and demand an
    *  active scare. Runtime-only — starts at 0 (guard) on load. */
   activeRemaining: number;
+  /** Seconds spent at GUARD since the active window lapsed (0 while active).
+   *  Drives the guard production ease (BALANCE.GUARD_RATE): a short step-away
+   *  runs at full rate, a parked tab eases toward the offline mult. Runtime-
+   *  only — reset to 0 on load (catch-up already ran at the offline rate). */
+  guardElapsed: number;
   /** Global cooldown (s) on the active "Dose Brewer's Yeast" intervention. */
   doseCooldownRemaining: number;
   /** Derived nutrition snapshot (recomputed each tick; not authoritative). */
@@ -959,6 +964,7 @@ export function initialState(now: number): GameState {
     niacinShortfall: 0,
     overcrowdStress: 0,
     activeRemaining: 0,
+    guardElapsed: 0,
     doseCooldownRemaining: 0,
     inventory: [],
     rack: [],

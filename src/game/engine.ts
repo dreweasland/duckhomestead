@@ -49,12 +49,20 @@ import {
 } from './contracts';
 import { goodGeneCount } from './genetics';
 import { flockRatio, type Duck } from './state';
-import { scareOff, type ScareResult } from './predators';
+import { rewindWoundsToBrink, scareOff, type ScareResult } from './predators';
 import { tryTendDrop } from './loot';
 import { conditionTarget } from './nutrition';
 import { waterConditionMult } from './water';
 import type { Milestone } from './rank';
-import { clearStorage, loadGame, newGame, saveToStorage, type AwaySummary } from './save';
+import {
+  clearStorage,
+  loadGame,
+  meaningfulAway,
+  newGame,
+  runOfflineCatchUp,
+  saveToStorage,
+  type AwaySummary,
+} from './save';
 import { tick } from './tick';
 import {
   placeFlowFeature,
@@ -477,12 +485,12 @@ export class GameEngine {
       saveToStorage(this.state, Date.now());
     }, BALANCE.AUTOSAVE_DEBOUNCE_MS);
   }
-  saveNow() {
+  saveNow(now = Date.now()) {
     if (this.saveTimer != null) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
-    saveToStorage(this.state, Date.now());
+    saveToStorage(this.state, now);
   }
 
   // ── Player actions (wrap pure actions, fire events, re-render) ─────
@@ -848,8 +856,13 @@ export class GameEngine {
 
   /** Mark the player as actively engaged (any meaningful interaction). Refreshes
    *  the active window — while it's live, predator dives drop the passive floor and
-   *  demand a scare. Cheap; safe to call on every UI interaction. */
+   *  demand a scare. Cheap; safe to call on every UI interaction. On the
+   *  guard→active edge, wounds the guard brink-hold parked at the escalation
+   *  threshold are rewound to a real triage window (the same return grace the
+   *  offline path gets) — otherwise they'd all escalate on the first active
+   *  frame, before any admit is possible. */
   markActive() {
+    if (this.state.activeRemaining <= 0) rewindWoundsToBrink(this.state);
     this.state.activeRemaining = BALANCE.PREDATORS.ACTIVE_WINDOW_S;
   }
 
@@ -936,6 +949,29 @@ export class GameEngine {
     const r = fulfilProvision(this.state);
     this.notify();
     return r;
+  }
+
+  /**
+   * The tab became visible again after the browser paused the rAF loop
+   * (hidden tab, minimized/occluded window, display sleep). The frame clamp
+   * simulates at most 1s of such a gap, and the next autosave would erase its
+   * offline credit — so before this hook, hidden time was simply destroyed:
+   * strictly worse than closing the browser. Run the SAME offline catch-up a
+   * page load gets (0.4× rate, mercy rail, 8h cap, Away summary): hidden time
+   * IS offline time. `lastSeen` is trustworthy here — the visibility handler
+   * saves on hide, and the autosave debounce keeps it within ~1.5s anyway.
+   */
+  resumeFromHidden(now: number) {
+    const gapSeconds = (now - this.state.lastSeen) / 1000;
+    if (gapSeconds <= BALANCE.VISIBILITY_CATCHUP_MIN_S) return;
+    const away = runOfflineCatchUp(this.state, now);
+    if (meaningfulAway(away)) this.away = away;
+    // Returning to the tab IS being present — same as the page-load path
+    // (start() marks active); this also grants brink-held wounds their triage
+    // window via markActive's guard→active rewind.
+    this.markActive();
+    this.saveNow(now); // one clock for the whole operation
+    this.notify();
   }
 
   /** Dismiss the "While you were away" summary. */

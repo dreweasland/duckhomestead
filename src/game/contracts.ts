@@ -360,10 +360,13 @@ export function onPredatorEvent(state: GameState, e: PredatorEvent): void {
  * the slot with no penalty — orders and defense have no clock; both run until
  * the player either fills or abandons them). The caller (tick.ts) must only
  * invoke this in online mode — nothing here may run during offline catch-up.
+ * The provision deadline additionally pauses at GUARD (`active` false): the
+ * clocks-only-run-while-you're-there law, extended to the tab-open-idle
+ * playstyle — an accepted order must never expire behind an unwatched tab.
  * (The defense contract's scare-count hook is fed separately, from
  * GameEngine's predator-event drain — see onPredatorEvent's doc comment.)
  */
-export function runContracts(state: GameState, dt: number): void {
+export function runContracts(state: GameState, dt: number, active = true): void {
   // Track the run's peak egg rate ABOVE the tier gate: it's the honest base for
   // the clutch egg cost (breeding.ts clutchCost) and other net pricing (pond.ts
   // upgrades) — a parked/throttled flock can't talk its way down to the floors.
@@ -383,7 +386,7 @@ export function runContracts(state: GameState, dt: number): void {
     cs.refreshRemaining = C.OFFER_REFRESH_S;
   }
 
-  if (cs.active && cs.active.type === 'provision' && !cs.active.completed) {
+  if (active && cs.active && cs.active.type === 'provision' && !cs.active.completed) {
     cs.active.limitRemaining -= dt;
     if (cs.active.limitRemaining <= 0) {
       // Expired — freed slot, no penalty. Flag it so the engine surfaces a quiet

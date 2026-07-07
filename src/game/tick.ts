@@ -75,13 +75,37 @@ function runCycle(state: GameState, station: Station, throughput: number): boole
 }
 
 /**
+ * Guard production ease: 1× while active and for GRACE_S of guard (a short
+ * step-away costs nothing), then linearly down to OFFLINE_RATE_MULT over
+ * EASE_S — a parked tab converges on the same idle floor as a closed browser.
+ * Any interaction snaps it back instantly (markActive zeroes guardElapsed).
+ */
+export function guardRateMult(state: GameState): number {
+  const G = BALANCE.GUARD_RATE;
+  const t = state.guardElapsed - G.GRACE_S;
+  if (t <= 0) return 1;
+  const f = Math.min(1, t / G.EASE_S);
+  return 1 + (BALANCE.OFFLINE_RATE_MULT - 1) * f;
+}
+
+/**
  * Advance the simulation by `dt` seconds. Pure with respect to GameState
  * (mutates it in place). Production is decoupled from render: callers feed
  * fixed timesteps. Offline applies OFFLINE_RATE_MULT and never grants XP
  * (XP only ever comes from tending, which is online — see actions.tend).
  */
 export function tick(state: GameState, dt: number, opts: TickOptions): void {
-  const rateMult = opts.mode === 'offline' ? BALANCE.OFFLINE_RATE_MULT : 1;
+  // ACTIVE vs GUARD clock first — the production rate below depends on it.
+  // Active lapses in real seconds; offline drains it too (you're away → guard).
+  // The guard timer feeds the production ease; predators/contracts stay on the
+  // raw wall clock regardless.
+  if (state.activeRemaining > 0) {
+    state.activeRemaining = Math.max(0, state.activeRemaining - dt);
+    state.guardElapsed = 0;
+  } else {
+    state.guardElapsed = (state.guardElapsed ?? 0) + dt;
+  }
+  const rateMult = opts.mode === 'offline' ? BALANCE.OFFLINE_RATE_MULT : guardRateMult(state);
   const willHaul = opts.autoHaul || opts.mode === 'offline';
 
   // Only raw producers run in this loop — mills (formulation) and coops
@@ -178,10 +202,9 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // Wall-clock danger — advanced by the RAW dt, never the offline rate-scaled
   // step (an owl doesn't hunt slower because you're away). Offline passes the
   // mercy budget so a defended/secured overnight is soft losses, not a wipe.
-  // Active window lapses in real seconds; offline drains it too (you're away →
-  // guard). ACTIVE only applies online: the player is here, so dives drop the
-  // passive floor and demand a scare.
-  if (state.activeRemaining > 0) state.activeRemaining = Math.max(0, state.activeRemaining - dt);
+  // The active window drained at the top of this tick (the rate ease reads it);
+  // ACTIVE only applies online: the player is here, so dives drop the passive
+  // floor and demand a scare.
   const activeDefense = opts.mode === 'online' && state.activeRemaining > 0;
 
   runPredators(state, dt, {
@@ -199,5 +222,7 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // tick(), so it's fed from GameEngine.drainPredatorEvents() instead (the
   // actual online-only choke point every predator event passes through en
   // route to the UI; offline catch-up never calls it). See game/contracts.ts.
-  if (online) runContracts(state, dt);
+  // The active flag pauses a provision order's deadline at guard — a clock
+  // never runs while you're not actually there (same law as offline).
+  if (online) runContracts(state, dt, activeDefense);
 }

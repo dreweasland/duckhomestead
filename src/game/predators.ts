@@ -216,8 +216,16 @@ function wearDefense(state: GameState, type: PredatorDef['defense'], amount: num
 
 /** Land a hit that got past the floor onto a specific (already-chosen) target:
  *  a snatch (brutality dial), a shrugged-off resist, or a soft wound. Shared by
- *  offline immediate attacks and online telegraphed strikes. */
-function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target: Duck, rng: () => number): void {
+ *  offline immediate attacks and online telegraphed strikes. Returns the
+ *  outcome so callers can gate per-hit netting wear on actual harm (a shrug
+ *  doesn't tear the line — see the 2026-07-07 wear retune in balance.ts). */
+function landHit(
+  state: GameState,
+  def: PredatorDef,
+  opts: PredatorOpts,
+  target: Duck,
+  rng: () => number,
+): 'snatched' | 'shrugged' | 'wounded' {
   // Brutality dial: a rare landed attack may skip the wound and take the duck
   // outright. Default OFF — every death otherwise passes through a wound.
   if (P.ALLOW_INSTANT_SNATCH && rng() < P.INSTANT_SNATCH_CHANCE && permitPermanentLoss(opts)) {
@@ -225,7 +233,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
     emit(state, { kind: 'snatched', predatorId: def.id, duckId: target.id, duckName: target.name });
     removeDuck(state, target.id);
     drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.loss); // a taken duck rattles the flock
-    return;
+    return 'snatched';
   }
 
   // Resilience: a Hardy (H-gene) duck has a chance to shrug off the wound
@@ -233,7 +241,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   if (rng() < woundResistChance(target.genome)) {
     // The H-gene's proudest moment was invisible — announce it (pure feedback).
     emit(state, { kind: 'shrugged', predatorId: def.id, duckId: target.id, duckName: target.name });
-    return;
+    return 'shrugged';
   }
 
   // THE PAIRED HUNT: actual harm (not a shrug) voids the bounty.
@@ -247,6 +255,7 @@ function landHit(state: GameState, def: PredatorDef, opts: PredatorOpts, target:
   // Condition stress: a landed hit rattles the whole flock (a blip alone; a bad
   // night compounds into a real dent to nurse back). A shrugged-off hit doesn't.
   drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.wound);
+  return 'wounded';
 }
 
 /** Resolve one attack attempt immediately (offline catch-up): roll against the
@@ -256,12 +265,14 @@ function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, r
   const success = attackChance(state, def, opts.mode === 'online');
   if (rng() >= success) return; // attack missed (defenses/presence held)
 
-  // A breach — the attack got past the floor — tears the netting extra.
-  wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
-
   const target = pickTarget(state, rng);
   if (!target) return; // nothing exposed (all secured / none eligible) — no effect
-  landHit(state, def, opts, target, rng);
+  // Per-hit wear only when the hit actually harms: a shrugged-off (or empty-
+  // yard) breach doesn't tear the netting. Breach wear used to fire on every
+  // success and dominated the ambient rate — see the balance.ts wear note.
+  if (landHit(state, def, opts, target, rng) !== 'shrugged') {
+    wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
+  }
 }
 
 /** Scare difficulty 0..1 from homestead rank: 0 at the intro rank, 1 at RANK_DIFF_TO.
@@ -322,17 +333,23 @@ function pickSpot(rng: () => number, exclude = -1): number {
 /**
  * THE PAIRED HUNT (rank ladder, 2026-07-06): on its clock, force-open the owl
  * AND raccoon windows together — the one-dive-at-a-time rule queues their
- * strikes back-to-back. Online-only (nothing here runs during catch-up);
- * flawless (no landed harm while the hunt runs, tracked via landHit) pays a
+ * strikes back-to-back. Online-only (nothing here runs during catch-up), and
+ * the scheduling clock only runs while ACTIVE (idle playstyle review,
+ * 2026-07-07): an attended set-piece must never open against an unwatched
+ * guard tab — unattended hunts were ~81% passive rare-module bounties, and
+ * the unlucky rest landed harm nobody chose. A hunt already running when the
+ * active window lapses still resolves and grades (the player just fought it).
+ * Flawless (no landed harm while the hunt runs, tracked via landHit) pays a
  * guaranteed bounty. Requires the rank plus BOTH base predators established.
  */
-function runPairedHunt(state: GameState, dt: number, rng: () => number): void {
+function runPairedHunt(state: GameState, dt: number, active: boolean, rng: () => number): void {
   const PH = P.PAIRED_HUNT;
   if (state.rank < PH.INTRO_RANK) return;
   const seen = state.predatorsSeen ?? [];
   if (!seen.includes('owl') || !seen.includes('raccoon')) return;
   const h = (state.pairedHunt ??= { timeToNext: PH.everySec, active: false, remaining: 0, harmed: false });
   if (!h.active) {
+    if (!active) return; // the clock FREEZES at guard — an event you attend
     h.timeToNext -= dt;
     if (h.timeToNext > 0) return;
     for (const id of ['owl', 'raccoon'] as const) {
@@ -415,9 +432,12 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
     emit(state, { kind: 'repelled', predatorId: def.id, duckId: target.id });
     return; // missed — defenses/presence held
   }
-  wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
   if (def.jackpot) ps.jackpotLanded = (ps.jackpotLanded ?? 0) + 1;
-  landHit(state, def, opts, target, rng);
+  // Per-hit wear only on actual harm — a shrug doesn't tear the line (see
+  // resolveAttack / the balance.ts wear note).
+  if (landHit(state, def, opts, target, rng) !== 'shrugged') {
+    wearDefense(state, def.defense, P.DETERRENT_WEAR_PER_HIT);
+  }
 }
 
 /** Result of a scare click: 'foiled' (strike beaten, duck safe), 'feint' (the owl
@@ -494,12 +514,15 @@ function advancePredator(state: GameState, def: PredatorDef, opts: PredatorOpts,
     attacksFired: 0,
   });
 
-  // Siege predators (minLegacyTier set) are an EVENT, never simulated offline:
-  // the schedule is FROZEN (doesn't advance) while away, and an already-open
-  // window FIZZLES (rescheduled fresh, no jackpot) rather than resolving
-  // unattended. A siege is something you attend, never something that mauls
-  // you in your sleep. Normal predators (no minLegacyTier) are untouched.
-  if (def.minLegacyTier != null && opts.mode === 'offline') {
+  // Siege predators (minLegacyTier set) are an EVENT, never simulated
+  // unattended: the schedule is FROZEN (doesn't advance) while away — offline
+  // OR at guard (idle playstyle review, 2026-07-07: a guard tab both farmed
+  // ~1.5 unattended epic jackpots per idle hour AND ate streak-resetting hits
+  // nobody chose) — and an already-open window FIZZLES (rescheduled fresh, no
+  // jackpot, no streak grade) rather than resolving unattended. A siege is
+  // something you attend, never something that mauls you in your sleep or
+  // pays you for lunch. Normal predators (no minLegacyTier) are untouched.
+  if (def.minLegacyTier != null && (opts.mode === 'offline' || !opts.activeDefense)) {
     if (windowOpen(ps)) state.predators[def.id] = freshSchedule(def);
     return;
   }
@@ -653,6 +676,19 @@ function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void 
     const threshold = P.WOUND_ESCALATE_SEC * woundMult;
     d.woundElapsed = (d.woundElapsed ?? 0) + dt;
     if (d.woundElapsed < threshold) continue;
+    // GUARD brink-hold (idle playstyle review, 2026-07-07): at guard the
+    // auto-admit above already triaged into every free slot, so reaching here
+    // means infirmary OVERFLOW with nobody watching — where offline the mercy
+    // rail would cap the toll, guard had NO cap, making a tab left open
+    // deadlier than a closed browser. Hold at the brink instead: a duck only
+    // ever dies while the player is actually here (an ignored, visible wound)
+    // or within the offline budget. markActive rewinds these to a real triage
+    // window on return (see rewindWoundsToBrink), mirroring the offline
+    // return grace.
+    if (opts.mode === 'online' && !opts.activeDefense) {
+      d.woundElapsed = threshold;
+      continue;
+    }
     if (permitPermanentLoss(opts)) {
       emit(state, { kind: 'escalated', duckId: d.id, source: d.woundSource ?? 'predator', duckName: d.name });
       drainCondition(state, BALANCE.NUTRITION.STRESS.DRAIN.loss); // losing one rattles the rest
@@ -663,6 +699,22 @@ function escalateWounds(state: GameState, dt: number, opts: PredatorOpts): void 
     }
   }
   if (lost) for (const id of lost) removeDuck(state, id);
+}
+
+/**
+ * Rewind every un-admitted wound to at least OFFLINE_RETURN_WOUND_GRACE_S
+ * before escalation. Both unattended modes hold budget-blocked wounds AT the
+ * brink (offline: mercy rail spent; guard: the brink-hold above) — without
+ * this rewind at the return boundary they'd all escalate on the first
+ * attended frame, before any triage is possible. Called by save.ts after
+ * offline catch-up and by GameEngine.markActive on the guard→active edge.
+ */
+export function rewindWoundsToBrink(state: GameState): void {
+  const threshold = P.WOUND_ESCALATE_SEC * waterWoundMult(state);
+  const brink = Math.max(0, threshold - P.OFFLINE_RETURN_WOUND_GRACE_S);
+  for (const d of state.ducks) {
+    if (d.wounded && !d.recovering) d.woundElapsed = Math.min(d.woundElapsed ?? 0, brink);
+  }
 }
 
 /**
@@ -689,7 +741,7 @@ export function runPredators(state: GameState, dt: number, opts: PredatorOpts): 
       for (const def of PREDATOR_DEFS) state.predators[def.id] = freshSchedule(def);
       emit(state, { kind: 'introduced', predatorId: PREDATOR_DEFS[0].id });
     }
-    if (opts.mode === 'online') runPairedHunt(state, dt, rng);
+    if (opts.mode === 'online') runPairedHunt(state, dt, !!opts.activeDefense, rng);
     for (const def of PREDATOR_DEFS) {
       if (state.rank < def.introRank) continue; // not yet at this predator's rank
       // Siege predators (Phase 6c) additionally never schedule/resolve below

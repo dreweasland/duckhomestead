@@ -56,10 +56,17 @@ export function stockAll(s: GameState, v = 1_000_000): GameState {
   return s;
 }
 
-/** Advance the sim by `seconds` of online time in 0.1s steps (auto-haul on). */
+/** Advance the sim by `seconds` of online time in 0.1s steps (auto-haul on).
+ *  Pins guardElapsed at 0 (fresh guard) each step so long runs measure the
+ *  full 1× online rate — the guard production ease has its own tests
+ *  (guard-idle.test.ts) and would otherwise skew every duration-based
+ *  assertion past GUARD_RATE.GRACE_S. */
 export function run(s: GameState, seconds: number, autoHaul = true): GameState {
   const steps = Math.round(seconds / 0.1);
-  for (let i = 0; i < steps; i++) tick(s, 0.1, { mode: 'online', autoHaul });
+  for (let i = 0; i < steps; i++) {
+    s.guardElapsed = 0;
+    tick(s, 0.1, { mode: 'online', autoHaul });
+  }
   return s;
 }
 

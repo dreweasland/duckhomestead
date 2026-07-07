@@ -177,6 +177,30 @@ export const BALANCE = {
   OFFLINE_RATE_MULT: 0.4,
   /** Max hours of offline catch-up credited on load. */
   OFFLINE_CAP_HOURS: 8,
+  /** Returning to a hidden/occluded tab runs the SAME offline catch-up as a
+   *  page load when at least this many real seconds passed unseen. Browsers
+   *  pause the rAF sim loop for hidden tabs, minimized/occluded windows, and
+   *  display sleep — before this hook (idle playstyle review, 2026-07-07) that
+   *  time was simply destroyed: the frame clamp simulated 1s of it and the
+   *  next autosave erased the gap's offline credit. Now hidden time IS offline
+   *  time: 0.4×, mercy rail, 8h cap, Away summary — the tab-open playstyle and
+   *  the browser-closed one converge on one honest idle rule. */
+  VISIBILITY_CATCHUP_MIN_S: 5,
+  /** GUARD EASE (idle playstyle review, 2026-07-07): "idle is the floor" was
+   *  written when offline WAS the idle mode — but the de facto playstyle is a
+   *  tab left open at guard, which produced at a full 1× forever (7.5× what a
+   *  closed browser earns per day), minting uncapped egg currency with zero
+   *  decisions — the exact mountain the Feed Store caps were built against.
+   *  Now guard production stays at 1× for GRACE_S after the active window
+   *  lapses (stepping away for coffee costs nothing), then eases linearly to
+   *  OFFLINE_RATE_MULT over EASE_S. Any interaction snaps it back to 1×
+   *  instantly (markActive). Wall-clock layers (predators, contracts, tend
+   *  cooldowns) are untouched — this scales PRODUCTION exactly like the
+   *  offline mult does. */
+  GUARD_RATE: {
+    GRACE_S: 900, // full rate for the first 15 min of guard…
+    EASE_S: 900, // …then ease to OFFLINE_RATE_MULT over the next 15
+  },
 
   // ── Tending (the active engine + the ONLY XP source) ────────────────
   // Cooldown is set long enough that tending the whole homestead leaves a
@@ -566,8 +590,15 @@ export const BALANCE = {
     // investment, making built defenses cosmetic overnight. At 0.005 ambient an
     // undefended night costs ~0.5 integrity: morning repair is a routine bill
     // and the floor still means something at 3am.
+    // (Idle playstyle review, 2026-07-07: that night-cost claim only counted
+    // ambient wear. Per-hit wear fired on every BREACH — ~2/h/line at a
+    // pristine floor — and at 0.06 it dominated, compounding as the floor
+    // sagged: nets zeroed ~3.5h into ANY unattended stretch, night or workday.
+    // Per-hit wear now fires only when a hit actually WOUNDS (shrugs and
+    // empty-yard breaches don't tear netting) and at 0.02, landing a full
+    // night at ~0.6 total wear — the routine morning bill as designed.)
     DETERRENT_WEAR_PER_WINDOW: 0.005, // ambient weathering per threat window
-    DETERRENT_WEAR_PER_HIT: 0.06, // extra damage when an attack breaches the floor
+    DETERRENT_WEAR_PER_HIT: 0.02, // extra tear when a hit lands a WOUND (see landHit call sites)
     /** Net/cloth PURCHASE pricing (playtest, 2026-07-05 — '20 nets, next is
      *  181k for +1% floor'): coverage made netting FLOCK-PROPORTIONAL (linear
      *  benefit, +DUCKS_COVERED_PER_UNIT each), and the old geometric curve

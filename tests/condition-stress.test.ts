@@ -51,7 +51,9 @@ describe('harm events drain the battery (attributable chunks)', () => {
     d.woundSource = 'predator';
     d.severity = 'minor';
     d.woundElapsed = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(s) - 0.5;
-    runPredators(s, 1, { mode: 'online', rng: zero });
+    // ACTIVE: online escalation is uncapped only while the player is here
+    // (guard brink-holds instead — see the guard-idle wound care tests).
+    runPredators(s, 1, { mode: 'online', rng: zero, activeDefense: true });
     expect(s.ducks).not.toContain(d); // escalated — the loss
     expect(s.condition).toBeCloseTo(MAX - S.DRAIN.loss, 5);
   });

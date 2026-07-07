@@ -1,8 +1,8 @@
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import { collectAll, placeStarterEngine } from './actions';
+import { rewindWoundsToBrink } from './predators';
 import { initialState, rackSockets, seedFlock, type Duck, type Gene, type GameState, type Genome, type Resource } from './state';
 import { tick } from './tick';
-import { waterWoundMult } from './water';
 
 const SAVE_KEY = 'duck-homestead-save-v1';
 
@@ -107,6 +107,7 @@ export function deserialize(raw: string, now: number): GameState {
       niacinShortfall: parsed.niacinShortfall ?? 0,
       overcrowdStress: parsed.overcrowdStress ?? 0,
       activeRemaining: 0, // always start in guard; the first action arms active mode
+      guardElapsed: 0, // fresh guard clock — the away gap was already offline-rated
       doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,
       // Phase 3 loot defaults for older saves.
       inventory: parsed.inventory ?? [],
@@ -360,15 +361,12 @@ export function runOfflineCatchUp(state: GameState, now: number): AwaySummary {
   collectAll(state);
 
   // The mercy rail holds budget-exhausted wounds AT the escalation brink — but
-  // online, permanent loss is uncapped, so without a rewind every brink-held
-  // duck would escalate on the FIRST online frame, behind the Away modal,
-  // before any admit is possible (and the toll reported below would already be
-  // false). Rewind every un-admitted wound to a real triage window.
-  const woundThreshold = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(state);
-  const brink = Math.max(0, woundThreshold - BALANCE.PREDATORS.OFFLINE_RETURN_WOUND_GRACE_S);
-  for (const d of state.ducks) {
-    if (d.wounded && !d.recovering) d.woundElapsed = Math.min(d.woundElapsed ?? 0, brink);
-  }
+  // active online, permanent loss is uncapped, so without a rewind every
+  // brink-held duck would escalate the moment play resumes, behind the Away
+  // modal, before any admit is possible (and the toll reported below would
+  // already be false). Rewind every un-admitted wound to a real triage window
+  // (shared with the guard→active edge in GameEngine.markActive).
+  rewindWoundsToBrink(state);
 
   const produced: Partial<Record<Resource, number>> = {};
   for (const key of Object.keys(state.resources) as Resource[]) {
@@ -451,6 +449,22 @@ export function newGame(now: number): GameState {
   return state;
 }
 
+/** Whether an away summary is worth a modal: meaningful time passed AND
+ *  something happened — resources made OR a flock toll (predator/overcrowding).
+ *  Gating on production alone hid the toll when nothing was produced (e.g. an
+ *  all-drake flock with no laying hens), so the player returned to wounded/
+ *  missing ducks with no explanation. Shared by the load path and the
+ *  hidden-tab resume path (GameEngine.resumeFromHidden). */
+export function meaningfulAway(away: AwaySummary): boolean {
+  return (
+    away.elapsedSeconds > 5 &&
+    (Object.keys(away.produced).length > 0 ||
+      away.predator != null ||
+      away.overcrowd != null ||
+      (away.debuffed ?? 0) > 0)
+  );
+}
+
 export function loadGame(now: number): { state: GameState; away: AwaySummary | null } {
   let raw: string | null = null;
   try {
@@ -462,15 +476,5 @@ export function loadGame(now: number): { state: GameState; away: AwaySummary | n
 
   const state = deserialize(raw, now);
   const away = runOfflineCatchUp(state, now);
-  // Surface the summary if meaningful time passed AND something happened — resources
-  // made OR a flock toll (predator/overcrowding). Gating on production alone hid the
-  // toll when nothing was produced (e.g. an all-drake flock with no laying hens),
-  // so the player returned to wounded/missing ducks with no explanation.
-  const meaningful =
-    away.elapsedSeconds > 5 &&
-    (Object.keys(away.produced).length > 0 ||
-      away.predator != null ||
-      away.overcrowd != null ||
-      (away.debuffed ?? 0) > 0);
-  return { state, away: meaningful ? away : null };
+  return { state, away: meaningfulAway(away) ? away : null };
 }

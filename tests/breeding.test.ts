@@ -266,7 +266,9 @@ describe('duck naming (opt-in — the emotional layer)', () => {
     d.woundSource = 'predator';
     d.severity = 'minor';
     d.woundElapsed = 99999; // far past any escalation window
-    runPredators(s, 1, { mode: 'online', rng: () => 1 });
+    // ACTIVE: online escalation is uncapped only while the player is here
+    // (guard brink-holds instead — see the guard-idle wound care tests).
+    runPredators(s, 1, { mode: 'online', rng: () => 1, activeDefense: true });
     const e = (s.pendingPredatorEvents ?? []).find((x) => x.kind === 'escalated');
     expect(e && 'duckName' in e ? e.duckName : undefined).toBe('Petunia');
     expect(s.ducks.find((x) => x.name === 'Petunia')).toBeUndefined(); // she's gone — the event remembers

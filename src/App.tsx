@@ -242,7 +242,9 @@ export default function App() {
   const [buildType, setBuildType] = useState<StationType | null>(null);
   const [activeZone, setActiveZone] = useState('yard');
   const [tendFlash, setTendFlash] = useState<{ id: number; xp: number } | null>(null);
-  const [awayOpen, setAwayOpen] = useState(true);
+  // No local open flag: engine.away is the single source — clearAway() on
+  // dismiss nulls it, and a hidden-tab resume (resumeFromHidden) may set a
+  // FRESH summary later in the session, which must re-open the modal.
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
   const [flockOpen, setFlockOpen] = useState(false);
@@ -300,7 +302,7 @@ export default function App() {
   // Stable identity — the FlockPanel memo comparator checks onClose equality.
   const closeFlock = useCallback(() => setFlockOpen(false), []);
   const guideBlocked =
-    (engine.away != null && awayOpen) ||
+    engine.away != null ||
     ding != null ||
     loot != null ||
     dex != null ||
@@ -440,11 +442,10 @@ export default function App() {
           </span>
         )}
       </NotifyRail>
-      {engine.away && awayOpen && (
+      {engine.away && (
         <AwayModal
           away={engine.away}
           onClose={() => {
-            setAwayOpen(false);
             engine.clearAway();
           }}
         />

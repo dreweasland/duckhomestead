@@ -21,6 +21,7 @@ import {
   windowOpen,
   activeStrike,
   currentThreat,
+  rewindWoundsToBrink,
   rollWindowAttacks,
   rollWoundSeverity,
   scareOff,
@@ -294,6 +295,41 @@ describe('the siege (The Great Horned) — tier-gated, offline-frozen EVENT (Pha
     expect(s.predators.greatHorned.timeToNextWindow).toBe(500); // untouched
   });
 
+  it('the clock is ALSO frozen at GUARD — an unwatched tab neither farms nor eats a siege', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    s.legacyTier = TIER;
+    s.predatorsSeen = ['greatHorned'];
+    s.predators.greatHorned = { timeToNextWindow: 500, windowRemaining: 0, windowElapsed: 0, attacksFired: 0 };
+    runPredators(s, 3600, { mode: 'online', rng: never, activeDefense: false }); // an idle guard hour
+    expect(s.predators.greatHorned.timeToNextWindow).toBe(500); // untouched
+    // …and it advances again the moment the player is back.
+    runPredators(s, 100, { mode: 'online', rng: never, activeDefense: true });
+    expect(s.predators.greatHorned.timeToNextWindow).toBe(400);
+  });
+
+  it('an OPEN window fizzles when the active window lapses mid-siege (no grade, no streak reset)', () => {
+    const s = flock(6);
+    s.rank = RANK;
+    s.legacyTier = TIER;
+    s.predatorsSeen = ['greatHorned'];
+    s.predatorFlawlessStreak = 2;
+    s.predators.greatHorned = {
+      timeToNextWindow: 0,
+      windowRemaining: 40,
+      windowElapsed: 35,
+      attacksFired: 2,
+      jackpotDives: 2,
+      jackpotLanded: 1, // a hit already landed — a resolved close would reset the streak
+    };
+    runPredators(s, 1, { mode: 'online', rng: never, activeDefense: false });
+    const ps = s.predators.greatHorned;
+    expect(ps.windowRemaining).toBe(0); // window cleared, not resolved
+    expect(ps.timeToNextWindow).toBe(SIEGE.windowEverySec); // rescheduled a full interval out
+    expect(s.predatorFlawlessStreak).toBe(2); // ungraded — the streak survives
+    expect(events(s).some((e) => e.kind === 'siegeFoiled')).toBe(false);
+  });
+
   it('an OPEN window fizzles on offline catch-up: cleared, rescheduled fresh, no jackpot', () => {
     const s = flock(6);
     s.rank = RANK;
@@ -340,7 +376,9 @@ describe('the siege jackpot — flawless-defense grant + streak (Phase 6c)', () 
   const JACKPOT = SIEGE.jackpot!;
 
   /** Force greatHorned's window to close THIS tick with a given committed-dive /
-   *  landed tally, so resolveJackpot's grading fires deterministically. */
+   *  landed tally, so resolveJackpot's grading fires deterministically. ACTIVE —
+   *  a siege only ever runs/grades while the player is actually there (the
+   *  guard/offline freeze fizzles it instead). */
   function closeWindow(s: GameState, dives: number, landed: number): void {
     s.predators.greatHorned = {
       timeToNextWindow: 0,
@@ -350,7 +388,7 @@ describe('the siege jackpot — flawless-defense grant + streak (Phase 6c)', () 
       jackpotDives: dives,
       jackpotLanded: landed,
     };
-    runPredators(s, 1, { mode: 'online', rng: never }); // dt exceeds remaining -> closes
+    runPredators(s, 1, { mode: 'online', rng: never, activeDefense: true }); // dt exceeds remaining -> closes
   }
 
   function readySiege(): GameState {
@@ -737,8 +775,10 @@ describe('wound → escalation → admit to infirmary (the checkpoint)', () => {
     // Park the schedule so no NEW attacks confound the count.
     s.predators.owl.timeToNextWindow = 1e9;
     // The window is the base timer stretched/tightened by water access (Phase 4d).
+    // ACTIVE: the player is demonstrably here, ignoring a visible wound — the
+    // one online state where escalation is uncapped (guard brink-holds instead).
     const escalateAt = P.WOUND_ESCALATE_SEC * waterWoundMult(s);
-    runPredators(s, escalateAt + 1, { mode: 'online', rng: never });
+    runPredators(s, escalateAt + 1, { mode: 'online', rng: never, activeDefense: true });
     expect(s.ducks.find((d) => d.id === 'd0')).toBeUndefined();
     expect(events(s).some((e) => e.kind === 'escalated')).toBe(true);
   });
@@ -1022,7 +1062,7 @@ describe('guard-idle wound care (tab open, player away)', () => {
     expect(d.recovering).toBeFalsy();
   });
 
-  it('guard overflow still escalates — the exposure matches a night away', () => {
+  it('guard overflow HOLDS at the brink — nobody dies behind an unwatched tab', () => {
     const { s } = mkWounded();
     // Fill every slot, then wound one more past its timer.
     for (const d of s.ducks) {
@@ -1033,7 +1073,42 @@ describe('guard-idle wound care (tab open, player away)', () => {
     const extra = s.ducks[1];
     extra.recovering = false;
     extra.woundElapsed = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * 2;
-    runPredators(s, 1, { mode: 'online', rng: never, activeDefense: false });
+    const threshold = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(s);
+    // Guard: overflow past the timer is held AT the brink, not killed — where
+    // offline the mercy rail caps the toll, guard had NO cap (a tab left open
+    // was deadlier than a closed browser).
+    for (let t = 0; t < 100; t++) runPredators(s, 1, { mode: 'online', rng: never, activeDefense: false });
+    expect(s.ducks).toContain(extra);
+    expect(extra.woundElapsed).toBe(threshold);
+    expect(events(s).some((e) => e.kind === 'escalated')).toBe(false);
+  });
+
+  it('the guard→active edge rewinds brink-held wounds to a real triage window', () => {
+    const { s } = mkWounded();
+    for (const d of s.ducks) {
+      d.wounded = true;
+      d.severity = 'minor';
+      d.recovering = true;
+    }
+    const extra = s.ducks[1];
+    extra.recovering = false;
+    extra.woundElapsed = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * 2;
+    runPredators(s, 1, { mode: 'online', rng: never, activeDefense: false }); // brink-held
+    // The return: markActive calls this on the guard→active edge (engine.ts).
+    rewindWoundsToBrink(s);
+    const threshold = BALANCE.PREDATORS.WOUND_ESCALATE_SEC * waterWoundMult(s);
+    expect(extra.woundElapsed).toBe(
+      Math.max(0, threshold - BALANCE.PREDATORS.OFFLINE_RETURN_WOUND_GRACE_S),
+    );
+    // Inside the grace, ACTIVE play doesn't lose the duck…
+    runPredators(s, 10, { mode: 'online', rng: never, activeDefense: true });
+    expect(s.ducks).toContain(extra);
+    // …but an ignored wound past the grace still escalates (the active law).
+    runPredators(s, BALANCE.PREDATORS.OFFLINE_RETURN_WOUND_GRACE_S + 1, {
+      mode: 'online',
+      rng: never,
+      activeDefense: true,
+    });
     expect(s.ducks).not.toContain(extra);
   });
 });
@@ -1075,6 +1150,30 @@ describe('strike outcomes all SPEAK (repelled + shrugged events — pure feedbac
     expect(shrug).toBeDefined();
     expect(shrug && 'duckName' in shrug ? shrug.duckName : undefined).toBe('Tank');
     expect(s.ducks.some((d) => d.wounded)).toBe(false);
+  });
+
+  it('per-hit wear fires only on a landed WOUND — a shrug never tears the line', () => {
+    // Identical setups, identical rng; the only difference is Hardy vs flat
+    // genomes. Both runs breach the floor twice — the Hardy flock shrugs both
+    // (no per-hit wear), the flat flock takes two wounds (two tears). The
+    // window is pre-opened, so no ambient per-window wear muddies the compare.
+    const runOne = (hardy: boolean): GameState => {
+      const s = flock(6);
+      openStrike(s);
+      buildDeterrent(s);
+      if (hardy) s.ducks.forEach((d) => (d.genome = ['H', 'H', 'H', 'H', 'H', 'H']));
+      runPredators(s, 45, { mode: 'offline', rng: () => 0.1, lossBudget: { remaining: 10 } });
+      return s;
+    };
+    const shrugged = runOne(true);
+    expect(shrugged.ducks.some((d) => d.wounded)).toBe(false);
+    expect(shrugged.deterrentIntegrity).toBe(1); // pristine — nothing landed
+    const wounded = runOne(false);
+    expect(wounded.ducks.filter((d) => d.wounded)).toHaveLength(2);
+    expect(wounded.deterrentIntegrity).toBeCloseTo(
+      1 - 2 * BALANCE.PREDATORS.DETERRENT_WEAR_PER_HIT,
+      6,
+    );
   });
 });
 
@@ -1202,9 +1301,9 @@ describe('THE PAIRED HUNT (rank 28): coordinated windows, flawless bounty', () =
     return s;
   };
 
-  it('opens BOTH windows together (online), and never ticks offline', () => {
+  it('opens BOTH windows together (online, ACTIVE), and never ticks offline or at guard', () => {
     const s = huntState();
-    runPredators(s, 2, { mode: 'online', rng: () => 0.99, activeDefense: false });
+    runPredators(s, 2, { mode: 'online', rng: () => 0.99, activeDefense: true });
     expect(s.pairedHunt?.active).toBe(true);
     expect(s.predators.owl?.windowRemaining).toBeGreaterThan(0);
     expect(s.predators.raccoon?.windowRemaining).toBeGreaterThan(0);
@@ -1213,13 +1312,25 @@ describe('THE PAIRED HUNT (rank 28): coordinated windows, flawless bounty', () =
     const off = huntState();
     runPredators(off, 2, { mode: 'offline', rng: () => 0.99, lossBudget: { remaining: 10 } });
     expect(off.pairedHunt?.active).toBe(false); // an active set-piece — online only
+
+    // GUARD: the clock FREEZES — an unwatched tab never opens a hunt (it was
+    // ~81% passive bounty farming, and landed harm nobody chose otherwise).
+    const g = huntState();
+    runPredators(g, 3600, { mode: 'online', rng: () => 0.99, activeDefense: false });
+    expect(g.pairedHunt?.active).toBe(false);
+    expect(g.pairedHunt?.timeToNext).toBe(1); // untouched
   });
 
   it('flawless (nothing landed) pays the bounty; harm voids it', () => {
+    // Open the hunt ACTIVE, then let the player lapse to guard mid-hunt: a
+    // running hunt still resolves and grades (they fought it — only the
+    // SCHEDULING clock freezes at guard). rng 0.99: every guard-mode strike
+    // expiry MISSES (defenses hold) — flawless.
     const s = huntState();
     const dust0 = s.dust;
     const mods0 = s.inventory.length + s.rack.length;
-    // rng 0.99: every guard-mode strike expiry MISSES (defenses hold) — flawless.
+    runPredators(s, 2, { mode: 'online', rng: () => 0.99, activeDefense: true });
+    expect(s.pairedHunt?.active).toBe(true);
     for (let t = 0; t < PH.windowDurationSec + PH.graceSec + 5; t++) {
       runPredators(s, 1, { mode: 'online', rng: () => 0.99, activeDefense: false });
     }
@@ -1230,13 +1341,13 @@ describe('THE PAIRED HUNT (rank 28): coordinated windows, flawless bounty', () =
 
     const h = huntState();
     const hd0 = h.dust;
-    runPredators(h, 2, { mode: 'online', rng: () => 0.99, activeDefense: false });
+    runPredators(h, 2, { mode: 'online', rng: () => 0.99, activeDefense: true });
     h.pairedHunt!.harmed = true; // a landed hit mid-hunt (landHit marks this)
     for (let t = 0; t < PH.windowDurationSec + PH.graceSec + 5; t++) {
       runPredators(h, 1, { mode: 'online', rng: () => 0.99, activeDefense: false });
     }
     expect(h.pairedHunt?.active).toBe(false);
     expect(h.dust).toBe(hd0); // no bounty
-    expect(h.pairedHunt?.timeToNext).toBeGreaterThan(PH.everySec - 30); // rescheduled either way (ticks down as the loop runs on)
+    expect(h.pairedHunt?.timeToNext).toBe(PH.everySec); // rescheduled (frozen at guard until the player returns)
   });
 });
