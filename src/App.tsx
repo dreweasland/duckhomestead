@@ -19,7 +19,7 @@ import { WaterBoard, WaterBuildBar } from './ui/WaterBoard';
 import type { DexEvent, DingEvent, LootEvent } from './game/engine';
 import { currentThreat, predatorsActive } from './game/predators';
 import { championGoal } from './game/prestige';
-import { GrangePanel } from './ui/GrangePanel';
+import { ActiveContractStrip, GrangePanel } from './ui/GrangePanel';
 import { LegacyPanel } from './ui/LegacyPanel';
 import { defenseFloor, flockRatio, rackSockets, RARITIES, stationAt, zoneUnlocked, type FlowFeatureType, type PondFeatureType } from './game/state';
 import { DuckIcon, GrangeIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
@@ -673,26 +673,33 @@ export default function App() {
             })()}
           {state.legacyTier >= BALANCE.CONTRACTS.UNLOCK_TIER &&
             (() => {
-              const claimable = !!state.contracts.active?.completed;
+              const active = state.contracts.active;
+              const claimable = !!active?.completed;
+              const tag = claimable
+                ? 'ready to claim!'
+                : active
+                  ? active.type === 'order'
+                    ? 'commission'
+                    : active.type === 'provision'
+                      ? 'provision'
+                      : 'defense'
+                  : `${state.contracts.offers.length} offers`;
               return (
                 <button
                   onClick={() => setGrangeOpen(true)}
-                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-bold transition ${
+                  className={`flex flex-col gap-1.5 rounded-md px-3 py-2 text-sm font-bold transition ${
                     claimable
                       ? 'bg-[#5a4320] text-[#ffe9a8] ring-1 ring-[#e2b94f] hover:bg-[#6a4f28]'
                       : 'bg-[#2e3a26] text-[#bfe8a8] hover:bg-[#36422c]'
                   }`}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <GrangeIcon size={16} /> The Grange
+                  <span className="flex w-full items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <GrangeIcon size={16} /> The Grange
+                    </span>
+                    <span className="tabular-nums">{tag}</span>
                   </span>
-                  <span className="tabular-nums">
-                    {claimable
-                      ? 'ready to claim!'
-                      : state.contracts.active
-                        ? 'contract active'
-                        : `${state.contracts.offers.length} offers`}
-                  </span>
+                  {active && <ActiveContractStrip state={state} />}
                 </button>
               );
             })()}

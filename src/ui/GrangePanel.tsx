@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
 import { eligibleForLine } from '../game/contracts';
@@ -170,6 +171,87 @@ function ActiveJob({ c, state, engine }: { c: Contract; state: GameState; engine
         <HandoverIcon size={11} /> Deliver all
       </button>
     </div>
+  );
+}
+
+/** A thin goal-line + progress bar, the shared shell for the main-screen strip. */
+function StripShell({ pct, done, children }: { pct: number; done: boolean; children: ReactNode }) {
+  return (
+    <span className="flex w-full flex-col gap-1 rounded bg-black/25 px-2 py-1.5 text-[10px] font-normal text-[#e8dcc0]">
+      <span className="flex items-center gap-1.5">{children}</span>
+      <span className="block h-1 overflow-hidden rounded-full bg-black/40">
+        <span
+          className="block h-full rounded-full"
+          style={{ width: `${Math.round(pct * 100)}%`, background: done ? '#e2b94f' : '#8fe388' }}
+        />
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The active contract distilled to one at-a-glance strip for the main screen's
+ * Grange button — what the job is + live progress, no actions. Reuses the same
+ * eligibility/quality rules as the panel so the numbers match exactly. Renders
+ * nothing when no contract is active.
+ */
+export function ActiveContractStrip({ state }: { state: GameState }) {
+  const c = state.contracts.active;
+  if (!c) return null;
+
+  if (c.type === 'provision') {
+    const Icon = RESOURCE_ICON[c.ingredient];
+    const stock = Math.floor(state.resources[c.ingredient]);
+    const pct = Math.min(1, stock / Math.max(1, c.amount));
+    return (
+      <StripShell pct={pct} done={c.completed}>
+        <Icon size={11} />
+        <span className="tabular-nums">
+          {stock.toLocaleString()} / {c.amount.toLocaleString()} {ING_LABEL[c.ingredient]}
+        </span>
+        <span className="ml-auto tabular-nums text-[#e8c45a]">{mmss(c.limitRemaining)}</span>
+      </StripShell>
+    );
+  }
+
+  if (c.type === 'defense') {
+    const pct = Math.min(1, c.scareProgress / Math.max(1, c.scareTarget));
+    return (
+      <StripShell pct={pct} done={c.completed}>
+        <OwlIcon size={11} />
+        <span className="tabular-nums">
+          {c.scareProgress} / {c.scareTarget} dives foiled
+        </span>
+      </StripShell>
+    );
+  }
+
+  // Commission: per-line ready counts against unprotected fresh stock (what a
+  // delivery can actually take) — the strip's bar tracks lines filled.
+  const lineStates = c.lines.map((l) => {
+    const ready = eligibleForLine(state, c, l).filter(
+      (d) => !d.genome.includes('P') && !d.secured && d.site !== 'winter',
+    ).length;
+    return { line: l, ready };
+  });
+  const filled = lineStates.filter((ls) => ls.ready >= ls.line.count).length;
+  return (
+    <StripShell pct={filled / Math.max(1, lineStates.length)} done={c.completed}>
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {lineStates.map(({ line, ready }, i) => (
+          <span key={i} className="inline-flex items-center gap-1">
+            <ColorSwatch color={line.color} size={9} />
+            <span className="tabular-nums">
+              {line.color} {line.sex}
+              {line.count > 1 ? 's' : ''}
+            </span>
+            <span className={ready >= line.count ? 'font-bold text-[#8fe388]' : 'text-[#e8c45a]'}>
+              {Math.min(ready, line.count)}/{line.count}
+            </span>
+          </span>
+        ))}
+      </span>
+    </StripShell>
   );
 }
 
