@@ -8,6 +8,7 @@ import {
   deliverOrder,
   duckQualifies,
   eligibleForLine,
+  lineStatus,
   fulfilProvision,
   generateOffer,
   onPredatorEvent,
@@ -399,6 +400,26 @@ describe('order: the BREEDING COMMISSION — fresh color stock, handed over', ()
     expect(s.ducks.length).toBeGreaterThan(2); // hatching really happened
     // Ducks may QUALIFY — but nothing ever completes without deliverOrder().
     expect((s.contracts.active as OrderContract).completed).toBe(false);
+  });
+
+  it('lineStatus explains WHY a right-colour duck is not counting', () => {
+    const c = commission({ sinceDuckId: 100, minQuality: 3, target: genome('LLLLLL') });
+    const s = initialState(0);
+    const line = c.lines[0]; // blue hen
+    s.ducks = [
+      mk('d150'), // right kind, quality 2 < 3 → below quality
+      mk('d151', { genome: genome('LLLLDD') }), // quality 4 ≥ 3, unprotected → ready
+      mk('d152', { genome: genome('LLLLDD'), secured: true }), // qualifies but held back
+      mk('d153', { genome: genome('PLLLDD') }), // Prime carrier → held back
+      mk('d50'), // right kind but hatched before acceptance
+      mk('d160', { sex: 'drake' }), // wrong sex → ignored entirely
+    ];
+    const st = lineStatus(s, c, line);
+    expect(st.ready).toBe(1);
+    expect(st.belowQuality).toBe(1);
+    expect(st.protectedCount).toBe(2);
+    expect(st.preAcceptance).toBe(1);
+    expect(st.rightKind).toBe(4); // the four post-acceptance blue hens
   });
 });
 

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { eligibleForLine } from '../game/contracts';
+import { lineStatus } from '../game/contracts';
 import { ColorSwatch } from './FlockPanel';
 import { type OrderContract, type Contract, type GameState, type Ingredient } from '../game/state';
 import { useEscapeKey } from './useEscapeKey';
@@ -130,29 +130,46 @@ function ActiveJob({ c, state, engine }: { c: Contract; state: GameState; engine
   }
   // Commission: per-line ready counts (unprotected fresh stock only — what the
   // delivery can actually take), one Deliver-all button when every line fills.
-  const lineStates = c.lines.map((l) => {
-    const ready = eligibleForLine(state, c, l).filter(
-      (d) => !d.genome.includes('P') && !d.secured && d.site !== 'winter',
-    ).length;
-    return { line: l, ready };
-  });
+  // When a line is short, a diagnostic says WHY the right-colour ducks the
+  // player bred aren't counting (below the quality floor / held back), so a
+  // stuck delivery is never a mystery.
+  const lineStates = c.lines.map((l) => lineStatus(state, c, l));
   const allReady = lineStates.every((ls) => ls.ready >= ls.line.count);
   const canDeliver = !c.completed && allReady;
   return (
     <div>
-      <div className="mb-2 flex flex-col gap-1">
-        {lineStates.map(({ line, ready }, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-[10px] tabular-nums text-[#c9b88f]">
-            <ColorSwatch color={line.color} size={11} />
-            <span>
-              {line.color} {line.sex}
-              {line.count > 1 ? 's' : ''}
-            </span>
-            <span className={ready >= line.count ? 'font-bold text-[#8fe388]' : 'text-[#e8c45a]'}>
-              {Math.min(ready, line.count)}/{line.count} ready
-            </span>
-          </div>
-        ))}
+      <div className="mb-2 flex flex-col gap-1.5">
+        {lineStates.map((ls, i) => {
+          const { line, ready, belowQuality, protectedCount, unread, preAcceptance } = ls;
+          const short = ready < line.count;
+          const reasons: string[] = [];
+          if (belowQuality > 0) reasons.push(`${belowQuality} below quality ≥${c.minQuality}/6`);
+          if (protectedCount > 0) reasons.push(`${protectedCount} held back (Prime/secured/wintering)`);
+          if (preAcceptance > 0)
+            reasons.push(`${preAcceptance} bred before accepting (only ducks hatched after count)`);
+          return (
+            <div key={i} className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5 text-[10px] tabular-nums text-[#c9b88f]">
+                <ColorSwatch color={line.color} size={11} />
+                <span>
+                  {line.color} {line.sex}
+                  {line.count > 1 ? 's' : ''}
+                </span>
+                <span className={ready >= line.count ? 'font-bold text-[#8fe388]' : 'text-[#e8c45a]'}>
+                  {Math.min(ready, line.count)}/{line.count} ready
+                </span>
+              </div>
+              {short && reasons.length > 0 && (
+                <div className="pl-[18px] text-[9px] leading-snug text-[#b89a6a]">
+                  {reasons.join(' · ')}
+                  {belowQuality > 0 && unread > 0 && !state.geneReader
+                    ? ' — build a gene-reader to see each duck’s quality'
+                    : ''}
+                </div>
+              )}
+            </div>
+          );
+        })}
         <div className="text-[9px] text-[#7a6a4a]">
           counts ducks hatched after acceptance, quality ≥{c.minQuality}/6 · Prime, secured &amp;
           wintering ducks are never handed over
@@ -228,12 +245,7 @@ export function ActiveContractStrip({ state }: { state: GameState }) {
 
   // Commission: per-line ready counts against unprotected fresh stock (what a
   // delivery can actually take) — the strip's bar tracks lines filled.
-  const lineStates = c.lines.map((l) => {
-    const ready = eligibleForLine(state, c, l).filter(
-      (d) => !d.genome.includes('P') && !d.secured && d.site !== 'winter',
-    ).length;
-    return { line: l, ready };
-  });
+  const lineStates = c.lines.map((l) => lineStatus(state, c, l));
   const filled = lineStates.filter((ls) => ls.ready >= ls.line.count).length;
   return (
     <StripShell pct={filled / Math.max(1, lineStates.length)} done={c.completed}>

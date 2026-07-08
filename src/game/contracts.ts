@@ -160,6 +160,61 @@ export function eligibleForLine(state: GameState, c: OrderContract, line: OrderL
   return state.ducks.filter((d) => duckQualifies(c, line, d));
 }
 
+/** A duck the delivery auto-picker will never hand over: a Prime carrier (kept
+ *  stock), a secured (vaulted) duck, or a posted winterer. Same standing as the
+ *  cull tools — the player must free it explicitly to spend it. */
+export const isDeliveryProtected = (d: Duck): boolean =>
+  d.genome.includes('P') || !!d.secured || d.site === 'winter';
+
+/**
+ * Why a commission line is (un)fillable — the funnel from "right colour+sex,
+ * hatched under this commission" down to what a delivery can actually take.
+ * Powers the Grange card's per-line diagnostic: a right-kind duck that isn't
+ * `ready` is either below the quality floor or held back (Prime/secured/
+ * wintering), and `unread` flags how many of those have hidden genomes (the
+ * player can't even see the quality that's failing them without a gene-reader).
+ */
+export interface LineStatus {
+  line: OrderLine;
+  /** Right colour + sex, hatched under the commission — any quality, any protection. */
+  rightKind: number;
+  /** Right-kind but under the quality floor. */
+  belowQuality: number;
+  /** Right-kind, meets quality, but Prime/secured/wintering — never auto-handed. */
+  protectedCount: number;
+  /** Right-kind with a genome not yet read (quality hidden to the player). */
+  unread: number;
+  /** Right colour+sex but hatched BEFORE acceptance — the anti-shelf rule bars
+   *  them; the commonest "but I have that duck right there!" confusion. */
+  preAcceptance: number;
+  /** Deliverable right now (== eligibleForLine minus the protected). */
+  ready: number;
+}
+
+export function lineStatus(state: GameState, c: OrderContract, line: OrderLine): LineStatus {
+  const s: LineStatus = {
+    line, rightKind: 0, belowQuality: 0, protectedCount: 0, unread: 0, preAcceptance: 0, ready: 0,
+  };
+  if (c.sinceDuckId < 0) return s;
+  for (const d of state.ducks) {
+    if (d.sex !== line.sex || phenotype(d.genotype) !== line.color) continue;
+    if (duckIdNum(d) < c.sinceDuckId) {
+      s.preAcceptance++;
+      continue;
+    }
+    s.rightKind++;
+    if (!d.genomeKnown) s.unread++;
+    if (targetMatch(d.genome, c.target) < c.minQuality) {
+      s.belowQuality++;
+    } else if (isDeliveryProtected(d)) {
+      s.protectedCount++;
+    } else {
+      s.ready++;
+    }
+  }
+  return s;
+}
+
 // ── PROVISION (hand over a produced ingredient — the Feed Store's first customer) ──
 /** Ingredients the player currently produces at all (rate > 0) — a provision
  *  is only ever offered for one of these; the type drops from the roll
@@ -302,7 +357,7 @@ export function deliverOrder(state: GameState): ActionResult<{ duckIds: string[]
   const taken = new Set<string>();
   for (const line of c.lines) {
     const pool = eligibleForLine(state, c, line).filter(
-      (d) => !taken.has(d.id) && !d.genome.includes('P') && !d.secured && d.site !== 'winter',
+      (d) => !taken.has(d.id) && !isDeliveryProtected(d),
     );
     if (pool.length < line.count) {
       return fail(`Not enough fresh ${line.color} ${line.sex}s (need ${line.count} — Prime/secured/wintering ducks are never handed over)`);
