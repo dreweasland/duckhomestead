@@ -123,46 +123,71 @@ export function ResourceFlowPanel({ state, onClose }: { state: GameState; onClos
           })}
         </div>
 
-        {/* Feed Store capacity — the storage ⇄ production partnership (the
-            fullest line is the binding one, same logic as mill load). */}
+        {/* Feed Store capacity — the storage ⇄ production partnership. One mini
+            meter PER ingredient (a single "fullest" line flickers between ties
+            once several stores max out; per-line is stable and more honest). */}
         {(() => {
           const cap = ingredientCap(state);
-          let fullest: { key: Resource; frac: number } = { key: 'corn', frac: 0 };
-          for (const key of INGREDIENTS) {
-            const frac = (state.resources[key] ?? 0) / cap;
-            if (frac > fullest.frac) fullest = { key, frac };
-          }
-          const label = ROWS.find((r) => r.key === fullest.key)?.label ?? fullest.key;
+          // Only stocked lines — an unproduced ingredient sitting at 0 is noise.
+          const lines = INGREDIENTS.map((key) => {
+            const stock = state.resources[key] ?? 0;
+            return { key, stock, frac: stock / cap };
+          }).filter((l) => l.stock > 1e-6);
           const silos = state.stations.filter((s) => s.type === 'silo').length;
-          const full = fullest.frac >= 1;
-          const color = full ? '#e8c45a' : fullest.frac >= 0.8 ? '#e8c45a' : '#8fe388';
-          const hint = full
-            ? `${label} store is FULL — its producers are idling. Build or upgrade a Silo (a board tile), or let the flock eat it down.`
-            : fullest.frac >= 0.8
-              ? `${label} is approaching the cap — a Silo buys headroom (and overnight cushion).`
-              : 'Headroom — stored feed is your overnight cushion and shock buffer.';
+          const fullCount = lines.filter((l) => l.frac >= 1).length;
+          const nearCount = lines.filter((l) => l.frac >= 0.8 && l.frac < 1).length;
+          const summaryColor = fullCount > 0 ? '#e8835a' : nearCount > 0 ? '#e8c45a' : '#8fe388';
+          const hint =
+            fullCount > 0
+              ? `${fullCount} store${fullCount > 1 ? 's' : ''} FULL — those producers are idling. Build or upgrade a Silo (a board tile), or let the flock eat it down.`
+              : nearCount > 0
+                ? `${nearCount} line${nearCount > 1 ? 's' : ''} nearing the cap — a Silo buys headroom (and overnight cushion).`
+                : 'Headroom — stored feed is your overnight cushion and shock buffer.';
           return (
             <div className="mt-3 rounded-md bg-[#1f1812] p-2.5">
-              <div className="mb-1 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">
                   Feed store capacity
                 </span>
-                <span className="text-xs font-bold tabular-nums" style={{ color }}>
-                  {Math.round(Math.min(1, fullest.frac) * 100)}% full
+                <span className="text-[10px] tabular-nums text-[#9a8a6a]">
+                  {fmt(cap)} per ingredient
+                  {silos > 0 ? ` · ${silos} silo${silos > 1 ? 's' : ''}` : ' · no silos built'}
                 </span>
               </div>
-              <div className="mb-1 h-2 overflow-hidden rounded-full bg-[#3a2e22]">
-                <div
-                  className="h-full rounded-full transition-[width]"
-                  style={{ width: `${Math.min(1, fullest.frac) * 100}%`, background: color }}
-                />
-              </div>
-              <div className="mb-1 text-[10px] tabular-nums text-[#9a8a6a]">
-                fullest line: {label} {fmt(Math.min(state.resources[fullest.key] ?? 0, cap))} /{' '}
-                {fmt(cap)} per ingredient
-                {silos > 0 ? ` · ${silos} silo${silos > 1 ? 's' : ''}` : ' · no silos built'}
-              </div>
-              <div className="text-[10px] leading-relaxed" style={{ color }}>
+              {lines.length > 0 ? (
+                <div className="mb-1.5 flex flex-col gap-1">
+                  {lines.map(({ key, frac }) => {
+                    const Icon = RESOURCE_ICON[key];
+                    const label = ROWS.find((r) => r.key === key)?.label ?? key;
+                    const color = frac >= 1 ? '#e8835a' : frac >= 0.8 ? '#e8c45a' : '#8fe388';
+                    return (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="flex w-24 items-center gap-1.5">
+                          <Icon size={12} title={label} />
+                          <span className="truncate text-[10px] text-[#c9b88f]">{label}</span>
+                        </span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#3a2e22]">
+                          <div
+                            className="h-full rounded-full transition-[width]"
+                            style={{ width: `${Math.min(1, frac) * 100}%`, background: color }}
+                          />
+                        </div>
+                        <span
+                          className="w-9 text-right text-[10px] font-bold tabular-nums"
+                          style={{ color }}
+                        >
+                          {Math.round(Math.min(1, frac) * 100)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mb-1.5 text-[10px] tabular-nums text-[#9a8a6a]">
+                  No feed stored yet — production fills these lines.
+                </div>
+              )}
+              <div className="text-[10px] leading-relaxed" style={{ color: summaryColor }}>
                 {hint}
               </div>
             </div>
