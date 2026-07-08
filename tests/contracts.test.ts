@@ -362,10 +362,14 @@ describe('order: the BREEDING COMMISSION — fresh color stock, handed over', ()
     s.contracts.active = commission();
     s.ducks = [];
     expect(deliverOrder(s).ok).toBe(false);
-    s.ducks = [mk('d1', { secured: true }), mk('d2', { site: 'winter' }), mk('d3', { genome: genome('PLDDDD') })];
+    s.ducks = [mk('d1', { secured: true }), mk('d2', { site: 'winter' })];
     const r = deliverOrder(s);
-    expect(r.ok).toBe(false); // vault + posted + Prime carrier: never auto-handed
+    expect(r.ok).toBe(false); // vault + posted: never auto-handed
     if (!r.ok) expect(r.reason).toMatch(/never handed over/i);
+    // A Prime carrier IS deliverable — the worst-first sort keeps it unless it's
+    // the only thing that fills the line, which here it is.
+    s.ducks.push(mk('d3', { genome: genome('PLDDDD') }));
+    expect(deliverOrder(s).ok).toBe(true);
   });
 
   it('multi-line: fills every line at once, never double-spends a duck, drops pairings', () => {
@@ -410,14 +414,14 @@ describe('order: the BREEDING COMMISSION — fresh color stock, handed over', ()
       mk('d150'), // right kind, quality 2 < 3 → below quality
       mk('d151', { genome: genome('LLLLDD') }), // quality 4 ≥ 3, unprotected → ready
       mk('d152', { genome: genome('LLLLDD'), secured: true }), // qualifies but held back
-      mk('d153', { genome: genome('PLLLDD') }), // Prime carrier → held back
+      mk('d153', { genome: genome('PLLLDD') }), // Prime carrier, quality 4 → ready (no longer barred)
       mk('d50'), // right kind but hatched before acceptance
       mk('d160', { sex: 'drake' }), // wrong sex → ignored entirely
     ];
     const st = lineStatus(s, c, line);
-    expect(st.ready).toBe(1);
+    expect(st.ready).toBe(2); // d151 + the Prime carrier d153
     expect(st.belowQuality).toBe(1);
-    expect(st.protectedCount).toBe(2);
+    expect(st.protectedCount).toBe(1); // only the secured duck
     expect(st.preAcceptance).toBe(1);
     expect(st.rightKind).toBe(4); // the four post-acceptance blue hens
   });

@@ -160,18 +160,18 @@ export function eligibleForLine(state: GameState, c: OrderContract, line: OrderL
   return state.ducks.filter((d) => duckQualifies(c, line, d));
 }
 
-/** A duck the delivery auto-picker will never hand over: a Prime carrier (kept
- *  stock), a secured (vaulted) duck, or a posted winterer. Same standing as the
- *  cull tools — the player must free it explicitly to spend it. */
-export const isDeliveryProtected = (d: Duck): boolean =>
-  d.genome.includes('P') || !!d.secured || d.site === 'winter';
+/** A duck the delivery auto-picker will never hand over: a secured (vaulted)
+ *  duck or a posted winterer. Same standing as the cull tools — the player must
+ *  free it explicitly to spend it. (Prime carriers are NOT barred: the
+ *  worst-first sort already keeps them unless nothing else fills the line.) */
+export const isDeliveryProtected = (d: Duck): boolean => !!d.secured || d.site === 'winter';
 
 /**
  * Why a commission line is (un)fillable — the funnel from "right colour+sex,
  * hatched under this commission" down to what a delivery can actually take.
  * Powers the Grange card's per-line diagnostic: a right-kind duck that isn't
- * `ready` is either below the quality floor or held back (Prime/secured/
- * wintering), and `unread` flags how many of those have hidden genomes (the
+ * `ready` is either below the quality floor or held back (secured/wintering),
+ * and `unread` flags how many of those have hidden genomes (the
  * player can't even see the quality that's failing them without a gene-reader).
  */
 export interface LineStatus {
@@ -180,7 +180,7 @@ export interface LineStatus {
   rightKind: number;
   /** Right-kind but under the quality floor. */
   belowQuality: number;
-  /** Right-kind, meets quality, but Prime/secured/wintering — never auto-handed. */
+  /** Right-kind, meets quality, but secured/wintering — never auto-handed. */
   protectedCount: number;
   /** Right-kind with a genome not yet read (quality hidden to the player). */
   unread: number;
@@ -340,13 +340,13 @@ export function rerollOffers(state: GameState, rng: () => number = Math.random):
 /**
  * Deliver against the active BREEDING COMMISSION — every line at once. For
  * each line the auto-pick takes the LOWEST-target-quality qualifying ducks
- * (the player's best fresh stock is kept by default), never a Prime carrier,
- * a SECURED duck (the vault is the player's own declaration of "keep"), or a
- * WINTERING duck (posted workers) — the same protection standing as the cull
- * tools. If any line can't be filled from unprotected stock, the delivery
- * fails with the reason; freeing protected ducks (unsecure/recall) is the
- * explicit path to spending them. Delivered ducks are REMOVED (pairings
- * dropped) and the commission completes.
+ * (the player's best fresh stock is kept by default — Prime carriers, the
+ * highest quality, sort to the back and stay), never a SECURED duck (the vault
+ * is the player's own declaration of "keep") or a WINTERING duck (posted
+ * workers) — the same protection standing as the cull tools. If any line can't
+ * be filled from unprotected stock, the delivery fails with the reason; freeing
+ * protected ducks (unsecure/recall) is the explicit path to spending them.
+ * Delivered ducks are REMOVED (pairings dropped) and the commission completes.
  */
 export function deliverOrder(state: GameState): ActionResult<{ duckIds: string[] }> {
   const c = state.contracts.active;
@@ -360,7 +360,7 @@ export function deliverOrder(state: GameState): ActionResult<{ duckIds: string[]
       (d) => !taken.has(d.id) && !isDeliveryProtected(d),
     );
     if (pool.length < line.count) {
-      return fail(`Not enough fresh ${line.color} ${line.sex}s (need ${line.count} — Prime/secured/wintering ducks are never handed over)`);
+      return fail(`Not enough fresh ${line.color} ${line.sex}s (need ${line.count} — secured/wintering ducks are never handed over)`);
     }
     pool.sort((a, b) => targetMatch(a.genome, c.target) - targetMatch(b.genome, c.target));
     for (const d of pool.slice(0, line.count)) {

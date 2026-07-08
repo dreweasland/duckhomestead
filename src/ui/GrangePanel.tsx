@@ -144,7 +144,7 @@ function ActiveJob({ c, state, engine }: { c: Contract; state: GameState; engine
           const short = ready < line.count;
           const reasons: string[] = [];
           if (belowQuality > 0) reasons.push(`${belowQuality} below quality ≥${c.minQuality}/6`);
-          if (protectedCount > 0) reasons.push(`${protectedCount} held back (Prime/secured/wintering)`);
+          if (protectedCount > 0) reasons.push(`${protectedCount} held back (secured/wintering)`);
           if (preAcceptance > 0)
             reasons.push(`${preAcceptance} bred before accepting (only ducks hatched after count)`);
           return (
@@ -171,8 +171,8 @@ function ActiveJob({ c, state, engine }: { c: Contract; state: GameState; engine
           );
         })}
         <div className="text-[9px] text-[#7a6a4a]">
-          counts ducks hatched after acceptance, quality ≥{c.minQuality}/6 · Prime, secured &amp;
-          wintering ducks are never handed over
+          counts ducks hatched after acceptance, quality ≥{c.minQuality}/6 · secured &amp; wintering
+          ducks are never handed over
         </div>
       </div>
       <button
