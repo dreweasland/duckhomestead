@@ -203,6 +203,20 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         // Touch fingers wobble more than mice — a tap must not read as a
         // micro-drag (which would fire a same-tile "move" with its place SFX).
         const dragThresh = (pointerType: string) => (pointerType === 'touch' ? 14 : 6);
+        // TOUCH MOVE MODE: drag-to-move loses to page scrolling on touch (the
+        // browser claims the pan under touch-action: manipulation), so a touch
+        // player LIFTS a station with a long-press instead — it hovers over its
+        // tile until they tap the destination (or anywhere else to set it back
+        // down). Desktop mouse drag is untouched.
+        let armedMoveId: string | null = null;
+        let longPress: ReturnType<typeof setTimeout> | null = null;
+        const LONG_PRESS_MS = 450;
+        const clearLongPress = () => {
+          if (longPress != null) {
+            clearTimeout(longPress);
+            longPress = null;
+          }
+        };
         // Pointer-down state for the whole grid (so empty-tile taps still work).
         // `id` is set only when pressing a station; `dragging` only a station
         // can become true. Read by the render loop to follow the cursor and
@@ -228,6 +242,18 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           }
           const st = stationAt(engine.state, gx, gy, zoneId);
           down = { id: st?.id ?? null, sx: e.global.x, sy: e.global.y, px: e.global.x, py: e.global.y, dragging: false, gx, gy, valid: true };
+          // Touch: holding a station past the long-press window LIFTS it into
+          // move mode; releasing or sliding first is a normal tap/scroll.
+          if (e.pointerType === 'touch' && st && armedMoveId == null) {
+            clearLongPress();
+            longPress = setTimeout(() => {
+              longPress = null;
+              if (!down || down.id !== st.id || down.dragging) return;
+              armedMoveId = st.id;
+              down = null; // this press is consumed — its release must not select/tend
+              (navigator as { vibrate?: (ms: number) => void }).vibrate?.(15);
+            }, LONG_PRESS_MS);
+          }
         });
 
         app.stage.on('pointermove', (e) => {
@@ -241,6 +267,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
             Math.hypot(e.global.x - down.sx, e.global.y - down.sy) > dragThresh(e.pointerType)
           ) {
             down.dragging = true;
+            clearLongPress(); // real movement — this is a drag/scroll, not a hold
           }
           if (down.dragging) {
             const { gx, gy } = toTile(e.global);
@@ -252,6 +279,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         });
 
         const endPointer = (e: { global: { x: number; y: number } }) => {
+          clearLongPress(); // released before the hold window — a normal tap
           const d = down;
           down = null;
           if (!d) return;
@@ -261,6 +289,18 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
               const r = engine.move(d.id, d.gx, d.gy);
               if (r.ok) playPlace();
             }
+            return;
+          }
+          // TOUCH MOVE MODE: a station is lifted — this tap is its destination.
+          // A valid empty tile moves it; anywhere else just sets it back down.
+          if (armedMoveId != null) {
+            const armed = armedMoveId;
+            armedMoveId = null;
+            const { gx, gy } = toTile(e.global);
+            if (!inBounds(gx, gy) || isBlockedTile(zoneId, gx, gy)) return;
+            if (stationAt(engine.state, gx, gy, zoneId)) return;
+            const r = engine.move(armed, gx, gy);
+            if (r.ok) playPlace();
             return;
           }
           // A tap (no real movement): select / place, or tend on a quick second
@@ -283,8 +323,10 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         // Touch: when the browser claims the gesture for page scrolling
         // (touch-action: manipulation), the pointer stream ends in a CANCEL,
         // not an up. Drop the press cleanly or the drag ghost / drop target
-        // sticks to the board until the next tap.
+        // sticks to the board until the next tap. (A LIFTED station stays
+        // lifted — move mode is a mode, not a gesture; the next tap resolves it.)
         app.stage.on('pointercancel', () => {
+          clearLongPress();
           down = null;
         });
 
@@ -549,9 +591,15 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
             const def = STATION_DEFS[s.type];
             const entry = sprites.get(s.id) ?? makeSprite(s);
             const beingDragged = down?.dragging && down.id === s.id;
+            const lifted = armedMoveId === s.id; // touch long-press move mode
             if (beingDragged) {
               // Follow the cursor (tile-centered) and float above everything.
               entry.c.position.set(down!.px - TILE / 2, down!.py - TILE / 2);
+              entry.c.zIndex = 10000;
+            } else if (lifted) {
+              // Hover-bob over its own tile until the player taps a destination.
+              const bob = Math.sin(performance.now() / 160) * 2.5;
+              entry.c.position.set(OX + s.x * TILE, OY + s.y * TILE - 7 + bob);
               entry.c.zIndex = 10000;
             } else {
               entry.c.position.set(OX + s.x * TILE, OY + s.y * TILE);
@@ -561,7 +609,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
             // Starved stations (missing inputs in central storage) are dimmed
             // so it's obvious why they aren't producing.
             const starved = !stationStatus(state, s).producing;
-            entry.c.alpha = beingDragged ? 0.85 : starved ? 0.55 : 1;
+            entry.c.alpha = beingDragged || lifted ? 0.85 : starved ? 0.55 : 1;
             // Mill sails spin (slowly when starved) for a touch of life.
             if (entry.sails) entry.sails.rotation += (app.ticker.deltaMS / 1000) * (starved ? 0.3 : 1.4);
 

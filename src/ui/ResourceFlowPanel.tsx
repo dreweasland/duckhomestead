@@ -66,9 +66,9 @@ export function ResourceFlowPanel({ state, onClose }: { state: GameState; onClos
   const mill = load ? millStatus(load) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        className="w-full max-w-sm rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]"
+        className="w-full max-w-sm rounded-t-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 flex items-center justify-between">

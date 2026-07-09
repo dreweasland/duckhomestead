@@ -15,6 +15,9 @@ export function StatusPills({ state }: { state: GameState }) {
       active: state.autoHaulUnlocked,
       Icon: CartIcon,
       label: 'Auto-Haul',
+      // The unlock rank rides on the locked pill itself — hover titles don't
+      // exist on touch, and "what rank do I need?" is the pill's whole answer.
+      lockedRank: BALANCE.MILESTONE_AUTOHAUL_RANK,
       on: 'bg-[#2e2746] text-[#cdbcff] ring-[#4a3e6e]',
       title: state.autoHaulUnlocked
         ? 'Auto-Haul Cart active — every station’s output flows to storage automatically.'
@@ -25,6 +28,7 @@ export function StatusPills({ state }: { state: GameState }) {
       active: state.tendAllUnlocked,
       Icon: TendIcon,
       label: 'Tend All',
+      lockedRank: BALANCE.MILESTONE_TENDALL_RANK,
       on: 'bg-[#1f3326] text-[#bfe8a8] ring-[#3a5a3a]',
       title: state.tendAllUnlocked
         ? 'Tending Whistle active — tend every ready station at once, and the sweep buys a real breather.'
@@ -52,6 +56,7 @@ export function StatusPills({ state }: { state: GameState }) {
         >
           {p.active ? <p.Icon size={11} /> : <LockIcon size={10} />}
           {p.label}
+          {!p.active && <span className="opacity-70">R{p.lockedRank}</span>}
         </span>
       ))}
       {showGuard && (

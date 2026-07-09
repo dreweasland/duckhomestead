@@ -66,6 +66,15 @@ await page.waitForTimeout(1500); // texture load + first frames
   the StationBar's Tend button appearing (`getByRole('button', { name: /tend/i })`).
 - **Double-tap = tend**: two taps on the same station < 350ms apart
   (~120ms wait between taps works).
+- **Long-press (touch move mode) needs CDP** — `page.touchscreen` only taps.
+  Hold via raw touch events, then tap the destination tile:
+  ```js
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await page.waitForTimeout(700); // > LONG_PRESS_MS (450) lifts the station
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.touchscreen.tap(destX, destY); // drops it there
+  ```
 - Check `scrollWidth <= clientWidth` on `document.scrollingElement` when
   layout is in question, and collect `console`/`pageerror` events — the page
   renders its shell even if a system throws.

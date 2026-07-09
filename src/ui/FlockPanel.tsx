@@ -744,8 +744,8 @@ function FlockPanelInner({
   const stageCount = (s: Duck['stage']) => stagePool.filter((d) => d.stage === s).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:max-h-[90vh] sm:rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-black text-[#ffe9a8]">Flock</h2>
           <div className="flex items-center gap-3">

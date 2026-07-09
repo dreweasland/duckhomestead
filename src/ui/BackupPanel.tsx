@@ -109,8 +109,8 @@ export function BackupControls({ engine }: { engine: GameEngine }) {
       {done && <div className="text-[10px] text-[#8fe388]">Homestead restored from backup.</div>}
 
       {pending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+          <div className="w-full max-w-sm rounded-t-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]">
             <h2 className="text-lg font-black text-[#ffe9a8]">Replace your current homestead?</h2>
             <p className="mt-1 text-xs text-[#9a8a6a]">This backup has:</p>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
