@@ -7,6 +7,31 @@ body,
   margin: 0;
 }
 
+/* Mobile: a double-tap must never zoom the page — double-tap IS the tend
+   gesture on the board. `manipulation` keeps panning + pinch-zoom available;
+   an ancestor's touch-action constrains every descendant, so one declaration
+   at the root covers the whole app (canvas, buttons, panels). */
+html {
+  touch-action: manipulation;
+}
+
+/* Notched phones (viewport-fit=cover): keep the app clear of the sensor
+   housing and home indicator. Zero on every desktop browser. */
+body {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+/* The Pixi board renders at a fixed pixel size (TILE is the art grid); the
+   canvas fills its aspect-ratio host so the whole board DOWNSCALES on narrow
+   screens instead of overflowing. Pixi maps pointer coordinates through the
+   element's CSS box, so taps keep hitting the right tiles under the scale. */
+.board-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 /* While a predator window is OPEN, swap the cursor for a red targeting reticle so it's
    impossible to lose mid-scare. Applied to every element under the board so it shows
    over the diving owl/raccoon too; falls back to crosshair if the SVG can't load. */
@@ -25,6 +50,9 @@ body {
   -webkit-font-smoothing: none;
   image-rendering: pixelated;
   user-select: none;
+  /* No iOS long-press callout/loupe over the pixel art (text is unselectable
+     already; the callout is the remaining long-press artifact on touch). */
+  -webkit-touch-callout: none;
 }
 
 /* DING level-up pop: a quick overshoot-and-settle scale. */

@@ -508,7 +508,7 @@ export default function App() {
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-start">
         {/* Canvas — the board. */}
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex min-w-0 max-w-full flex-col items-center gap-3">
           <ZoneBar
             state={state}
             activeZone={activeZone}
@@ -517,7 +517,10 @@ export default function App() {
               setBuildType(null); // a yard tool is meaningless on the winter board (and vice versa)
             }}
           />
-          <div className="relative rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
+          {/* max-w-full lets the whole board box shrink on narrow screens —
+              without it this box sizes to the canvas's native width and the
+              page scrolls sideways on a phone. */}
+          <div className="relative max-w-full rounded-lg bg-[#1f1812] p-2 ring-1 ring-[#3a2e22]">
             {/* Status pills tuck into the board's empty top headroom (the canvas
                 reserves space there) — present, but adding no height. Yard only:
                 Auto-Haul / Tend-All are station/tending milestones, irrelevant on

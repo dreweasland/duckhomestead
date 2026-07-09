@@ -200,7 +200,9 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
 
         let lastTapId: string | null = null;
         let lastTapAt = 0;
-        const DRAG_THRESH = 6;
+        // Touch fingers wobble more than mice — a tap must not read as a
+        // micro-drag (which would fire a same-tile "move" with its place SFX).
+        const dragThresh = (pointerType: string) => (pointerType === 'touch' ? 14 : 6);
         // Pointer-down state for the whole grid (so empty-tile taps still work).
         // `id` is set only when pressing a station; `dragging` only a station
         // can become true. Read by the render loop to follow the cursor and
@@ -233,7 +235,11 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           down.px = e.global.x;
           down.py = e.global.y;
           // Only a press that started on a station turns into a drag.
-          if (!down.dragging && down.id && Math.hypot(e.global.x - down.sx, e.global.y - down.sy) > DRAG_THRESH) {
+          if (
+            !down.dragging &&
+            down.id &&
+            Math.hypot(e.global.x - down.sx, e.global.y - down.sy) > dragThresh(e.pointerType)
+          ) {
             down.dragging = true;
           }
           if (down.dragging) {
@@ -274,6 +280,13 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         };
         app.stage.on('pointerup', endPointer);
         app.stage.on('pointerupoutside', endPointer);
+        // Touch: when the browser claims the gesture for page scrolling
+        // (touch-action: manipulation), the pointer stream ends in a CANCEL,
+        // not an up. Drop the press cleanly or the drag ghost / drop target
+        // sticks to the board until the next tap.
+        app.stage.on('pointercancel', () => {
+          down = null;
+        });
 
         // Reusable per-station display objects keyed by id.
         const labelStyle = new TextStyle({ fontSize: 11, fill: 0xfff4d6, fontFamily: 'monospace' });
@@ -826,5 +839,16 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, zoneId, unlocked]);
 
-  return <div ref={hostRef} className="inline-block leading-none" style={{ width: W, height: H }} />;
+  // The host is an aspect-ratio box capped at the board's native size: on a
+  // desktop it renders 1:1 as before; on a narrow screen it shrinks to fit and
+  // the canvas (CSS-sized to fill it — see .board-host in index.css) scales
+  // down with it. Pointer mapping survives because Pixi translates client
+  // coordinates through the canvas's CSS box, not its render-target size.
+  return (
+    <div
+      ref={hostRef}
+      className="board-host inline-block w-full leading-none"
+      style={{ maxWidth: W, aspectRatio: `${W} / ${H}` }}
+    />
+  );
 }

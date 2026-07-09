@@ -23,11 +23,16 @@ export function PredatorBanner({ state, onOpen }: { state: GameState; onOpen: ()
   const active = state.activeRemaining > 0;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[45]">
+    // Fixed to the viewport, so body's safe-area padding doesn't reach it —
+    // pad the notch height directly (zero everywhere but notched phones).
+    <div
+      className="pointer-events-none fixed inset-x-0 top-0 z-[45]"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <button
         type="button"
         onClick={onOpen}
-        className={`pointer-events-auto flex w-full items-center justify-center gap-2.5 px-4 py-1.5 text-xs font-bold shadow-lg ${
+        className={`pointer-events-auto flex w-full flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 px-4 py-1.5 text-xs font-bold shadow-lg ${
           diving
             ? 'predator-pulse bg-[#6e1414] text-[#ffe2e2] ring-1 ring-[#ff8a8a]'
             : open

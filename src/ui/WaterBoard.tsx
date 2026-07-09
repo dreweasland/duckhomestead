@@ -469,7 +469,10 @@ export function WaterBoard({
   const upgradeCost = selected ? pondFeatureUpgradeCost(state, selected.x, selected.y) : 0;
 
   return (
-    <div className="flex flex-col items-center gap-2" style={{ width: GW }}>
+    // maxWidth lets the whole water column shrink on narrow screens; the SVG
+    // below scales with it (viewBox preserves the coordinate space, so cell
+    // taps keep resolving to the right tiles at any size).
+    <div className="flex w-full flex-col items-center gap-2" style={{ maxWidth: GW }}>
       {help && (
         <WaterHelp
           onClose={() => setHelp(false)}
@@ -496,8 +499,7 @@ export function WaterBoard({
         </button>
       </div>
       <svg
-        width={GW}
-        height={isFlow ? GH + 2 * TILE : GH}
+        className="block h-auto w-full"
         viewBox={`0 0 ${GW} ${isFlow ? GH + 2 * TILE : GH}`}
         shapeRendering="crispEdges"
         style={{ imageRendering: 'pixelated' }}

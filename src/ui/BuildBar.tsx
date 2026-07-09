@@ -56,8 +56,9 @@ export function BuildBar({ state, buildType, onPick, activeZone = 'yard' }: Prop
           const cost = BALANCE.COSTS[t];
           const affordable = state.resources.eggs >= cost;
           const selected = buildType === t;
-          // Uniform 4-per-row: the core chain + silo up top, producers below.
-          const span = 'col-span-3';
+          // Uniform 4-per-row on desktop (core chain + silo up top, producers
+          // below); 2-per-row on phones so labels + costs stay readable.
+          const span = 'col-span-6 sm:col-span-3';
           return (
             <button
               key={t}
