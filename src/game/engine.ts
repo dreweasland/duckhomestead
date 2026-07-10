@@ -56,6 +56,7 @@ import { waterConditionMult } from './water';
 import type { Milestone } from './rank';
 import {
   clearStorage,
+  deserialize,
   loadGame,
   meaningfulAway,
   newGame,
@@ -1000,6 +1001,26 @@ export class GameEngine {
     this.conditionWasLow = false;
     this.lastConditionReboundAt = 0;
     this.saveNow();
+    this.notify();
+  }
+
+  /**
+   * Adopt a newer CLOUD save (sync pull). Unlike a file restore, the gap
+   * since the save's lastSeen is credited through the SAME offline catch-up a
+   * page load gets — adopting a save parked hours ago on another device
+   * arrives with its idle production, mercy-railed toll, and Away summary,
+   * not frozen in the past. This is what makes newest-wins cheap: staleness
+   * costs only the other device's *active* progress.
+   */
+  adoptCloudSave(raw: string, now: number) {
+    const state = deserialize(raw, now);
+    const away = runOfflineCatchUp(state, now);
+    this.state = state;
+    this.away = meaningfulAway(away) ? away : null;
+    this.conditionWasLow = false;
+    this.lastConditionReboundAt = 0;
+    this.markActive(); // adopting IS being present — same as the load path
+    this.saveNow(now);
     this.notify();
   }
 

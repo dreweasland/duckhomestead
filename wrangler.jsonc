@@ -2,13 +2,27 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "duckhomestead",
   "compatibility_date": "2026-06-29",
+  // Cloud sync (mobile tier 3): /api/* hits the Worker; everything else is
+  // static assets (the Vite plugin wires the client build in dev and deploy).
+  "main": "worker/index.ts",
   "observability": {
     "enabled": true
   },
   "assets": {
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
   },
   "compatibility_flags": [
     "nodejs_compat"
+  ],
+  // One table of saves, keyed by hashed sync code. `npm run dev` uses a local
+  // D1 automatically; the id below is the real database (created via
+  // `wrangler d1 create duckhomestead`; schema is lazy — see worker/index.ts).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "duckhomestead",
+      "database_id": "9ceefb0c-bb4d-4fd8-b106-a9e636ac5e58"
+    }
   ]
 }

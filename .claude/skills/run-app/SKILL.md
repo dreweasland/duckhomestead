@@ -79,6 +79,19 @@ await page.waitForTimeout(1500); // texture load + first frames
   layout is in question, and collect `console`/`pageerror` events — the page
   renders its shell even if a system throws.
 
+## Cloud sync (worker + local D1)
+
+`npm run dev` runs the /api Worker with a LOCAL D1 automatically (the
+Cloudflare Vite plugin) — no wrangler login needed. Two-device sync is two
+isolated `browser.newContext()`s sharing a code. Gotchas:
+- Read the code from storage, not the DOM (`localStorage.getItem('duck-homestead-sync-code')`)
+  — text selectors collide with the BUILD header.
+- The sync links live at the page bottom; clicking them scrolls the board out
+  of view — `window.scrollTo(0, 0)` before any canvas tile click.
+- Assert adoption via `__engine.state.xp`, and remember sync-UI clicks are
+  deliberately excluded from the dirty flag (`data-sync-ui`) — a device that
+  only clicked "Sync now" adopts rather than pushes.
+
 ## One representative loop
 
 Dismiss welcome card → tap coop (StationBar appears) → double-tap plot at
