@@ -528,3 +528,53 @@ describe('guide: backup', () => {
     expect(when(s)).toBe(false);
   });
 });
+
+describe('zone-unlockable announcements (pond / works / winterstead)', () => {
+  const W = BALANCE.WATER;
+
+  it('pond-ready fires only with rank AND eggs met, and never once unlocked', () => {
+    const when = defOf('pond-ready').when;
+    const s = build({});
+    s.rank = W.POND_UNLOCK.rankRequired;
+    s.resources.eggs = W.POND_UNLOCK.eggCost - 1;
+    expect(when(s)).toBe(false); // eggs short
+    s.resources.eggs = W.POND_UNLOCK.eggCost;
+    expect(when(s)).toBe(true);
+    s.rank = W.POND_UNLOCK.rankRequired - 1;
+    expect(when(s)).toBe(false); // rank short
+    s.rank = W.POND_UNLOCK.rankRequired;
+    s.zones['pond'] = { unlocked: true };
+    expect(when(s)).toBe(false); // already dug
+  });
+
+  it('works-ready additionally waits for the pond (nothing to freshen without it)', () => {
+    const when = defOf('works-ready').when;
+    const s = build({});
+    s.rank = W.WORKS_UNLOCK.rankRequired;
+    s.resources.eggs = W.WORKS_UNLOCK.eggCost;
+    expect(when(s)).toBe(false); // pond not dug yet
+    s.zones['pond'] = { unlocked: true };
+    expect(when(s)).toBe(true);
+    s.zones['backPasture'] = { unlocked: true };
+    expect(when(s)).toBe(false);
+  });
+
+  it('winterstead-ready is triple-gated: rank, TIER, and the 20k eggs', () => {
+    const when = defOf('winterstead-ready').when;
+    const U = BALANCE.WINTER.UNLOCK;
+    const s = build({});
+    s.rank = U.rankRequired;
+    s.resources.eggs = U.eggCost;
+    expect(when(s)).toBe(false); // tier short
+    s.legacyTier = U.minLegacyTier;
+    expect(when(s)).toBe(true);
+    s.zones['winterstead'] = { unlocked: true };
+    expect(when(s)).toBe(false);
+  });
+
+  it('each carries a zone CTA pointing at its own board', () => {
+    expect(defOf('pond-ready').cta).toMatchObject({ open: 'zone', zone: 'pond' });
+    expect(defOf('works-ready').cta).toMatchObject({ open: 'zone', zone: 'backPasture' });
+    expect(defOf('winterstead-ready').cta).toMatchObject({ open: 'zone', zone: 'winterstead' });
+  });
+});

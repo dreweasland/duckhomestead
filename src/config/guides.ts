@@ -41,6 +41,7 @@ import {
   OwlIcon,
   ReaderIcon,
   SnowflakeIcon,
+  WaterIcon,
   type PixProps,
 } from '../ui/icons';
 import type { NutritionTab } from '../ui/NutritionPanel';
@@ -57,7 +58,9 @@ export type GuideOpenTarget =
   | 'grange'
   | 'backup'
   // Arms the SILO build tool on the Yard (no panel — the fix is a placement).
-  | 'build-silo';
+  | 'build-silo'
+  // Switches the board to `cta.zone` (the zone-unlockable announcements).
+  | 'zone';
 
 export interface GuideDef {
   /** localStorage key suffix: duck-homestead-guide-<id>. Stable — renaming a
@@ -75,7 +78,7 @@ export interface GuideDef {
    *  ~1/sec against live state. Read via selectors, never mutate. */
   when: (state: GameState) => boolean;
   /** Optional call-to-action that opens the relevant panel and marks seen. */
-  cta?: { label: string; open: GuideOpenTarget; tab?: NutritionTab };
+  cta?: { label: string; open: GuideOpenTarget; tab?: NutritionTab; zone?: string };
   /** Overrides the default "Got it" dismiss-button label. */
   dismissLabel?: string;
 }
@@ -169,6 +172,45 @@ export const GUIDE_DEFS: GuideDef[] = [
     body: 'Now that breeding’s underway, adult drakes draw from their own maintenance ration — no calcium needed, since they don’t lay — and it’s still unset. An underfed drake breeds slower, throttling how fast new clutches come. Open Nutrition’s Drakes tab and tap Suggested.',
     when: (state) => breedingEstablished(state) && adultDrakes(state).length > 0 && rationUnset(state.drakeRation),
     cta: { label: 'Open Nutrition', open: 'nutrition', tab: 'drakes' },
+  },
+  // ── Zone-unlockable announcements (playtest ask, 2026-07-10): the moment a
+  // zone's full gate is MET (rank + eggs + tier), say so — a locked tab is
+  // easy to stop seeing, and 20k banked eggs shouldn't sit on an unopened
+  // Winterstead. Each fires once, when genuinely affordable.
+  {
+    id: 'pond-ready',
+    title: 'The Pond is within reach',
+    icon: WaterIcon,
+    body: 'You have the rank and the eggs to dig THE POND. It earns nothing directly — it’s water for the flock: arrange springs, pools, plant beds and a deep zone so condition recovers faster and wounded ducks get more time to reach the infirmary. A thoughtful layout beats a scattered dump.',
+    when: (state) =>
+      !zoneUnlocked(state, 'pond') &&
+      state.rank >= BALANCE.WATER.POND_UNLOCK.rankRequired &&
+      state.resources.eggs >= BALANCE.WATER.POND_UNLOCK.eggCost,
+    cta: { label: 'Visit the Pond', open: 'zone', zone: 'pond' },
+  },
+  {
+    id: 'works-ready',
+    title: 'Waterworks within reach',
+    icon: WaterIcon,
+    body: 'A growing flock fouls the pond faster than it can freshen itself — and you can now afford the WATERWORKS: route pump → fountains → drain to keep the water circulating. It’s the same canvas as the pond, one circulation puzzle, and the only upkeep loop in the game.',
+    when: (state) =>
+      zoneUnlocked(state, 'pond') && // circulation without a pond has nothing to freshen
+      !zoneUnlocked(state, 'backPasture') &&
+      state.rank >= BALANCE.WATER.WORKS_UNLOCK.rankRequired &&
+      state.resources.eggs >= BALANCE.WATER.WORKS_UNLOCK.eggCost,
+    cta: { label: 'Visit Waterworks', open: 'zone', zone: 'backPasture' },
+  },
+  {
+    id: 'winterstead-ready',
+    title: 'Winterstead is within reach',
+    icon: SnowflakeIcon,
+    body: 'The tier-3 finale is fundable: WINTERSTEAD, a second homestead where the cold throttles but never kills — and where Hardy lines finally out-earn pure Lay. Assign hens, lay out heaters and waterers, and run the winter lines through the same shared stores. The biggest egg sink in the game, and it’s yours when you want it.',
+    when: (state) =>
+      !zoneUnlocked(state, 'winterstead') &&
+      state.rank >= BALANCE.WINTER.UNLOCK.rankRequired &&
+      state.legacyTier >= BALANCE.WINTER.UNLOCK.minLegacyTier &&
+      state.resources.eggs >= BALANCE.WINTER.UNLOCK.eggCost,
+    cta: { label: 'Visit Winterstead', open: 'zone', zone: 'winterstead' },
   },
   {
     id: 'seasons',

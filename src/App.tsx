@@ -359,6 +359,14 @@ export default function App() {
         setActiveZone('yard');
         setBuildType('silo');
         break;
+      case 'zone':
+        // Zone-unlockable announcements: jump straight to the locked tab —
+        // its unlock card (rank/eggs/the button) is the landing page.
+        if (cta.zone) {
+          setActiveZone(cta.zone);
+          setBuildType(null); // a yard tool is meaningless on another board
+        }
+        break;
     }
   }, []);
 
