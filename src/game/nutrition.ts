@@ -293,15 +293,18 @@ const DRAKE_AXES: Axis[] = ['energy', 'protein', 'niacin'];
  */
 export function runDrakeNutrition(state: GameState, dt: number, rateMult: number): number {
   const B = BALANCE.BREEDING;
-  // Check the O(1) gate before the O(ducks) flock scan — during the (often long)
-  // pre-breeding phase this skips the per-tick work entirely.
-  if (!breedingEstablished(state)) {
-    state.drakeNutrition = undefined;
-    return 1;
-  }
-  // Only the head COUNT drives demand — count adult drakes, no array allocation.
+  // Only the head COUNT drives demand — no array allocation. The pool is
+  // adult drakes (once breeding's established — a cold-start flock is never
+  // taxed) PLUS posted workers (9a: a posted duck always eats its keep; the
+  // same underfed floor that slows clutches slows post output — see
+  // posts.ts's postWorkRate reading this pool's breedRate).
+  const established = breedingEstablished(state);
   let n = 0;
-  for (const d of state.ducks) if (d.stage === 'adult' && d.sex === 'drake') n++;
+  for (const d of state.ducks) {
+    if (d.stage !== 'adult') continue;
+    if (d.post) n++;
+    else if (established && d.sex === 'drake') n++;
+  }
   if (n === 0) {
     state.drakeNutrition = undefined;
     return 1;

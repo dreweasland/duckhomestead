@@ -359,6 +359,43 @@ export const BALANCE = {
     },
   },
 
+  // ── Phase 9a: POSTS (the flock becomes a portfolio) ─────────────────
+  // Adult ducks assign to working posts: they stop laying, eat the drake
+  // maintenance ration (same pool, same underfed floor — starving workers
+  // throttles post output, never a wall), and convert a gene AXIS into a
+  // working effect. The point is breeding multi-objectivity: a cull decision
+  // becomes "which line does she strengthen?", so the game runs several
+  // lines at once instead of collapsing to the Standard monoculture.
+  // Guardrails: throughput-only (never a nutrition requirement/matrix
+  // change); sentry repel works offline exactly like built deterrents.
+  POSTS: {
+    /** Posts unlock here — where breeding takes over and the one-dimension
+     *  flatline begins (pond 12 < posts 14 < waterworks 17). */
+    INTRO_RANK: 14,
+    /** Static v1 slot caps (growth lever banked: rank/purchase-gated +1s). */
+    SLOTS: { sentry: 2, forager: 3, broody: 1 } as Record<string, number>,
+    /** SENTRY (H-axis): the watch in duck form. Active play: dive wind-ups
+     *  stretch (+reaction time). Guard/offline: a chance each landing attack
+     *  is repelled outright — duck-shaped built defense. */
+    SENTRY: {
+      WINDUP_PER_SCORE: 0.25, // windup × (1 + this × Σ H-score), capped…
+      WINDUP_CAP: 0.5, // …at +50% — generous, never trivializing
+      REPEL_PER_SCORE: 0.12, // guard/offline pre-roll per landing attack…
+      REPEL_CAP: 0.35, // …capped below the floor cap (nets stay primary)
+    },
+    /** FORAGER (V-axis): trickles greens + bugs into storage. A full-V
+     *  forager ≈ 40% of a mealworm farm and pays for her own ration. */
+    FORAGER: {
+      PEAS_PER_S: 0.1,
+      MEALWORMS_PER_S: 0.1,
+      /** Output = rate × (FLOOR + (1-FLOOR) × V-score) × workRate. */
+      SCORE_FLOOR: 0.4,
+    },
+    /** BROODY (V-axis): grow-out care — duckling maturation speed
+     *  × (1 + this × score). Multiplies with ration + Husbandry. */
+    BROODY: { MATURE_PER_SCORE: 0.3 },
+  },
+
   // ── Milestones ──────────────────────────────────────────────────────
   /** Rank at which the Auto-Haul Cart unlocks (auto-collect output). */
   MILESTONE_AUTOHAUL_RANK: 5,

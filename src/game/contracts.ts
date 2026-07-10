@@ -161,10 +161,12 @@ export function eligibleForLine(state: GameState, c: OrderContract, line: OrderL
 }
 
 /** A duck the delivery auto-picker will never hand over: a secured (vaulted)
- *  duck or a posted winterer. Same standing as the cull tools — the player must
- *  free it explicitly to spend it. (Prime carriers are NOT barred: the
- *  worst-first sort already keeps them unless nothing else fills the line.) */
-export const isDeliveryProtected = (d: Duck): boolean => !!d.secured || d.site === 'winter';
+ *  duck, a posted winterer, or a working post-holder (9a). Same standing as
+ *  the cull tools — the player must free it explicitly to spend it. (Prime
+ *  carriers are NOT barred: the worst-first sort already keeps them unless
+ *  nothing else fills the line.) */
+export const isDeliveryProtected = (d: Duck): boolean =>
+  !!d.secured || d.site === 'winter' || d.post != null;
 
 /**
  * Why a commission line is (un)fillable — the funnel from "right colour+sex,

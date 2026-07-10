@@ -2,6 +2,7 @@ import { BALANCE, PREDATOR_DEFS } from '../config/balance';
 import { repairCostPerNet } from '../game/actions';
 import type { GameEngine } from '../game/engine';
 import { currentThreat, predatorLive } from '../game/predators';
+import { postedDucks, sentryRepelChance, sentryWindupMult } from '../game/posts';
 import { waterWoundMult } from '../game/water';
 import {
   defenseCoverage,
@@ -52,6 +53,7 @@ export function WatchPanel({
   const capPct = Math.round(P.DEFENSE_FLOOR_CAP * 100);
   const securedCount = state.ducks.filter((d) => d.secured).length;
   const slots = secureCapacity(state);
+  const sentries = postedDucks(state, 'sentry'); // Phase 9a — the living watch
   const threat = currentThreat(state);
   const wounded = state.ducks.filter((d) => d.wounded);
 
@@ -175,6 +177,15 @@ export function WatchPanel({
                   ? `STRETCHED — ${state.hardwareCloth} cloth covers ${state.hardwareCloth * PER_UNIT} of ${exposed} exposed ducks; build more cloth`
                   : `cap ${capPct}% · ${state.hardwareCloth} cloth @ ${clothIntegrityPct}% · covers all ${exposed} exposed`
               }
+            />
+          )}
+          {sentries.length > 0 && (
+            <StatRow
+              label="Sentries on watch"
+              value={`${sentries.length}`}
+              hint={`dives ${Math.round((sentryWindupMult(state) - 1) * 100)}% slower · repel ${Math.round(
+                sentryRepelChance(state) * 100,
+              )}% at guard/away — post Hardy ducks from the Flock panel`}
             />
           )}
           <StatRow label="Secured breeders" value={`${securedCount} / ${slots}`} hint="excluded from attacks" />

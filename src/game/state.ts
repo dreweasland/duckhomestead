@@ -258,6 +258,11 @@ export interface Duck {
    *  and is ELSEWHERE for every home system (predators, overcrowding, water,
    *  home housing). Adults-only; set by assign/recall. */
   site?: 'home' | 'winter';
+  /** Phase 9a: this duck's working POST (sentry/forager/broody — 'show' with
+   *  9d). Posted ducks stay HOME (site-orthogonal; winter and posts are
+   *  mutually exclusive), stop laying, eat the drake maintenance ration, and
+   *  convert a gene axis into a working effect (see game/posts.ts). */
+  post?: PostId;
   /** In an Infirmary recovery slot: healing over time, holds a slot, eats extra feed,
    *  lays nothing, and no longer escalates. Set by Admit; cleared when recovered. */
   recovering?: boolean;
@@ -307,13 +312,18 @@ export function coopCapacity(state: GameState): number {
     .reduce((a, c) => a + BALANCE.BREEDING.COOP_CAPACITY * c.level, 0);
 }
 
+/** Phase 9a posts — a working assignment for an adult duck. */
+export type PostId = 'sentry' | 'forager' | 'broody';
+export const POST_IDS: readonly PostId[] = ['sentry', 'forager', 'broody'];
+
 export const isAdult = (d: Duck): boolean => d.stage === 'adult';
 /** Phase 6d: true when a duck lives at the main homestead (not winter-assigned).
  *  Every HOME pool/system filters on this — a winter duck is elsewhere. */
 export const atHome = (d: Duck): boolean => d.site !== 'winter';
-/** Adult hens AT HOME — the laying population that drives home egg output. */
+/** Adult hens AT HOME and NOT POSTED — the laying population that drives home
+ *  egg output (a posted hen works instead of laying — that's the post's cost). */
 export const adultLayers = (state: GameState): Duck[] =>
-  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'hen' && atHome(d));
+  state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'hen' && atHome(d) && !d.post);
 /** All adult ducks AT HOME — what the layer ration must feed. */
 export const adultDucks = (state: GameState): Duck[] =>
   state.ducks.filter((d) => isAdult(d) && atHome(d));

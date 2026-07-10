@@ -171,6 +171,14 @@ export const GUIDE_DEFS: GuideDef[] = [
     cta: { label: 'Open Nutrition', open: 'nutrition', tab: 'drakes' },
   },
   {
+    id: 'posts',
+    title: 'Put the flock to work',
+    icon: DuckIcon,
+    body: 'Working POSTS just unlocked. Assign an adult from the Flock panel and its genes become a job: Hardy ducks stand SENTRY (slower dives, attacks repelled while you’re away), Vigor ducks FORAGE (peas and mealworms into storage) or go BROODY (faster grow-out for every duckling). Posted ducks stop laying and eat the maintenance ration, so each post is a real trade — and a duck that’s junk against the Standard can still be a prize worker. Breed lines, not just the target.',
+    when: (state) => state.rank >= BALANCE.POSTS.INTRO_RANK && !state.ducks.some((d) => d.post),
+    cta: { label: 'Open Flock', open: 'flock' },
+  },
+  {
     id: 'gene-reader',
     title: 'Genomes are hidden — for now',
     icon: ReaderIcon,

@@ -4,7 +4,8 @@ import type { GameEngine } from '../game/engine';
 import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotMatches, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
 import { clutchCost } from '../game/breeding';
 import { targetForTier } from '../game/prestige';
-import { COLORS, coopCapacity, flockRatio, watererSupport, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState } from '../game/state';
+import { COLORS, coopCapacity, flockRatio, watererSupport, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState, type PostId } from '../game/state';
+import { broodyMatureMult, forageRates, POST_META, postCapacity, postedDucks, postsUnlocked, sentryRepelChance, sentryWindupMult } from '../game/posts';
 import { waterWoundMult } from '../game/water';
 import { playPlace, playTend } from '../audio/sfx';
 import { CloseIcon, DuckIcon, HealIcon, PencilIcon, ShieldIcon, SnowflakeIcon, WoundIcon } from './icons';
@@ -245,6 +246,74 @@ export function ColorSwatch({ color, size = 14 }: { color: Color; size?: number 
 /** Flock Health: the drake:hen ratio and its consequences. An over-drake flock
  *  harasses itself into injury past a size gate; the fix is culling surplus drakes
  *  (one tap here). Always visible so the ratio stays front-of-mind. */
+/**
+ * Phase 9a: the POSTS roster — occupancy, live effect readouts, and recall.
+ * Assignment happens on the duck rows (the "post" cycle button); this card is
+ * where the portfolio reads as a whole: what the watch, the forage line, and
+ * the hatchery are earning right now.
+ */
+function PostsCard({ engine, state }: { engine: GameEngine; state: GameState }) {
+  const rates = forageRates(state);
+  const rows: { id: PostId; effect: string }[] = [
+    {
+      id: 'sentry',
+      effect: `dives ${Math.round((sentryWindupMult(state) - 1) * 100)}% slower · repels ${Math.round(
+        sentryRepelChance(state) * 100,
+      )}% on watch`,
+    },
+    {
+      id: 'forager',
+      effect: `+${(rates.peas * 60).toFixed(1)} peas · +${(rates.mealworms * 60).toFixed(1)} mealworms /min`,
+    },
+    { id: 'broody', effect: `grow-out ×${broodyMatureMult(state).toFixed(2)}` },
+  ];
+  return (
+    <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">Posts</span>
+        <span
+          className="text-[9px] text-[#7a6a4a]"
+          title="Posted ducks stop laying and eat the drake maintenance ration — an underfed pool slows post output. Assign from the duck rows below; recall any time."
+        >
+          workers eat the drake ration
+        </span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {rows.map((r) => {
+          const occupants = postedDucks(state, r.id);
+          const healing = occupants.filter((d) => d.wounded || d.recovering).length;
+          return (
+            <div key={r.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+              <span className="w-14 shrink-0 font-bold text-[#c9b88f]">{POST_META[r.id].label}</span>
+              <span className="tabular-nums text-[#9a8a6a]">
+                {occupants.length}/{postCapacity(r.id)}
+              </span>
+              <span className="text-[10px] text-[#8fb8a0]">
+                {occupants.length > 0 ? r.effect : POST_META[r.id].blurb}
+              </span>
+              {healing > 0 && (
+                <span className="text-[10px] text-[#e8c45a]">
+                  ({healing} healing — not working)
+                </span>
+              )}
+              {occupants.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => engine.recallFromPost(d.id)}
+                  className="rounded bg-[#2a2018] px-1 py-0.5 text-[9px] text-[#9a8a6a] hover:text-[#e8835a]"
+                  title={`Recall ${d.name ?? d.id} to the laying/breeding flock`}
+                >
+                  {d.name ?? d.id} ×
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function FlockHealth({ engine, state }: { engine: GameEngine; state: GameState }) {
   const r = flockRatio(state);
   if (r.hens === 0 && r.drakes === 0) return null; // no adults yet — nothing to balance
@@ -791,6 +860,8 @@ function FlockPanelInner({
 
         {state.ducks.length > 0 && <FlockHealth engine={engine} state={state} />}
 
+        {postsUnlocked(state) && state.ducks.length > 0 && <PostsCard engine={engine} state={state} />}
+
         {state.ducks.length > 0 && (
           <Breeding
             engine={engine}
@@ -1011,7 +1082,7 @@ function FlockPanelInner({
                   const isPaired = pairedIds.has(d.id);
                   const picked = d.id === mateDrakeId || d.id === mateHenId;
                   // Wintering hens can't join a pair — breeding is home-only (6d).
-                  const canPick = d.stage === 'adult' && !d.wounded && !isPaired && d.site !== 'winter';
+                  const canPick = d.stage === 'adult' && !d.wounded && !isPaired && d.site !== 'winter' && !d.post;
                   return (
                     <div
                       key={d.id}
@@ -1173,6 +1244,54 @@ function FlockPanelInner({
                       >
                         <ShieldIcon size={12} />
                       </button>
+                      {postsUnlocked(state) && d.stage === 'adult' && d.site !== 'winter' && (() => {
+                        // Phase 9a: the post cycle button — none → sentry →
+                        // forager → broody (skipping full posts and
+                        // broody-for-drakes) → back to the flock. Same
+                        // no-silent-refusal rule as the snowflake.
+                        const blocked = pairedIds.has(d.id)
+                          ? 'in a breeding pair — unpair first'
+                          : d.wounded || d.recovering
+                            ? 'needs to heal first'
+                            : null;
+                        const cyclePost = () => {
+                          if (blocked) return;
+                          const order: PostId[] = ['sentry', 'forager', 'broody'];
+                          const start = d.post ? order.indexOf(d.post) + 1 : 0;
+                          for (let k = start; k < order.length; k++) {
+                            const cand = order[k];
+                            if (cand === 'broody' && d.sex !== 'hen') continue;
+                            const occupied = state.ducks.filter((x) => x.id !== d.id && x.post === cand).length;
+                            if (occupied >= postCapacity(cand)) continue;
+                            if (engine.assignToPost(d.id, cand).ok) {
+                              playTend();
+                              return;
+                            }
+                          }
+                          if (d.post) engine.recallFromPost(d.id); // past the end → home
+                        };
+                        return (
+                          <button
+                            onClick={cyclePost}
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                              d.post
+                                ? 'bg-[#2e3a26] text-[#8fb8a0]'
+                                : blocked
+                                  ? 'cursor-not-allowed text-[#3a4048] opacity-60'
+                                  : 'text-[#5a6a5a] hover:bg-[#33271c] hover:text-[#8fb8a0]'
+                            }`}
+                            title={
+                              blocked
+                                ? `Can’t post: ${blocked}`
+                                : d.post
+                                  ? `${POST_META[d.post].label} — ${POST_META[d.post].blurb}. Click to cycle posts / send home.`
+                                  : 'Assign to a working post (click cycles sentry / forager / broody)'
+                            }
+                          >
+                            {d.post ? POST_META[d.post].label.toLowerCase() : 'post'}
+                          </button>
+                        );
+                      })()}
                       {winterOpen && d.stage === 'adult' && d.sex === 'hen' && (() => {
                         // Mirror assignToWinter's gates HERE so a refusal is
                         // never a silent no-op (playtest: clicking a paired
@@ -1182,11 +1301,13 @@ function FlockPanelInner({
                             ? null
                             : pairedIds.has(d.id)
                               ? 'she’s in a breeding pair — unpair her first'
-                              : d.wounded || d.recovering
-                                ? 'she needs to heal first'
-                                : winterUsed >= winterCap
-                                  ? 'winter coops are full — build another'
-                                  : null;
+                              : d.post
+                                ? 'she’s working a post — recall her first'
+                                : d.wounded || d.recovering
+                                  ? 'she needs to heal first'
+                                  : winterUsed >= winterCap
+                                    ? 'winter coops are full — build another'
+                                    : null;
                         return (
                           <button
                             onClick={() => {
@@ -1239,8 +1360,9 @@ function FlockPanelInner({
                   const sections = [
                     { id: 'secured', label: 'Secured', icon: <ShieldIcon size={11} />, ducks: shown.filter((d) => d.secured) },
                     { id: 'winter', label: 'Wintering', icon: <SnowflakeIcon size={11} />, ducks: shown.filter((d) => !d.secured && d.site === 'winter') },
-                    { id: 'named', label: 'Named', icon: <PencilIcon size={10} />, ducks: shown.filter((d) => !d.secured && d.site !== 'winter' && d.name) },
-                    { id: 'rest', label: 'The Flock', icon: <DuckRowIcon />, ducks: shown.filter((d) => !d.secured && d.site !== 'winter' && !d.name) },
+                    { id: 'posted', label: 'On post', icon: <DuckRowIcon />, ducks: shown.filter((d) => !d.secured && d.site !== 'winter' && d.post) },
+                    { id: 'named', label: 'Named', icon: <PencilIcon size={10} />, ducks: shown.filter((d) => !d.secured && d.site !== 'winter' && !d.post && d.name) },
+                    { id: 'rest', label: 'The Flock', icon: <DuckRowIcon />, ducks: shown.filter((d) => !d.secured && d.site !== 'winter' && !d.post && !d.name) },
                   ].filter((sec) => sec.ducks.length > 0);
                   const soloFlock = sections.length === 1 && sections[0].id === 'rest';
                   return sections.map((sec) => (

@@ -402,12 +402,14 @@ export function NutritionPanel({
         ) : (
           <>
             <div className="mb-4 rounded-md bg-[#1f1812] px-3 py-2 text-xs">
-              <div className="text-[10px] uppercase tracking-wider text-[#7a6a4a]">Breeding speed</div>
+              <div className="text-[10px] uppercase tracking-wider text-[#7a6a4a]">
+                Breeding &amp; post speed
+              </div>
               <div className="text-lg font-bold" style={{ color: barColor(drn.breedRate) }}>
                 {Math.round(drn.breedRate * 100)}%
               </div>
               <div className="text-[10px] text-[#9a8a6a]">
-                {drn.drakeCount} drake{drn.drakeCount > 1 ? 's' : ''}
+                {drn.drakeCount} in the pool (drakes + posted workers)
               </div>
             </div>
 
@@ -418,15 +420,16 @@ export function NutritionPanel({
 
             <RationEditor
               state={state}
-              title="Drake ration — units per drake per cycle"
+              title="Maintenance ration — units per drake/worker per cycle"
               ration={state.drakeRation}
               suggested={B.DEFAULT_DRAKE_RATION}
               onSet={(i, v) => engine.setDrakeRation(i, v)}
             />
             <p className="mt-3 text-[10px] text-[#7a6a4a]">
-              Adult drakes draw from the same storage as the flock (a real end-game drain) but need no
-              calcium — so it spares oyster shell. Underfed drakes breed slower, down to{' '}
-              {Math.round(B.DRAKE_BREED_PENALTY_FLOOR * 100)}% clutch speed — a throttle, never a stop.
+              Drakes and posted workers (9a) draw from the same storage as the flock (a real end-game
+              drain) but need no calcium — so it spares oyster shell. An underfed pool breeds AND works
+              slower, down to {Math.round(B.DRAKE_BREED_PENALTY_FLOOR * 100)}% — a throttle, never a
+              stop.
             </p>
           </>
         )}

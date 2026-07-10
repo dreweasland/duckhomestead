@@ -6,6 +6,7 @@ import { UPGRADE_OUTPUT, stationOutputMult } from './actions';
 import { cycleMult, yieldMult } from './loot';
 import { husbandryBoostMult, outputBoostMult, speedBoostMult } from './prestige';
 import { runNutrition, runDucklingNutrition, runDrakeNutrition, runWinterNutrition } from './nutrition';
+import { broodyMatureMult, runForagers } from './posts';
 import { runBreeding, runOvercrowding } from './breeding';
 import { runPredators } from './predators';
 import { runCirculation } from './pond';
@@ -185,11 +186,16 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // never the core engine. Also lays the premium winter eggs.
   runWinterNutrition(state, dt, rateMult, willHaul);
 
+  // Phase 9a: foragers trickle peas + mealworms into storage — a producer in
+  // duck form, rate-scaled like every other (offline at the reduced mult).
+  runForagers(state, dt, rateMult);
+
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
   // Husbandry (legacy boost) is a pure SPEED scalar on both rates — it never
   // touches the rations that produced them, clutch size, or genome odds.
+  // A broody post (9a) rides the same maturation channel.
   const husbandry = husbandryBoostMult(state);
-  runBreeding(state, dt * rateMult, matureRate * husbandry, breedRate * husbandry);
+  runBreeding(state, dt * rateMult, matureRate * husbandry * broodyMatureMult(state), breedRate * husbandry);
   // Flock ratio health: an over-drake flock injures its own (online & offline).
   runOvercrowding(state, dt * rateMult);
 

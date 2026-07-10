@@ -15,10 +15,10 @@ import {
 import { outputBoostMult, renownBoostMult, speedBoostMult } from './prestige';
 import { milestoneAtRank, xpForLevel, type Milestone } from './rank';
 import { waterWoundMult } from './water';
-import type { Gene, GameState, Ingredient, Module, Rarity, Resource, Station } from './state';
+import type { Gene, GameState, Ingredient, Module, PostId, Rarity, Resource, Station } from './state';
+import { postCapacity, postsUnlocked } from './posts';
 import {
   addResource,
-  adultDrakes,
   adultLayers,
   breedingEstablished,
   coopCapacity,
@@ -193,10 +193,17 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
     outflow += (((state.ration[ing] ?? 0) * layers) / coopCycle) * feedScale;
     const immature = state.ducks.filter((d) => d.stage !== 'adult').length;
     outflow += ((state.ducklingRation[ing] ?? 0) * immature) / coopCycle;
-    // Drakes draw their maintenance ration too, once breeding's established.
-    if (breedingEstablished(state)) {
-      const drakes = adultDrakes(state).length;
-      outflow += ((state.drakeRation[ing] ?? 0) * drakes) / coopCycle;
+    // The maintenance pool draws its ration too: drakes (once breeding's
+    // established) + posted workers (9a — always fed while posted).
+    {
+      const established = breedingEstablished(state);
+      let maintenance = 0;
+      for (const d of state.ducks) {
+        if (d.stage !== 'adult') continue;
+        if (d.post) maintenance++;
+        else if (established && d.sex === 'drake') maintenance++;
+      }
+      outflow += ((state.drakeRation[ing] ?? 0) * maintenance) / coopCycle;
     }
     // Phase 6d: wintering hens draw the winter ration from the same stores.
     const wintering = state.winter?.henCount ?? 0;
@@ -618,7 +625,9 @@ export function cullDucks(state: GameState, duckIds: string[]): ActionResult<{ r
   const ids = new Set(duckIds);
   const paired = new Set(state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
   const before = state.ducks.length;
-  state.ducks = state.ducks.filter((d) => !(ids.has(d.id) && !d.secured && !paired.has(d.id)));
+  // Posted ducks are working assets — bulk sweeps never take them (same
+  // standing as secured/paired keepers; recall first to release one).
+  state.ducks = state.ducks.filter((d) => !(ids.has(d.id) && !d.secured && !d.post && !paired.has(d.id)));
   return done({ released: before - state.ducks.length });
 }
 
@@ -631,6 +640,9 @@ export function createPair(state: GameState, drakeId: string, henId: string): Ac
   // Phase 6d: breeding happens at HOME — a wintering hen must be recalled first
   // (the mirror of assignToWinter rejecting paired hens).
   if (drake.site === 'winter' || hen.site === 'winter') return fail('Wintering birds can’t pair — recall first');
+  // Phase 9a: a posted duck is working — recall it to breed (mirror of
+  // assignToPost rejecting paired ducks).
+  if (drake.post || hen.post) return fail('Posted birds can’t pair — recall first');
   const paired = (id: string) => state.breedingPairs.some((p) => p.drakeId === id || p.henId === id);
   if (paired(drakeId) || paired(henId)) return fail('A bird is already paired');
   state.breedingPairs.push({
@@ -695,11 +707,46 @@ export function assignToWinter(state: GameState, duckId: string): ActionResult<u
   if (d.site === 'winter') return fail('Already at Winterstead');
   if (d.stage !== 'adult') return fail('Adults only — winter is no place to grow up');
   if (d.sex !== 'hen') return fail('Only laying hens winter over');
+  if (d.post) return fail('She’s working a post — recall her first');
   if (d.wounded || d.recovering) return fail('She needs to heal first');
   if (state.breedingPairs.some((p) => p.henId === duckId)) return fail('She’s in a breeding pair');
   const assigned = state.ducks.filter((x) => x.site === 'winter').length;
   if (assigned >= winterCapacity(state)) return fail('Winter coops are full — build another');
   d.site = 'winter';
+  return done(true);
+}
+
+// ── Phase 9a: POSTS (assign an adult to a working post) ───────────────
+/**
+ * Post an adult duck: it stops laying, eats the maintenance ration, and works
+ * its gene axis (see game/posts.ts). Same shape as the winter assign — posts
+ * and Winterstead are mutually exclusive sites of work.
+ */
+export function assignToPost(state: GameState, duckId: string, post: PostId): ActionResult<unknown> {
+  if (!postsUnlocked(state)) return fail(`Posts unlock at Rank ${BALANCE.POSTS.INTRO_RANK}`);
+  const d = state.ducks.find((x) => x.id === duckId);
+  if (!d) return fail('No such duck');
+  if (d.post === post) return fail('Already at this post');
+  if (d.stage !== 'adult') return fail('Adults only — ducklings have growing to do');
+  if (d.site === 'winter') return fail('At Winterstead — recall home first');
+  if (d.wounded || d.recovering) return fail('Needs to heal first');
+  if (state.breedingPairs.some((p) => p.drakeId === duckId || p.henId === duckId)) {
+    return fail('In a breeding pair — unpair first');
+  }
+  if (post === 'broody' && d.sex !== 'hen') return fail('Broodiness is a hen’s gift');
+  // Moving between posts is one action — free the old slot before the count.
+  const occupied = state.ducks.filter((x) => x.id !== duckId && x.post === post).length;
+  if (occupied >= postCapacity(post)) return fail('That post is full');
+  d.post = post;
+  return done(true);
+}
+
+/** Bring a posted duck back to the laying/breeding flock. Always allowed. */
+export function recallFromPost(state: GameState, duckId: string): ActionResult<unknown> {
+  const d = state.ducks.find((x) => x.id === duckId);
+  if (!d) return fail('No such duck');
+  if (!d.post) return fail('Not at a post');
+  d.post = undefined;
   return done(true);
 }
 

@@ -36,7 +36,7 @@ import {
   type XpResult,
 } from './actions';
 import { playstylePreset, zoneDef } from '../config/balance';
-import { assignToWinter, recallFromWinter } from './actions';
+import { assignToPost, assignToWinter, recallFromPost, recallFromWinter } from './actions';
 import {
   acceptContract,
   abandonContract,
@@ -88,6 +88,7 @@ import {
   type Ingredient,
   type Module,
   type ModuleStat,
+  type PostId,
   type PredatorEvent,
   type Rarity,
   type Resource,
@@ -731,7 +732,9 @@ export class GameEngine {
     const cullRank = (d: Duck) =>
       d.genome.filter((g) => g === 'P').length * 10 + goodGeneCount(d.genome);
     const ids = this.state.ducks
-      .filter((d) => d.stage === 'adult' && d.sex === 'drake' && !d.secured && !paired.has(d.id))
+      .filter(
+        (d) => d.stage === 'adult' && d.sex === 'drake' && !d.secured && !d.post && !paired.has(d.id),
+      )
       .sort((a, b) => cullRank(a) - cullRank(b))
       .slice(0, excess)
       .map((d) => d.id);
@@ -763,6 +766,18 @@ export class GameEngine {
   /** Phase 6d: assign an adult hen to Winterstead (the premium winter pool). */
   assignToWinter(duckId: string): ActionResult<unknown> {
     const r = assignToWinter(this.state, duckId);
+    this.notify();
+    return r;
+  }
+  /** Phase 9a: post an adult duck to a working post (sentry/forager/broody). */
+  assignToPost(duckId: string, post: PostId): ActionResult<unknown> {
+    const r = assignToPost(this.state, duckId, post);
+    this.notify();
+    return r;
+  }
+  /** Phase 9a: bring a posted duck back to the laying/breeding flock. */
+  recallFromPost(duckId: string): ActionResult<unknown> {
+    const r = recallFromPost(this.state, duckId);
     this.notify();
     return r;
   }

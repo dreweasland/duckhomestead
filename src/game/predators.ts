@@ -13,6 +13,7 @@ import {
   type WoundSeverity,
 } from './state';
 import { woundResistChance } from './genetics';
+import { sentryRepelChance, sentryWindupMult } from './posts';
 import { waterWoundMult } from './water';
 import { grantModule } from './loot';
 
@@ -267,6 +268,12 @@ function resolveAttack(state: GameState, def: PredatorDef, opts: PredatorOpts, r
 
   const target = pickTarget(state, rng);
   if (!target) return; // nothing exposed (all secured / none eligible) — no effect
+  // SENTRY (9a): the watch gets its own roll on an attack that beat the floor
+  // — duck-shaped built defense, on duty offline exactly like deterrents.
+  if (rng() < sentryRepelChance(state)) {
+    emit(state, { kind: 'repelled', predatorId: def.id, duckId: target.id });
+    return;
+  }
   // Per-hit wear only when the hit actually harms: a shrugged-off (or empty-
   // yard) breach doesn't tear the netting. Breach wear used to fire on every
   // success and dominated the ambient rate — see the balance.ts wear note.
@@ -285,11 +292,14 @@ export function rankDifficulty(state: GameState): number {
 
 /** Dive wind-up (reaction window) in seconds, shrinking with rank difficulty.
  *  A def with `windupScale` set (siege) OVERRIDES the rank ramp with a fixed
- *  fraction of STRIKE_WINDUP_SEC — a siege stays harsh regardless of rank. */
+ *  fraction of STRIKE_WINDUP_SEC — a siege stays harsh regardless of rank.
+ *  Sentries (9a) stretch every wind-up — the watch buys you reaction time. */
 export function strikeWindupSec(state: GameState, def?: PredatorDef): number {
-  if (def?.windupScale != null) return P.STRIKE_WINDUP_SEC * def.windupScale;
-  const d = rankDifficulty(state);
-  return P.STRIKE_WINDUP_SEC * (1 + (P.RANK_WINDUP_MIN_SCALE - 1) * d);
+  const base =
+    def?.windupScale != null
+      ? P.STRIKE_WINDUP_SEC * def.windupScale
+      : P.STRIKE_WINDUP_SEC * (1 + (P.RANK_WINDUP_MIN_SCALE - 1) * rankDifficulty(state));
+  return base * sentryWindupMult(state);
 }
 
 /** Weighted pick of how many scare clicks a strike needs (1..N), interpolating the
@@ -431,6 +441,12 @@ function resolveStrike(state: GameState, def: PredatorDef, opts: PredatorOpts, p
     // Formerly silent — the nets' finest work deserves a beat (pure feedback).
     emit(state, { kind: 'repelled', predatorId: def.id, duckId: target.id });
     return; // missed — defenses/presence held
+  }
+  // SENTRY (9a): the watch's own roll after the floor gives way (guard only —
+  // in ACTIVE play the sentries instead stretch the wind-up for YOUR scare).
+  if (rng() < sentryRepelChance(state)) {
+    emit(state, { kind: 'repelled', predatorId: def.id, duckId: target.id });
+    return;
   }
   if (def.jackpot) ps.jackpotLanded = (ps.jackpotLanded ?? 0) + 1;
   // Per-hit wear only on actual harm — a shrug doesn't tear the line (see

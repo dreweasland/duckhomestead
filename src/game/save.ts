@@ -1,5 +1,6 @@
 import { BALANCE, STATION_DEFS } from '../config/balance';
 import { collectAll, placeStarterEngine } from './actions';
+import { validPost } from './posts';
 import { rewindWoundsToBrink } from './predators';
 import { initialState, rackSockets, seedFlock, type Duck, type Gene, type GameState, type Genome, type Resource } from './state';
 import { tick } from './tick';
@@ -124,7 +125,9 @@ export function deserialize(raw: string, now: number): GameState {
       ducks: (parsed.ducks ?? []).map((raw) => {
         const { vigor: _vigor, ...d } = raw as Duck & { vigor?: number };
         const genome = validGenome(d.genome) ? d.genome : migrateGenome(_vigor);
-        return { ...d, genome, genomeKnown: d.genomeKnown ?? (parsed.geneReader ?? false) };
+        // Phase 9a: an unknown post value (hand-edit, newer build) loads as
+        // unposted — never a crash, never a phantom worker.
+        return { ...d, genome, post: validPost(d.post), genomeKnown: d.genomeKnown ?? (parsed.geneReader ?? false) };
       }),
       nextDuckId: parsed.nextDuckId ?? 1,
       breedingPairs: parsed.breedingPairs ?? [],
