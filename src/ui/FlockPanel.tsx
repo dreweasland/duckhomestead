@@ -12,6 +12,13 @@ import { CloseIcon, DuckIcon, HealIcon, PencilIcon, ShieldIcon, SnowflakeIcon, W
 
 const DuckRowIcon = () => <DuckIcon size={11} />;
 import { useEscapeKey } from './useEscapeKey';
+import { usePersistentState } from './usePersistentState';
+
+// In-progress mate picks survive a close/reopen (check the board mid-pick
+// without losing the drake you chose) but reset on reload — workflow state,
+// not a preference, so it lives in module memory rather than storage.
+let heldMateDrakeId = '';
+let heldMateHenId = '';
 
 export const COLOR_META: Record<Color, { label: string; swatch: string }> = {
   black: { label: 'Black', swatch: '#33333c' },
@@ -720,18 +727,42 @@ function FlockPanelInner({
   // BREEDING: target/pairs/builder, rows are pick-targets with kin dots.
   // ROSTER: filters/bulk/manage buttons (secure/winter/name/release).
   // POSTS: the 9a roster card, rows carry only the post cycle.
-  const [tab, setTab] = useState<'breeding' | 'roster' | 'posts'>('breeding');
-  // Sections the user expanded past the row cap ("show all").
+  // Tab + every filter/sort below PERSIST (playtest, 2026-07-10: reopening
+  // reset the whole workbench) — see usePersistentState.
+  const [tab, setTab] = usePersistentState<'breeding' | 'roster' | 'posts'>(
+    'flock-tab',
+    'breeding',
+    (v) => v === 'breeding' || v === 'roster' || v === 'posts',
+  );
+  // Sections the user expanded past the row cap ("show all") — deliberately
+  // NOT persisted: the cap is a render-perf guard, opt past it per visit.
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [armedCull, setArmedCull] = useState<string | null>(null);
   // Role sections in the duck list: which are collapsed (The Flock at scale).
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [collapsedSectionIds, setCollapsedSectionIds] = usePersistentState<string[]>(
+    'flock-collapsed',
+    [],
+    (v) => Array.isArray(v) && v.every((x) => typeof x === 'string'),
+  );
+  const collapsedSections = new Set(collapsedSectionIds);
+  const setCollapsedSections = (update: (prev: Set<string>) => Set<string>) =>
+    setCollapsedSectionIds((prev) => [...update(new Set(prev))]);
   // Opt-in naming: which duck's name is being edited + the draft text.
   const [namingId, setNamingId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
-  // New-pair selection: drake + hen are picked by tapping rows in the list below.
-  const [mateDrakeId, setMateDrakeId] = useState('');
-  const [mateHenId, setMateHenId] = useState('');
+  // New-pair selection: drake + hen are picked by tapping rows in the list
+  // below. Held in module memory so a close/reopen keeps an in-progress pick;
+  // a vanished duck (culled/delivered) degrades to the empty slot naturally.
+  const [mateDrakeId, setMateDrakeIdRaw] = useState(heldMateDrakeId);
+  const [mateHenId, setMateHenIdRaw] = useState(heldMateHenId);
+  const setMateDrakeId = (id: string) => {
+    heldMateDrakeId = id;
+    setMateDrakeIdRaw(id);
+  };
+  const setMateHenId = (id: string) => {
+    heldMateHenId = id;
+    setMateHenIdRaw(id);
+  };
   const target = state.genomeTarget;
   // Sort: color (dex order) → stage (adults, then juveniles, then ducklings) →
   // sex (drakes, then hens) → genome quality (best match-to-target first).
@@ -759,17 +790,41 @@ function FlockPanelInner({
   // stage → sex → vigor order.
   const colorCounts: Record<Color, number> = { black: 0, blue: 0, splash: 0 };
   for (const d of state.ducks) colorCounts[phenotype(d.genotype)]++;
-  const [colorTab, setColorTab] = useState<'all' | Color>('all');
+  const [colorTab, setColorTab] = usePersistentState<'all' | Color>(
+    'flock-color',
+    'all',
+    (v) => v === 'all' || COLORS.includes(v as Color),
+  );
   const inTab = (d: Duck) => colorTab === 'all' || phenotype(d.genotype) === colorTab;
   // Cross-cutting filters (compose with the color tab): sex and life stage.
-  const [sexFilter, setSexFilter] = useState<'all' | Duck['sex']>('all');
-  const [stageFilter, setStageFilter] = useState<'all' | Duck['stage']>('all');
+  const [sexFilter, setSexFilter] = usePersistentState<'all' | Duck['sex']>(
+    'flock-sex',
+    'all',
+    (v) => v === 'all' || v === 'drake' || v === 'hen',
+  );
+  const [stageFilter, setStageFilter] = usePersistentState<'all' | Duck['stage']>(
+    'flock-stage',
+    'all',
+    (v) => v === 'all' || v === 'adult' || v === 'juvenile' || v === 'duckling',
+  );
   // Genome browser (the scale tooling): sort by a genome stat, and query for a
   // gene-in-slot. Both read the genome, so they act on READ ducks; an unread
   // duck sinks to the bottom of a genome sort and never matches a gene query.
-  const [sortKey, setSortKey] = useState<SortKey>('match');
-  const [querySlot, setQuerySlot] = useState<number>(-1); // -1 = any slot
-  const [queryGene, setQueryGene] = useState<Gene | 'any'>('any');
+  const [sortKey, setSortKey] = usePersistentState<SortKey>(
+    'flock-sort',
+    'match',
+    (v) => typeof v === 'string' && v in SORT_LABEL,
+  );
+  const [querySlot, setQuerySlot] = usePersistentState<number>(
+    'flock-query-slot',
+    -1, // -1 = any slot
+    (v) => Number.isInteger(v) && (v as number) >= -1 && (v as number) < 6,
+  );
+  const [queryGene, setQueryGene] = usePersistentState<Gene | 'any'>(
+    'flock-query-gene',
+    'any',
+    (v) => v === 'any' || GENE_ORDER.includes(v as Gene) || v === 'P',
+  );
   // Bulk-release cutoff: release READ ducks whose match-to-target is below this
   // (an unread duck is never bulk-culled — you can't judge a "?"). Defaults to the
   // BEST match currently in the flock, so it pre-selects "keep only my top tier"
@@ -784,7 +839,14 @@ function FlockPanelInner({
   // spared-count: deep in the Prime chase most sub-cutoff birds are carriers
   // (P passes at dominance 4), and a silent blanket rule made the tool look
   // dead ('no bulk release button lights up', playtest 2026-07-05).
-  const [keepPrime, setKeepPrime] = useState(true);
+  // Persisted; the CUTOFF itself is not — its smart default (the flock's best
+  // match) recomputes each open, and a stale remembered cutoff would pre-arm
+  // a bigger sweep than the player last meant.
+  const [keepPrime, setKeepPrime] = usePersistentState<boolean>(
+    'flock-keep-prime',
+    true,
+    (v) => typeof v === 'boolean',
+  );
 
   const geneQueryActive = queryGene !== 'any';
   const matchesGeneQuery = (d: Duck): boolean => {
