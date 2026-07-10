@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { predatorsActive } from '../game/predators';
+import { currentSeason, seasonRemaining, seasonsActive } from '../game/season';
 import type { GameState } from '../game/state';
 import { CartIcon, LockIcon, ShieldIcon, TendIcon } from './icons';
 
@@ -44,8 +45,20 @@ export function StatusPills({ state }: { state: GameState }) {
   const secs = Math.max(0, Math.ceil(state.activeRemaining));
   const mmss = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
+  const season = seasonsActive(state) ? currentSeason(state) : null;
+  const seasonMins = Math.ceil(seasonRemaining(state) / 60);
+
   return (
     <div className="flex flex-wrap items-center justify-center gap-1.5">
+      {season && (
+        <span
+          title={`${season.label} — ${season.note}. The year turns with ~${seasonMins} more active minutes (the clock only runs while you play).`}
+          className="inline-flex cursor-help items-center gap-1 rounded-full bg-[#241c14] px-2.5 py-0.5 text-[10px] font-bold ring-1 ring-[#2e251a]"
+          style={{ color: season.color }}
+        >
+          {season.label}
+        </span>
+      )}
       {pills.map((p) => (
         <span
           key={p.key}

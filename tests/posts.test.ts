@@ -140,9 +140,14 @@ describe('SENTRY: the living watch', () => {
 
 describe('FORAGER: a producer in duck form', () => {
   it('V-lines out-forage duds; output scales with the offline mult', () => {
+    // Rank 14 puts these flocks in the seasons era — park them in summer
+    // (forage ×1) so the assertions read the BASE rates. Spring's bonus has
+    // its own test in seasons.test.ts.
     const dud = flock(4);
+    dud.season.index = 1;
     assignToPost(dud, 'd0', 'forager');
     const vig = flock(4, genome('VVVVVV'));
+    vig.season.index = 1;
     assignToPost(vig, 'd0', 'forager');
     const dudRate = forageRates(dud).peas;
     const vigRate = forageRates(vig).peas;
@@ -151,6 +156,7 @@ describe('FORAGER: a producer in duck form', () => {
     runForagers(vig, 100, 1);
     expect(vig.resources.peas).toBeCloseTo(vigRate * 100, 4);
     const off = flock(4, genome('VVVVVV'));
+    off.season.index = 1;
     assignToPost(off, 'd0', 'forager');
     runForagers(off, 100, BALANCE.OFFLINE_RATE_MULT);
     expect(off.resources.peas).toBeCloseTo(vigRate * 100 * BALANCE.OFFLINE_RATE_MULT, 4);

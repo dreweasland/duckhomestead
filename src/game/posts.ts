@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { axisScore } from './genetics';
+import { seasonForageMult } from './season';
 import { addResource, POST_IDS, type Duck, type GameState, type PostId } from './state';
 
 /**
@@ -95,11 +96,12 @@ function forageScale(d: Duck): number {
   return F.SCORE_FLOOR + (1 - F.SCORE_FLOOR) * axisScore(d.genome, 'vigor');
 }
 
-/** The live forage rate per second, per resource (for readouts + the sim). */
+/** The live forage rate per second, per resource (for readouts + the sim).
+ *  Season-scaled (9c): rich in spring, lean in winter. */
 export function forageRates(state: GameState): { peas: number; mealworms: number } {
   let scale = 0;
   for (const d of state.ducks) if (d.post === 'forager' && working(d)) scale += forageScale(d);
-  scale *= postWorkRate(state);
+  scale *= postWorkRate(state) * seasonForageMult(state);
   return { peas: P.FORAGER.PEAS_PER_S * scale, mealworms: P.FORAGER.MEALWORMS_PER_S * scale };
 }
 

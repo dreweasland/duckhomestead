@@ -578,6 +578,14 @@ export interface GameState {
    *  (expiry clocks are online-only), so it can't accrue during catch-up. */
   pendingContractExpired?: number;
 
+  // ── Phase 9c: SEASONS ──
+  /** The season clock: index into SEASONS.ORDER + seconds of ACTIVE play
+   *  elapsed this season (the clock only runs while you're present). */
+  season: { index: number; elapsed: number };
+  /** Transient: a season turned this tick — drained by the engine for the
+   *  announcement toast (never replayed from a save). */
+  pendingSeasonChange?: string;
+
   // ── Phase 5 juice: water attribution beats (assessment fix ①, pure UI over
   // existing water math — see game/water.ts) ──
   /** Transient: infirmary admissions that beat the escalation clock while the
@@ -980,6 +988,7 @@ export function initialState(now: number): GameState {
     activeRemaining: 0,
     guardElapsed: 0,
     doseCooldownRemaining: 0,
+    season: { index: 0, elapsed: 0 },
     inventory: [],
     rack: [],
     dust: 0,

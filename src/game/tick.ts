@@ -7,6 +7,7 @@ import { cycleMult, yieldMult } from './loot';
 import { husbandryBoostMult, outputBoostMult, speedBoostMult } from './prestige';
 import { runNutrition, runDucklingNutrition, runDrakeNutrition, runWinterNutrition } from './nutrition';
 import { broodyMatureMult, runForagers } from './posts';
+import { advanceSeason, seasonClutchRate, seasonProducerMult } from './season';
 import { runBreeding, runOvercrowding } from './breeding';
 import { runPredators } from './predators';
 import { runCirculation } from './pond';
@@ -103,6 +104,10 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   if (state.activeRemaining > 0) {
     state.activeRemaining = Math.max(0, state.activeRemaining - dt);
     state.guardElapsed = 0;
+    // Phase 9c: the season clock runs only while you're PRESENT (the
+    // attended-event law) — a transition never happens behind an unwatched
+    // tab, and offline/guard keep the frozen season's multipliers.
+    if (opts.mode === 'online') advanceSeason(state, dt);
   } else {
     state.guardElapsed = (state.guardElapsed ?? 0) + dt;
   }
@@ -147,9 +152,11 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
       continue;
     }
 
-    // The boost divides cycle time — a global top-level rate scalar.
+    // The boost divides cycle time — a global top-level rate scalar. The
+    // season (9c) tilts each producer TYPE: peas surge in spring, fields lean
+    // in winter — the reason a one-season farm idles off-season.
     const cycleSeconds = STATION_DEFS[station.type].cycleSeconds * cycleScale;
-    station.cycleProgress += dt * rateMult;
+    station.cycleProgress += dt * rateMult * seasonProducerMult(state, station.type);
 
     // Run as many cycles as progress allows. If inputs are missing, cap
     // progress at one cycle so the station fires the instant inputs arrive.
@@ -193,9 +200,15 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // Breeding: clutches, incubation, hatching, and maturation (online & offline).
   // Husbandry (legacy boost) is a pure SPEED scalar on both rates — it never
   // touches the rations that produced them, clutch size, or genome odds.
-  // A broody post (9a) rides the same maturation channel.
+  // A broody post (9a) rides the same maturation channel; spring (9c) rides
+  // the clutch channel.
   const husbandry = husbandryBoostMult(state);
-  runBreeding(state, dt * rateMult, matureRate * husbandry * broodyMatureMult(state), breedRate * husbandry);
+  runBreeding(
+    state,
+    dt * rateMult,
+    matureRate * husbandry * broodyMatureMult(state),
+    breedRate * husbandry * seasonClutchRate(state),
+  );
   // Flock ratio health: an over-drake flock injures its own (online & offline).
   runOvercrowding(state, dt * rateMult);
 

@@ -1,4 +1,5 @@
 import { BALANCE } from '../config/balance';
+import { seasonFoulMult } from './season';
 import {
   cellKey,
   zoneUnlocked,
@@ -235,9 +236,10 @@ export function runCirculation(state: GameState, dt: number, rateMult: number): 
     if (isCovered(live, f.x, f.y)) {
       v = Math.min(1, v + recoverPerSec * step);
     } else {
-      // Fouling scales with flock; the deep zone (wantsCirculation) fouls fastest.
+      // Fouling scales with flock; the deep zone (wantsCirculation) fouls
+      // fastest. Summer (9c) blooms the pond; winter keeps it.
       const foulMult = f.type === 'deepZone' ? C.wantsCirculationFoulMult : 1;
-      const driftPerSec = recoverPerSec * C.foulPerDuckPerSec * flock * foulMult;
+      const driftPerSec = recoverPerSec * C.foulPerDuckPerSec * flock * foulMult * seasonFoulMult(state);
       v = Math.max(C.circulationFloor, v - driftPerSec * step);
     }
     fresh[key] = v;

@@ -2,6 +2,7 @@ import { BALANCE } from '../config/balance';
 import { UPGRADE_OUTPUT } from './actions';
 import { hardinessMult, layMult } from './genetics';
 import { conditionRegenMult, eggOutputMult, millThroughputMult } from './loot';
+import { seasonDemandDelta } from './season';
 import { waterConditionMult } from './water';
 import { flockWarmth, winterSupportFactor } from './winter';
 import { eggValueBoostMult } from './prestige';
@@ -108,7 +109,11 @@ export function runNutrition(state: GameState, dt: number, rateMult: number, wil
   const prior = state.nutrition?.satisfaction;
   const alpha = N.SMOOTH_TAU_S > 0 ? Math.min(1, step / N.SMOOTH_TAU_S) : 1;
   for (const axis of AXES) {
-    requirement[axis] = (N.REQUIREMENT[axis] * feedWeight) / coopCycle;
+    // Phase 9c: the season tilts the LAYER demand profile (summer eats light,
+    // winter eats heavy, the autumn molt wants calcium). Sim-level, never a
+    // module/genome effect; floored so an axis demand can't go negative.
+    const perDuck = Math.max(0, N.REQUIREMENT[axis] + seasonDemandDelta(state, axis));
+    requirement[axis] = (perDuck * feedWeight) / coopCycle;
     const instant = requirement[axis] > 0 ? supply[axis] / requirement[axis] : 1;
     satisfaction[axis] = prior ? prior[axis] + (instant - prior[axis]) * alpha : instant;
   }

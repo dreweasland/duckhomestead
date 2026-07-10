@@ -396,6 +396,66 @@ export const BALANCE = {
     BROODY: { MATURE_PER_SCORE: 0.3 },
   },
 
+  // ── Phase 9c: SEASONS (the farm equation re-poses itself) ───────────
+  // The nutrition optimum was stationary — solve the ration once and the
+  // economy goes quiet. Seasons rotate it: each re-tilts producer rates and
+  // the LAYER demand profile, so the ration wants re-solving quarterly and a
+  // farm built for one season idles in another. All throttle-never-wall (the
+  // condition battery + MIN_EGG_MULT absorb a lazy transition).
+  // The clock runs only while ACTIVE (the attended-event law from the guard
+  // rework): a transition never happens behind an unwatched tab — you're
+  // there for every turn of the year. Offline/guard keep the frozen season's
+  // multipliers. Dormant below INTRO_RANK so onboarding's taught ration
+  // stays stable.
+  SEASONS: {
+    INTRO_RANK: 8,
+    /** Seconds of ACTIVE play per season (~25 min — a couple of sessions). */
+    LENGTH_S: 1500,
+    ORDER: ['spring', 'summer', 'autumn', 'winter'] as const,
+    DEFS: {
+      spring: {
+        label: 'Spring',
+        color: '#8fe388',
+        note: 'peas surge · clutches come faster · forage is rich',
+        producers: { peaPatch: 1.5 } as Record<string, number>,
+        demand: {} as Record<string, number>,
+        clutchRate: 1.25,
+        forageMult: 1.25,
+        foulMult: 1,
+      },
+      summer: {
+        label: 'Summer',
+        color: '#e8c45a',
+        note: 'corn thrives · light appetites (energy −1) · the pond fouls fast',
+        producers: { plot: 1.25 } as Record<string, number>,
+        demand: { energy: -1 } as Record<string, number>,
+        clutchRate: 1,
+        forageMult: 1,
+        foulMult: 1.5,
+      },
+      autumn: {
+        label: 'Autumn',
+        color: '#e8935a',
+        note: 'harvest corn + mealworms · the molt wants calcium (+0.5)',
+        producers: { plot: 1.5, mealwormFarm: 1.25 } as Record<string, number>,
+        demand: { calcium: 0.5 } as Record<string, number>,
+        clutchRate: 1,
+        forageMult: 1,
+        foulMult: 1,
+      },
+      winter: {
+        label: 'Winter',
+        color: '#9fd4e8',
+        note: 'lean fields (producers ×0.8) · cold appetites (energy +1.5) · the pond keeps',
+        producers: { plot: 0.8, peaPatch: 0.8, mealwormFarm: 0.8, yeastVat: 0.8, oysterSource: 0.8 } as Record<string, number>,
+        demand: { energy: 1.5 } as Record<string, number>,
+        clutchRate: 1,
+        forageMult: 0.5,
+        foulMult: 0.75,
+      },
+    },
+  },
+
   // ── Milestones ──────────────────────────────────────────────────────
   /** Rank at which the Auto-Haul Cart unlocks (auto-collect output). */
   MILESTONE_AUTOHAUL_RANK: 5,

@@ -109,6 +109,13 @@ export function deserialize(raw: string, now: number): GameState {
       overcrowdStress: parsed.overcrowdStress ?? 0,
       activeRemaining: 0, // always start in guard; the first action arms active mode
       guardElapsed: 0, // fresh guard clock — the away gap was already offline-rated
+      // Phase 9c: the season persists (frozen while away); sanitize hand-edits
+      // and never replay a transition toast from a save.
+      season: {
+        index: Number.isInteger(parsed.season?.index) ? Math.max(0, parsed.season!.index % 4) : 0,
+        elapsed: Number.isFinite(parsed.season?.elapsed) ? Math.max(0, parsed.season!.elapsed) : 0,
+      },
+      pendingSeasonChange: undefined,
       doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,
       // Phase 3 loot defaults for older saves.
       inventory: parsed.inventory ?? [],

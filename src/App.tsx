@@ -182,6 +182,25 @@ export default function App() {
     return () => clearTimeout(t);
   }, [salvage]);
 
+  // Phase 9c: a season turn is a quiet announcement — the note tells you what
+  // the year just changed, so re-checking the ration is a choice, not a hunt.
+  const [seasonNews, setSeasonNews] = useState<{ id: number; label: string; note: string; color: string } | null>(null);
+  useEffect(
+    () =>
+      engine.onSeason((seasonId) => {
+        const def = BALANCE.SEASONS.DEFS[seasonId as keyof typeof BALANCE.SEASONS.DEFS];
+        if (!def) return;
+        setSeasonNews({ id: Date.now(), label: def.label, note: def.note, color: def.color });
+        playThreat(); // the attention chime — a season is weather, not danger
+      }),
+    [engine],
+  );
+  useEffect(() => {
+    if (!seasonNews) return;
+    const t = window.setTimeout(() => setSeasonNews(null), 5000);
+    return () => clearTimeout(t);
+  }, [seasonNews]);
+
   // The Grange: claiming a contract is a quiet rhythm beat, not a milestone DING.
   const [grangeClaim, setGrangeClaim] = useState<{ id: number; dust: number; shards: number; module?: boolean } | null>(
     null,
@@ -393,6 +412,15 @@ export default function App() {
             className="salvage-toast rounded-full bg-[#2e2746] px-3 py-1 text-xs font-bold text-[#cdbcff] shadow ring-1 ring-[#3a2e64]"
           >
             Auto-salvaged spare · +{salvage.dust} dust
+          </span>
+        )}
+        {seasonNews && (
+          <span
+            key={seasonNews.id}
+            className="ding-pop rounded-full bg-[#241c14] px-3 py-1 text-xs font-bold shadow ring-1 ring-[#3a2e22]"
+            style={{ color: seasonNews.color }}
+          >
+            {seasonNews.label} — {seasonNews.note}
           </span>
         )}
         {grangeClaim && (

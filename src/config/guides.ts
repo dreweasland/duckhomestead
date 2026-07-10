@@ -171,6 +171,14 @@ export const GUIDE_DEFS: GuideDef[] = [
     cta: { label: 'Open Nutrition', open: 'nutrition', tab: 'drakes' },
   },
   {
+    id: 'seasons',
+    title: 'The year has begun to turn',
+    icon: NutritionIcon,
+    body: 'From here the SEASONS rotate while you play: each tilts what the fields yield and what the flock craves — peas surge in spring, summer eats light but blooms the pond, the autumn molt wants calcium, and winter runs lean and hungry. Watch the season pill above the board; when the year turns, glance at the Nutrition bars and nudge the ration. Flock condition buffers a lazy transition — it just costs you.',
+    when: (state) => state.rank >= BALANCE.SEASONS.INTRO_RANK,
+    cta: { label: 'Open Nutrition', open: 'nutrition' },
+  },
+  {
     id: 'posts',
     title: 'Put the flock to work',
     icon: DuckIcon,

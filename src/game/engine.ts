@@ -172,6 +172,8 @@ export class GameEngine {
   private contractExpireListeners = new Set<() => void>();
   private woundSavedListeners = new Set<(e: WoundSavedEvent) => void>();
   private conditionReboundListeners = new Set<(e: ConditionReboundEvent) => void>();
+  /** Phase 9c: a season turned — the quiet announcement toast. */
+  private seasonListeners = new Set<(seasonId: string) => void>();
 
   // Water attribution (Phase 5 juice): the condition-rebound edge-detection
   // lives here, engine-side, never in tick — these are pure UI bookkeeping,
@@ -252,6 +254,11 @@ export class GameEngine {
     this.conditionReboundListeners.add(fn);
     return () => this.conditionReboundListeners.delete(fn);
   }
+  /** Fires when a season turns (9c) — the toast that says re-check the ration. */
+  onSeason(fn: (seasonId: string) => void): () => void {
+    this.seasonListeners.add(fn);
+    return () => this.seasonListeners.delete(fn);
+  }
   private notify() {
     for (const fn of this.listeners) fn();
   }
@@ -285,6 +292,15 @@ export class GameEngine {
   private emitConditionRebound(e: ConditionReboundEvent) {
     for (const fn of this.conditionReboundListeners) fn(e);
   }
+  /** Phase 9c: surface a season turn (quiet toast — set only while ACTIVE, so
+   *  it can never fire behind an unwatched tab or replay from a save). */
+  private drainSeasonChange() {
+    const s = this.state.pendingSeasonChange;
+    if (!s) return;
+    this.state.pendingSeasonChange = undefined;
+    for (const fn of this.seasonListeners) fn(s);
+  }
+
   /** Surface any delivery-deadline expiry accrued during ticks (quiet toast). */
   private drainContractExpiry() {
     const n = this.state.pendingContractExpired ?? 0;
@@ -462,6 +478,7 @@ export class GameEngine {
       this.drainTruebred(); // fire the truebred DING for a perfect-target hatch
       this.drainPredatorEvents(); // telegraph / attack / loss feedback this frame
       this.drainContractExpiry(); // a deadline lapse gets a toast, never silence
+      this.drainSeasonChange(); // a season turn gets its announcement (9c)
       this.drainWoundSaved(); // water attribution ①: an admission that beat the clock
       this.drainConditionRebound(); // water attribution ②: a dip recovered, well-watered
       if (t - this.lastNotify >= this.notifyIntervalMs) {

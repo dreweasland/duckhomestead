@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
+import { currentSeason, seasonsActive } from '../game/season';
 import {
   AXES,
   breedingEstablished,
@@ -330,6 +331,16 @@ export function NutritionPanel({
                 </div>
               </div>
 
+              {seasonsActive(state) && Object.keys(currentSeason(state).demand).length > 0 && (
+                // Phase 9c: the season's demand tilt, right where the bars it
+                // moves live — re-solving the ration is a choice, not a hunt.
+                <div
+                  className="mb-2 rounded bg-[#241c14] px-2 py-1 text-[10px] font-bold"
+                  style={{ color: currentSeason(state).color }}
+                >
+                  {currentSeason(state).label}: {currentSeason(state).note}
+                </div>
+              )}
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#9a8a6a]">
                 Nutrient balance ({adults} adult{adults > 1 ? 's' : ''})
               </div>
