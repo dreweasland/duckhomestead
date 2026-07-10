@@ -280,6 +280,10 @@ function PostsCard({ engine, state }: { engine: GameEngine; state: GameState }) 
       effect: `+${(rates.peas * 60).toFixed(1)} peas · +${(rates.mealworms * 60).toFixed(1)} mealworms /min`,
     },
     { id: 'broody', effect: `grow-out ×${broodyMatureMult(state).toFixed(2)}` },
+    // 9d: the show bench only exists once the Grange runs exhibitions.
+    ...(state.legacyTier >= BALANCE.CONTRACTS.UNLOCK_TIER
+      ? [{ id: 'show' as PostId, effect: 'the exhibition bench — judged by Grange contracts' }]
+      : []),
   ];
   return (
     <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2">
@@ -1270,11 +1274,12 @@ function FlockPanelInner({
                             : null;
                         const cyclePost = () => {
                           if (blocked) return;
-                          const order: PostId[] = ['sentry', 'forager', 'broody'];
+                          const order: PostId[] = ['sentry', 'forager', 'broody', 'show'];
                           const start = d.post ? order.indexOf(d.post) + 1 : 0;
                           for (let k = start; k < order.length; k++) {
                             const cand = order[k];
                             if (cand === 'broody' && d.sex !== 'hen') continue;
+                            if (cand === 'show' && state.legacyTier < BALANCE.CONTRACTS.UNLOCK_TIER) continue;
                             const occupied = state.ducks.filter((x) => x.id !== d.id && x.post === cand).length;
                             if (occupied >= postCapacity(cand)) continue;
                             if (engine.assignToPost(d.id, cand).ok) {

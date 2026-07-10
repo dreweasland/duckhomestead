@@ -3,6 +3,7 @@ import { resourceFlow } from './actions';
 import { targetMatch } from './genetics';
 import { targetForTier } from './prestige';
 import { grantModule } from './loot';
+import { currentSeason, seasonsActive } from './season';
 import {
   COLORS,
   INGREDIENTS,
@@ -14,6 +15,7 @@ import {
   type ContractType,
   type DefenseContract,
   type Duck,
+  type ExhibitionContract,
   type GameState,
   type Ingredient,
   type Module,
@@ -239,20 +241,90 @@ function generateProvision(
   candidates: Ingredient[],
   rng: () => number,
 ): ProvisionContract {
-  const ingredient = candidates[Math.floor(rng() * candidates.length)];
+  // Phase 9d: the board leans on the year — a provision prefers the season's
+  // SCARCE ingredient (the one the tilted farm is worst at) at a premium.
+  const scarce = seasonsActive(state) ? (currentSeason(state).scarce as Ingredient) : null;
+  const seasonal = scarce != null && candidates.includes(scarce) && rng() < C.PROVISION.SEASONAL_CHANCE;
+  const ingredient = seasonal ? scarce : candidates[Math.floor(rng() * candidates.length)];
   const rate = resourceFlow(state, ingredient).in;
   const cap = ingredientCap(state) * C.PROVISION.CAP_FRACTION;
   const amount = Math.max(1, Math.round(Math.min(rate * C.PROVISION.SECONDS, cap)));
+  const reward = rollReward(notch, 'provision', rng);
+  if (seasonal) {
+    reward.dust = Math.round(reward.dust * C.PROVISION.SEASONAL_REWARD_MULT);
+    reward.shards = Math.round(reward.shards * C.PROVISION.SEASONAL_REWARD_MULT);
+  }
   return {
     id,
     type: 'provision',
     notch,
-    reward: rollReward(notch, 'provision', rng),
+    reward,
     completed: false,
     ingredient,
     amount,
     limitRemaining: 0, // the deadline only starts ticking once accepted
+    seasonal: seasonal || undefined,
   };
+}
+
+// ── EXHIBITION (9d: present the show bench — the ducks come home) ─────
+/**
+ * An EXHIBITION asks for `entries` show-posted ducks of one color, judged on
+ * target-quality + flock condition when PRESENTED. Unlike an order, nothing
+ * is handed over — the standing cost is parking good stock on the show post
+ * (not laying, eating the maintenance ration). Judging rewrites the reward
+ * by the judged scale, so a flawless bench pays half again the rolled band.
+ */
+function generateExhibition(state: GameState, notch: number, id: string, rng: () => number): ExhibitionContract {
+  const colors = state.dexSeen.length > 0 ? state.dexSeen : (['blue'] as Color[]);
+  return {
+    id,
+    type: 'exhibition',
+    notch,
+    reward: rollReward(notch, 'exhibition', rng),
+    completed: false,
+    color: colors[Math.floor(rng() * colors.length)],
+    entries: C.EXHIBITION.ENTRIES_BY_NOTCH[notch],
+    target: targetForTier(state.legacyTier),
+  };
+}
+
+/** The show bench eligible for an exhibition: show-posted, healthy, right color. */
+export function exhibitionBench(state: GameState, c: ExhibitionContract): Duck[] {
+  return state.ducks.filter(
+    (d) => d.post === 'show' && !d.wounded && !d.recovering && phenotype(d.genotype) === c.color,
+  );
+}
+
+/** Judge + complete the active exhibition (an explicit player click). */
+export function presentExhibition(state: GameState): ActionResult<{ score: number; scale: number }> {
+  const c = state.contracts.active;
+  if (!c || c.type !== 'exhibition') return fail('No exhibition running');
+  if (c.completed) return fail('Already judged — claim the reward');
+  const bench = exhibitionBench(state, c);
+  if (bench.length < c.entries) {
+    return fail(`Need ${c.entries} healthy ${c.color} duck${c.entries > 1 ? 's' : ''} on the Show post`);
+  }
+  const E = C.EXHIBITION;
+  // Quality: the best `entries` ducks on the bench, judged against the
+  // snapshotted Standard. Presentation: flock condition rounds out the score.
+  const quality =
+    bench
+      .map((d) => targetMatch(d.genome, c.target) / c.target.length)
+      .sort((a, b) => b - a)
+      .slice(0, c.entries)
+      .reduce((a, b) => a + b, 0) / c.entries;
+  const condition = state.condition / BALANCE.NUTRITION.CONDITION_MAX;
+  const score = quality * (1 - E.CONDITION_WEIGHT) + condition * E.CONDITION_WEIGHT;
+  const scale = E.SCALE_MIN + (E.SCALE_MAX - E.SCALE_MIN) * Math.max(0, Math.min(1, score));
+  c.judgedScore = score;
+  c.reward = {
+    ...c.reward,
+    dust: Math.round(c.reward.dust * scale),
+    shards: Math.round(c.reward.shards * scale),
+  };
+  c.completed = true;
+  return done({ score, scale });
 }
 
 function generateDefense(notch: number, id: string, rng: () => number): DefenseContract {
@@ -271,11 +343,14 @@ export function generateOffer(state: GameState, rng: () => number = Math.random)
   const id = `ct${state.contracts.nextContractId++}`;
   const notch = pickNotch(rng);
   const provisionCandidates = producedIngredients(state);
-  const availableTypes: ContractType[] =
-    provisionCandidates.length > 0 ? ['order', 'provision', 'defense'] : ['order', 'defense'];
+  const availableTypes: ContractType[] = ['order', 'defense'];
+  if (provisionCandidates.length > 0) availableTypes.push('provision');
+  // Exhibitions (9d) need the posts era — no bench to judge before rank 14.
+  if (state.rank >= BALANCE.POSTS.INTRO_RANK) availableTypes.push('exhibition');
   const type = pickType(availableTypes, rng);
   if (type === 'order') return generateOrder(state, notch, id, rng);
   if (type === 'provision') return generateProvision(state, notch, id, provisionCandidates, rng);
+  if (type === 'exhibition') return generateExhibition(state, notch, id, rng);
   return generateDefense(notch, id, rng);
 }
 

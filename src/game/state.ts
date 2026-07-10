@@ -316,9 +316,10 @@ export function coopCapacity(state: GameState): number {
     .reduce((a, c) => a + BALANCE.BREEDING.COOP_CAPACITY * c.level, 0);
 }
 
-/** Phase 9a posts — a working assignment for an adult duck. */
-export type PostId = 'sentry' | 'forager' | 'broody';
-export const POST_IDS: readonly PostId[] = ['sentry', 'forager', 'broody'];
+/** Phase 9a posts — a working assignment for an adult duck ('show' is 9d:
+ *  exhibition stock, Grange-gated). */
+export type PostId = 'sentry' | 'forager' | 'broody' | 'show';
+export const POST_IDS: readonly PostId[] = ['sentry', 'forager', 'broody', 'show'];
 
 export const isAdult = (d: Duck): boolean => d.stage === 'adult';
 /** Phase 6d: true when a duck lives at the main homestead (not winter-assigned).
@@ -697,7 +698,7 @@ export type PredatorEvent =
  *  the old `delivery` (egg-banking receipt) and `hatch` (spammable-by-mass-
  *  breeding bounty) shapes for `order` and `provision` — jobs that cost a real
  *  detour, never a receipt for default play. */
-export type ContractType = 'order' | 'provision' | 'defense';
+export type ContractType = 'order' | 'provision' | 'defense' | 'exhibition';
 
 /** Dust (the bulk) + a small legacy-shard trickle; a module only at the top
  *  difficulty notch. NEVER eggs/resources/XP — the online-only law's payout side. */
@@ -760,6 +761,24 @@ export interface ProvisionContract extends ContractCommon {
   amount: number;
   /** Seconds left once ACCEPTED (0 while still just an offer). */
   limitRemaining: number;
+  /** Phase 9d: this order asks for the SEASON's scarce ingredient at a reward
+   *  premium — the board leaning on the year (see contracts.ts). */
+  seasonal?: boolean;
+}
+
+/** Phase 9d: an EXHIBITION — present show-posted ducks of the named color,
+ *  judged on target-quality + flock condition. The ducks come home (never
+ *  handed over); the standing cost is parking good stock on the show post.
+ *  Judging rewrites the reward by the judged scale (see presentExhibition). */
+export interface ExhibitionContract extends ContractCommon {
+  type: 'exhibition';
+  color: Color;
+  /** Show-posted ducks of `color` required on the post when presented. */
+  entries: number;
+  /** The Standard snapshotted at generation — quality is judged against it. */
+  target: Genome;
+  /** Set at presentation: the judged 0..1 score (drives the reward scale). */
+  judgedScore?: number;
 }
 
 /** Prove the watch: foil `scareTarget` committed dives (the 'scared' event)
@@ -770,7 +789,7 @@ export interface DefenseContract extends ContractCommon {
   scareProgress: number;
 }
 
-export type Contract = OrderContract | ProvisionContract | DefenseContract;
+export type Contract = OrderContract | ProvisionContract | DefenseContract | ExhibitionContract;
 
 /** The board: a few open offers + at most ONE active contract (choosing which
  *  offer to run is the decision). Wiped by prestige (part of initialState()). */

@@ -44,6 +44,7 @@ import {
   deliverOrder,
   fulfilProvision,
   onPredatorEvent as onContractPredatorEvent,
+  presentExhibition,
   rerollOffers,
   type ClaimResult,
 } from './contracts';
@@ -980,6 +981,12 @@ export class GameEngine {
   /** Fulfil the active PROVISION ORDER — draws the full amount from central storage. */
   fulfilProvision(): ActionResult<unknown> {
     const r = fulfilProvision(this.state);
+    this.notify();
+    return r;
+  }
+  /** Present the active EXHIBITION (9d) — the show bench is judged in place. */
+  presentExhibition(): ActionResult<unknown> {
+    const r = presentExhibition(this.state);
     this.notify();
     return r;
   }

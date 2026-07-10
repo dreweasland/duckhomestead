@@ -372,8 +372,9 @@ export const BALANCE = {
     /** Posts unlock here — where breeding takes over and the one-dimension
      *  flatline begins (pond 12 < posts 14 < waterworks 17). */
     INTRO_RANK: 14,
-    /** Static v1 slot caps (growth lever banked: rank/purchase-gated +1s). */
-    SLOTS: { sentry: 2, forager: 3, broody: 1 } as Record<string, number>,
+    /** Static v1 slot caps (growth lever banked: rank/purchase-gated +1s).
+     *  'show' (9d) is exhibition stock — no passive effect; Grange-gated. */
+    SLOTS: { sentry: 2, forager: 3, broody: 1, show: 3 } as Record<string, number>,
     /** SENTRY (H-axis): the watch in duck form. Active play: dive wind-ups
      *  stretch (+reaction time). Guard/offline: a chance each landing attack
      *  is repelled outright — duck-shaped built defense. */
@@ -417,6 +418,7 @@ export const BALANCE = {
         label: 'Spring',
         color: '#8fe388',
         note: 'peas surge · clutches come faster · forage is rich',
+        scarce: 'mealworms', // the clutch boom eats protein
         producers: { peaPatch: 1.5 } as Record<string, number>,
         demand: {} as Record<string, number>,
         clutchRate: 1.25,
@@ -427,6 +429,7 @@ export const BALANCE = {
         label: 'Summer',
         color: '#e8c45a',
         note: 'corn thrives · light appetites (energy −1) · the pond fouls fast',
+        scarce: 'peas', // greens wilt in the heat
         producers: { plot: 1.25 } as Record<string, number>,
         demand: { energy: -1 } as Record<string, number>,
         clutchRate: 1,
@@ -437,6 +440,7 @@ export const BALANCE = {
         label: 'Autumn',
         color: '#e8935a',
         note: 'harvest corn + mealworms · the molt wants calcium (+0.5)',
+        scarce: 'oysterShell', // everyone's molt wants shell
         producers: { plot: 1.5, mealwormFarm: 1.25 } as Record<string, number>,
         demand: { calcium: 0.5 } as Record<string, number>,
         clutchRate: 1,
@@ -447,6 +451,7 @@ export const BALANCE = {
         label: 'Winter',
         color: '#9fd4e8',
         note: 'lean fields (producers ×0.8) · cold appetites (energy +1.5) · the pond keeps',
+        scarce: 'corn', // energy is the winter squeeze
         producers: { plot: 0.8, peaPatch: 0.8, mealwormFarm: 0.8, yeastVat: 0.8, oysterSource: 0.8 } as Record<string, number>,
         demand: { energy: 1.5 } as Record<string, number>,
         clutchRate: 1,
@@ -1175,8 +1180,9 @@ export const BALANCE = {
     REROLL_DUST: 5,
     /** Relative weights for the offer's TYPE roll. `provision` drops out of the
      *  pool entirely when the player produces none of the tradeable ingredients
-     *  (rate 0 for all of them) — see contracts.ts generateOffer. */
-    TYPE_WEIGHTS: { order: 1, provision: 1, defense: 1 } as Record<string, number>,
+     *  (rate 0 for all of them); `exhibition` (9d) requires the posts era
+     *  (rank ≥ POSTS.INTRO_RANK) — see contracts.ts generateOffer. */
+    TYPE_WEIGHTS: { order: 1, provision: 1, defense: 1, exhibition: 1 } as Record<string, number>,
     /** Relative weights for the offer's difficulty NOTCH roll (easy-leaning). */
     NOTCH_WEIGHTS: [50, 35, 15],
     /** Per-notch reward band: dust (the bulk) + a small legacy-shard trickle.
@@ -1200,7 +1206,18 @@ export const BALANCE = {
      * tradeoff). Defense was already a job (be present, click well, for a whole
      * window) and keeps its ×1 baseline; the new types are priced above it.
      */
-    TYPE_REWARD_MULT: { order: 2.5, provision: 1.5, defense: 1 } as Record<string, number>,
+    TYPE_REWARD_MULT: { order: 2.5, provision: 1.5, defense: 1, exhibition: 2 } as Record<string, number>,
+    /** Phase 9d: EXHIBITION — present show-posted ducks, judged, ducks come
+     *  home. Reward scales from SCALE_MIN (junk in the right feathers) to
+     *  SCALE_MAX (a flawless bench in fine condition). */
+    EXHIBITION: {
+      ENTRIES_BY_NOTCH: [1, 2, 3],
+      SCALE_MIN: 0.5,
+      SCALE_MAX: 1.5,
+      /** How much of the judged score is flock CONDITION (presentation) vs
+       *  entry quality — a rattled flock shows poorly. */
+      CONDITION_WEIGHT: 0.25,
+    },
     ORDER: {
       /**
        * BREEDING COMMISSION v2 (playtest, 2026-07-06): the odd-blood gene spec
@@ -1232,6 +1249,10 @@ export const BALANCE = {
        *  request for literally the whole store. */
       CAP_FRACTION: 0.7,
       LIMIT_MIN: 15,
+      /** Phase 9d: chance a provision asks for the SEASON's scarce ingredient
+       *  (when produced at all) — the board leaning on the year — at a premium. */
+      SEASONAL_CHANCE: 0.6,
+      SEASONAL_REWARD_MULT: 1.25,
     },
     DEFENSE: {
       SCARE_COUNT_BY_NOTCH: [2, 3, 5],

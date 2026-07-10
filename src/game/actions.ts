@@ -734,6 +734,10 @@ export function assignToPost(state: GameState, duckId: string, post: PostId): Ac
     return fail('In a breeding pair — unpair first');
   }
   if (post === 'broody' && d.sex !== 'hen') return fail('Broodiness is a hen’s gift');
+  // 9d: the Grange runs the shows — no bench before the board exists.
+  if (post === 'show' && state.legacyTier < BALANCE.CONTRACTS.UNLOCK_TIER) {
+    return fail('The Grange runs the shows — raise your Legacy first');
+  }
   // Moving between posts is one action — free the old slot before the count.
   const occupied = state.ducks.filter((x) => x.id !== duckId && x.post === post).length;
   if (occupied >= postCapacity(post)) return fail('That post is full');

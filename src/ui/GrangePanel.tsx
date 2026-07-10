@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { lineStatus } from '../game/contracts';
+import { exhibitionBench, lineStatus } from '../game/contracts';
 import { ColorSwatch } from './FlockPanel';
 import { type OrderContract, type Contract, type GameState, type Ingredient } from '../game/state';
 import { useEscapeKey } from './useEscapeKey';
@@ -47,6 +47,23 @@ function ContractGoal({ c }: { c: Contract }) {
       <span className="inline-flex items-center gap-1">
         <Icon size={12} /> Provide {c.amount.toLocaleString()} {ING_LABEL[c.ingredient]}
         <span className="text-[#7a6a4a]">· {C.PROVISION.LIMIT_MIN}m limit</span>
+        {c.seasonal && (
+          <span
+            className="rounded bg-[#3a3218] px-1 py-0.5 text-[9px] font-bold text-[#e8c45a]"
+            title="The season's scarce ingredient — this order pays a premium"
+          >
+            seasonal
+          </span>
+        )}
+      </span>
+    );
+  }
+  if (c.type === 'exhibition') {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <ColorSwatch color={c.color} size={12} /> Exhibit {c.entries} {c.color} duck
+        {c.entries > 1 ? 's' : ''} from the Show post
+        <span className="text-[#7a6a4a]">· judged on quality + condition · ducks come home</span>
       </span>
     );
   }
@@ -125,6 +142,41 @@ function ActiveJob({ c, state, engine }: { c: Contract; state: GameState; engine
             style={{ width: `${Math.round(pct * 100)}%` }}
           />
         </div>
+      </div>
+    );
+  }
+  if (c.type === 'exhibition') {
+    // The bench: healthy show-posted ducks of the right color, best-first.
+    const bench = exhibitionBench(state, c);
+    const canPresent = !c.completed && bench.length >= c.entries;
+    return (
+      <div>
+        <div className="mb-1 flex items-center gap-1.5 text-[10px] tabular-nums text-[#c9b88f]">
+          <ColorSwatch color={c.color} size={11} />
+          <span className={bench.length >= c.entries ? 'font-bold text-[#8fe388]' : 'text-[#e8c45a]'}>
+            {Math.min(bench.length, c.entries)}/{c.entries} on the bench
+          </span>
+          {c.completed && c.judgedScore != null && (
+            <span className="font-bold text-[#e2b94f]">judged {Math.round(c.judgedScore * 100)}%</span>
+          )}
+        </div>
+        <div className="mb-2 text-[9px] text-[#7a6a4a]">
+          post healthy {c.color} ducks to the SHOW post (Flock panel) — judged on match to the
+          Standard + flock condition; nothing is handed over
+        </div>
+        {!c.completed && (
+          <button
+            onClick={() => engine.presentExhibition()}
+            disabled={!canPresent}
+            className={`flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+              canPresent
+                ? 'bg-[#3a2e22] text-[#ffe9a8] hover:bg-[#4a3a2a]'
+                : 'cursor-not-allowed bg-[#241c14] text-[#6a5a3a]'
+            }`}
+          >
+            <HandoverIcon size={11} /> Present
+          </button>
+        )}
       </div>
     );
   }
@@ -238,6 +290,19 @@ export function ActiveContractStrip({ state }: { state: GameState }) {
         <OwlIcon size={11} />
         <span className="tabular-nums">
           {c.scareProgress} / {c.scareTarget} dives foiled
+        </span>
+      </StripShell>
+    );
+  }
+
+  if (c.type === 'exhibition') {
+    const bench = exhibitionBench(state, c).length;
+    const pct = Math.min(1, bench / Math.max(1, c.entries));
+    return (
+      <StripShell pct={pct} done={c.completed}>
+        <ColorSwatch color={c.color} size={11} />
+        <span className="tabular-nums">
+          {Math.min(bench, c.entries)} / {c.entries} {c.color} on the show bench
         </span>
       </StripShell>
     );

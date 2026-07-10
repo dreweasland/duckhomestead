@@ -42,9 +42,11 @@ function validGenome(g: unknown): g is Genome {
  *  freed slot on its normal clock. Commission v2 (same day) reshaped `order`
  *  from a gene spec to color LINES — a v1 order (has `constraints`, no
  *  `lines`) is likewise a retired shape. */
-const KNOWN_CONTRACT_TYPES = new Set(['order', 'provision', 'defense']);
-const contractShapeValid = (o: { type?: string; lines?: unknown }): boolean =>
-  KNOWN_CONTRACT_TYPES.has(o?.type ?? '') && (o.type !== 'order' || Array.isArray(o.lines));
+const KNOWN_CONTRACT_TYPES = new Set(['order', 'provision', 'defense', 'exhibition']);
+const contractShapeValid = (o: { type?: string; lines?: unknown; entries?: unknown }): boolean =>
+  KNOWN_CONTRACT_TYPES.has(o?.type ?? '') &&
+  (o.type !== 'order' || Array.isArray(o.lines)) &&
+  (o.type !== 'exhibition' || typeof o.entries === 'number');
 
 export interface AwaySummary {
   /** Real seconds elapsed since last seen (uncapped, for display). */

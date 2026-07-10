@@ -32,6 +32,9 @@ export const POST_META: Record<
   sentry: { label: 'Sentry', axis: 'hardy', blurb: 'slows dives; repels attacks while you’re away' },
   forager: { label: 'Forager', axis: 'vigor', blurb: 'gathers peas + mealworms into storage' },
   broody: { label: 'Broody', axis: 'vigor', blurb: 'speeds every duckling’s grow-out' },
+  // 9d: no passive effect — show ducks are the bench EXHIBITION contracts
+  // judge (color + target-quality + condition). Grange-gated on assign.
+  show: { label: 'Show', axis: 'lay', blurb: 'exhibition stock — judged at the Grange' },
 };
 
 export function postsUnlocked(state: GameState): boolean {
