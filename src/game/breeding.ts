@@ -1,5 +1,5 @@
 import { BALANCE } from '../config/balance';
-import { breedGenome, breedGenotype, isPrimeDuck, isTruebred, maturationMult, recordColor } from './genetics';
+import { breedGenome, breedGenotype, childAncestors, isPrimeDuck, isTruebred, kinship, maturationMult, recordColor } from './genetics';
 import { targetForTier } from './prestige';
 import { rollWoundSeverity } from './predators';
 import { breedingEstablished, coopCapacity, drainCondition, flockRatio, phenotype, type Duck, type GameState } from './state';
@@ -130,7 +130,9 @@ export function runBreeding(state: GameState, step: number, matureRate = 1, bree
       }
       const genotype = breedGenotype(drake.genotype, hen.genotype);
       const primeEligible = state.legacyTier >= BALANCE.GENOME.PRIME_MIN_TIER;
-      const genome = breedGenome(drake.genome, hen.genome, Math.random, primeEligible);
+      // Phase 9b: a close-kin cross degrades slots toward Dud (inbreeding
+      // depression) — the crossbreed preview shows the same odds beforehand.
+      const genome = breedGenome(drake.genome, hen.genome, Math.random, primeEligible, kinship(drake, hen));
       // Truebred DING fires when a hatch first achieves the target and the flock
       // had none — so it re-fires if you lose every truebred and rebreed one.
       const hadTruebred = state.ducks.some((d) => isTruebred(d.genome, standardTarget));
@@ -144,6 +146,9 @@ export function runBreeding(state: GameState, step: number, matureRate = 1, bree
         sex: Math.random() < 0.5 ? 'drake' : 'hen',
         stage: 'duckling',
         ageTicks: 0,
+        // Phase 9b: lineage rides on the duck itself — culling an ancestor
+        // never launders a relationship.
+        ancestors: childAncestors(drake, hen),
       };
       state.ducks.push(duckling);
       homeCount++; // hatches live at home

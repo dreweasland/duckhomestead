@@ -979,6 +979,27 @@ export const BALANCE = {
     /** Seed-flock genomes: per-slot gene weights (Dud-leaning so a fresh flock is
      *  middling — accessible floor, real room to breed up toward a truebred). */
     SEED_GENE_WEIGHTS: { L: 1, V: 1, H: 1, D: 2 } as Record<string, number>,
+    /**
+     * Phase 9b: KINSHIP — inbreeding depression, the pushback that keeps
+     * "pair the two best forever" from being a solved ratchet. Hatches record
+     * their ancestry (parents + grandparents, on the duck itself so culling
+     * an ancestor never hides the relationship); a close-kin pair's offspring
+     * rolls each slot against kinship × DUD_CHANCE to degrade to Dud. The
+     * crossbreed preview (slotOdds) mirrors it exactly — the pair card shows
+     * the truth before you commit. Even the pure Standard chase now needs a
+     * second unrelated line, and the post lines (9a) ARE that reservoir.
+     * Seed-flock ducks carry no lineage → unrelated → migrations unaffected.
+     */
+    KINSHIP: {
+      DUD_CHANCE: 0.35, // per-slot degrade chance at kinship 1.0 (scaled by k)
+      FULL_SIB: 0.5, // both parents shared
+      PARENT_CHILD: 0.25, // one is the other's parent
+      HALF_SIB: 0.25, // one shared parent
+      GRANDPARENT: 0.125, // per shared-grandparent-line link…
+      CAP: 0.5, // …summed, capped here (and k never exceeds full-sib)
+      /** The pair UI badges "close kin" at or above this k. */
+      WARN_AT: 0.125,
+    },
   },
 
   // ── Phenotype band: the free, always-visible "phone-it-in" floor ─────

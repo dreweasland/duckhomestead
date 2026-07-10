@@ -126,8 +126,13 @@ export function deserialize(raw: string, now: number): GameState {
         const { vigor: _vigor, ...d } = raw as Duck & { vigor?: number };
         const genome = validGenome(d.genome) ? d.genome : migrateGenome(_vigor);
         // Phase 9a: an unknown post value (hand-edit, newer build) loads as
-        // unposted — never a crash, never a phantom worker.
-        return { ...d, genome, post: validPost(d.post), genomeKnown: d.genomeKnown ?? (parsed.geneReader ?? false) };
+        // unposted — never a crash, never a phantom worker. 9b: ancestry must
+        // be a string array or it's dropped (pre-9b ducks are unrelated).
+        const ancestors =
+          Array.isArray(d.ancestors) && d.ancestors.every((x) => typeof x === 'string')
+            ? d.ancestors
+            : undefined;
+        return { ...d, genome, post: validPost(d.post), ancestors, genomeKnown: d.genomeKnown ?? (parsed.geneReader ?? false) };
       }),
       nextDuckId: parsed.nextDuckId ?? 1,
       breedingPairs: parsed.breedingPairs ?? [],

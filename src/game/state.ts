@@ -263,6 +263,10 @@ export interface Duck {
    *  mutually exclusive), stop laying, eat the drake maintenance ration, and
    *  convert a gene axis into a working effect (see game/posts.ts). */
   post?: PostId;
+  /** Phase 9b: lineage, recorded at hatch — [drakeId, henId, ...grandparent
+   *  ids]. Lives ON the duck (never looked up) so culling an ancestor can't
+   *  hide a relationship. Seeded/migrated ducks carry none → unrelated. */
+  ancestors?: string[];
   /** In an Infirmary recovery slot: healing over time, holds a slot, eats extra feed,
    *  lays nothing, and no longer escalates. Set by Admit; cleared when recovered. */
   recovering?: boolean;

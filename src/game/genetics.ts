@@ -165,9 +165,63 @@ export function isTruebred(genome: Genome, target: Genome): boolean {
  * (never seeded, never a hatch-spec/target gene). Must mirror slotOdds exactly
  * (see the preview-mirror test) so the odds preview never lies.
  */
-export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random, primeEligible = false): Genome {
+/**
+ * Phase 9b: the pair's kinship coefficient (0..FULL_SIB), computed purely from
+ * the two ducks' own recorded ancestry — never a flock lookup, so culling an
+ * ancestor can't launder a relationship. Full siblings 0.5; parent-child or
+ * half-siblings 0.25; each grandparent-line link 0.125 (summed, capped).
+ * Lineage-less ducks (seed flock, migrated saves) are unrelated by definition.
+ */
+export function kinship(
+  a: { id: string; ancestors?: string[] },
+  b: { id: string; ancestors?: string[] },
+): number {
+  const K = G.KINSHIP;
+  const ap = a.ancestors?.slice(0, 2) ?? [];
+  const bp = b.ancestors?.slice(0, 2) ?? [];
+  const agrand = a.ancestors?.slice(2) ?? [];
+  const bgrand = b.ancestors?.slice(2) ?? [];
+  let k = 0;
+  // Parent-child: one IS the other's parent.
+  if (ap.includes(b.id) || bp.includes(a.id)) k = Math.max(k, K.PARENT_CHILD);
+  // Shared parents: full or half siblings.
+  const sharedParents = new Set(ap.filter((id) => bp.includes(id))).size;
+  if (sharedParents >= 2) k = Math.max(k, K.FULL_SIB);
+  else if (sharedParents === 1) k = Math.max(k, K.HALF_SIB);
+  // Grandparent-line links: shared grandparents, a parent among the other's
+  // grandparents (aunt/uncle), or one being the other's grandparent outright.
+  let links = new Set(agrand.filter((id) => bgrand.includes(id))).size;
+  for (const id of new Set(ap)) if (bgrand.includes(id)) links++;
+  for (const id of new Set(bp)) if (agrand.includes(id)) links++;
+  if (agrand.includes(b.id) || bgrand.includes(a.id)) links++;
+  if (links > 0) k = Math.max(k, Math.min(K.CAP, links * K.GRANDPARENT));
+  return k;
+}
+
+/** The offspring's recorded ancestry: parents + both sides' parents. */
+export function childAncestors(
+  drake: { id: string; ancestors?: string[] },
+  hen: { id: string; ancestors?: string[] },
+): string[] {
+  return [
+    drake.id,
+    hen.id,
+    ...(drake.ancestors?.slice(0, 2) ?? []),
+    ...(hen.ancestors?.slice(0, 2) ?? []),
+  ];
+}
+
+export function breedGenome(
+  a: Genome,
+  b: Genome,
+  rng: Rng = Math.random,
+  primeEligible = false,
+  pairKinship = 0,
+): Genome {
   const dom = G.DOMINANCE;
   const genes = G.GENES;
+  // Phase 9b: inbreeding depression — a close-kin cross degrades slots to Dud.
+  const dudChance = pairKinship * G.KINSHIP.DUD_CHANCE;
   const out: Genome = [];
   for (let i = 0; i < a.length; i++) {
     const ga = a[i];
@@ -178,6 +232,7 @@ export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random, primeE
     if (rng() < G.MUTATION_CHANCE) {
       gene = primeEligible && rng() < G.PRIME_MUTATION_SHARE ? 'P' : ((genes[Math.floor(rng() * genes.length)] as Gene) ?? gene);
     }
+    if (dudChance > 0 && rng() < dudChance) gene = 'D';
     out.push(gene);
   }
   return out;
@@ -190,11 +245,19 @@ export function breedGenome(a: Genome, b: Genome, rng: Rng = Math.random, primeE
  * breedGenome exactly, so the preview never lies. Both parents' genomes must be
  * known to the caller (a "?" genome can't be previewed).
  */
-export function slotOdds(a: Genome, b: Genome, primeEligible = false): Record<Gene, number>[] {
+export function slotOdds(
+  a: Genome,
+  b: Genome,
+  primeEligible = false,
+  pairKinship = 0,
+): Record<Gene, number>[] {
   const dom = G.DOMINANCE;
   const m = G.MUTATION_CHANCE;
   const genes = G.GENES; // the uniform-mutation pool — excludes P by design
   const primeShare = primeEligible ? G.PRIME_MUTATION_SHARE : 0;
+  // Phase 9b: the kinship degrade smears every slot toward D — mirrored from
+  // breedGenome exactly, so a close-kin pair's preview shows the depression.
+  const dud = pairKinship * G.KINSHIP.DUD_CHANCE;
   const out: Record<Gene, number>[] = [];
   for (let i = 0; i < a.length; i++) {
     const ga = a[i];
@@ -209,6 +272,10 @@ export function slotOdds(a: Genome, b: Genome, primeEligible = false): Record<Ge
     dist.P += m * primeShare; // mutation → Prime (eligible crosses only)
     const uniformShare = m * (1 - primeShare);
     for (const gn of genes) dist[gn] += uniformShare / genes.length; // mutation: uniform over {L,V,H,D}
+    if (dud > 0) {
+      for (const gn of Object.keys(dist) as Gene[]) dist[gn] *= 1 - dud;
+      dist.D += dud;
+    }
     out.push(dist);
   }
   return out;

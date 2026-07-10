@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { BALANCE } from '../config/balance';
 import type { GameEngine } from '../game/engine';
-import { axisTier, colorOdds, goodGeneCount, PHENO_AXES, slotMatches, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
+import { axisTier, colorOdds, goodGeneCount, kinship, PHENO_AXES, slotMatches, slotOdds, targetMatch, type PhenoAxis } from '../game/genetics';
 import { clutchCost } from '../game/breeding';
 import { targetForTier } from '../game/prestige';
 import { COLORS, coopCapacity, flockRatio, watererSupport, infirmaryCapacity, infirmaryOccupied, phenotype, secureCapacity, winterCapacity, zoneUnlocked, type Color, type Duck, type Gene, type GameState, type PostId } from '../game/state';
@@ -138,14 +138,27 @@ const idNum = (d: Duck): number => parseInt(d.id.replace(/^\D+/, ''), 10) || 0;
  * slot's target gene is ringed so you can read progress-to-target at a glance.
  */
 function OddsPreview({ a, b, target, primeEligible }: { a: Duck; b: Duck; target: Gene[]; primeEligible: boolean }) {
+  // Phase 9b: kinship shows even when genomes are hidden — lineage is public
+  // knowledge (you watched them hatch), only the genes need a reader.
+  const kin = kinship(a, b);
+  const kinWarn = kin >= BALANCE.GENOME.KINSHIP.WARN_AT && (
+    <div
+      className="mt-1 rounded bg-[#3a2218] px-2 py-1 text-[10px] font-bold text-[#e8a35a]"
+      title="Inbreeding depression: a close-kin cross degrades offspring genes toward Dud. Pair from an unrelated line — your posted lines make good outcross stock."
+    >
+      CLOSE KIN — offspring slots degrade to Dud {Math.round(kin * BALANCE.GENOME.KINSHIP.DUD_CHANCE * 100)}% of
+      the time
+    </div>
+  );
   if (!a.genomeKnown || !b.genomeKnown) {
     return (
       <div className="mt-1 text-[10px] text-[#7a6a4a]">
         Build a Gene Reader to preview this cross’s gene odds.
+        {kinWarn}
       </div>
     );
   }
-  const odds = slotOdds(a.genome, b.genome, primeEligible);
+  const odds = slotOdds(a.genome, b.genome, primeEligible, kin);
   // Prime (Phase 6c) only ever shows a row once the cross is eligible to roll it
   // (tier-gated) — an ineligible cross has genuinely zero chance of it.
   const rows = primeEligible ? [...GENE_ORDER, 'P' as Gene] : GENE_ORDER;
@@ -154,6 +167,7 @@ function OddsPreview({ a, b, target, primeEligible }: { a: Duck; b: Duck; target
       <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[#7a6a4a]">
         Offspring odds (per slot)
       </div>
+      {kinWarn}
       <div className="flex flex-col gap-0.5">
         {rows.map((gene) => (
           <div key={gene} className="flex items-center gap-0.5">
