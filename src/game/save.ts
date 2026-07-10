@@ -141,7 +141,8 @@ export function deserialize(raw: string, now: number): GameState {
           Array.isArray(d.ancestors) && d.ancestors.every((x) => typeof x === 'string')
             ? d.ancestors
             : undefined;
-        return { ...d, genome, post: validPost(d.post), ancestors, genomeKnown: d.genomeKnown ?? (parsed.geneReader ?? false) };
+        const gen = Number.isFinite(d.gen) && d.gen! > 0 ? Math.floor(d.gen!) : undefined;
+        return { ...d, genome, post: validPost(d.post), ancestors, gen, genomeKnown: d.genomeKnown ?? (parsed.geneReader ?? false) };
       }),
       nextDuckId: parsed.nextDuckId ?? 1,
       breedingPairs: parsed.breedingPairs ?? [],

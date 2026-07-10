@@ -147,8 +147,10 @@ export function runBreeding(state: GameState, step: number, matureRate = 1, bree
         stage: 'duckling',
         ageTicks: 0,
         // Phase 9b: lineage rides on the duck itself — culling an ancestor
-        // never launders a relationship.
+        // never launders a relationship. `gen` is flavor for the ducks you
+        // name ("a seventh-generation truebred").
         ancestors: childAncestors(drake, hen),
+        gen: Math.max(drake.gen ?? 0, hen.gen ?? 0) + 1,
       };
       state.ducks.push(duckling);
       homeCount++; // hatches live at home

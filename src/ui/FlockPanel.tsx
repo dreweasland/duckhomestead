@@ -715,6 +715,12 @@ function FlockPanelInner({
   renderTick: number;
 }) {
   useEscapeKey(onClose);
+  // The panel is three tools sharing one flock list — tabs give each its own
+  // altitude (playtest, 2026-07-10: 'flock ui is getting pretty cluttered').
+  // BREEDING: target/pairs/builder, rows are pick-targets with kin dots.
+  // ROSTER: filters/bulk/manage buttons (secure/winter/name/release).
+  // POSTS: the 9a roster card, rows carry only the post cycle.
+  const [tab, setTab] = useState<'breeding' | 'roster' | 'posts'>('breeding');
   // Sections the user expanded past the row cap ("show all").
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [armedCull, setArmedCull] = useState<string | null>(null);
@@ -878,9 +884,38 @@ function FlockPanelInner({
 
         {state.ducks.length > 0 && <FlockHealth engine={engine} state={state} />}
 
-        {postsUnlocked(state) && state.ducks.length > 0 && <PostsCard engine={engine} state={state} />}
-
         {state.ducks.length > 0 && (
+          <div className="mb-3 flex gap-1">
+            {(
+              [
+                { id: 'breeding' as const, label: 'Breeding', count: state.breedingPairs.length },
+                { id: 'roster' as const, label: 'Roster', count: state.ducks.length },
+                ...(postsUnlocked(state)
+                  ? [{ id: 'posts' as const, label: 'Posts', count: postedDucks(state).length }]
+                  : []),
+              ]
+            ).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition ${
+                  tab === t.id
+                    ? 'bg-[#3a2e22] text-[#f5ecd8] ring-1 ring-[#5a4a32]'
+                    : 'bg-[#1f1812] text-[#9a8a6a] hover:bg-[#33271c]'
+                }`}
+              >
+                {t.label}
+                <span className="tabular-nums text-[#7a6a4a]">{t.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === 'posts' && postsUnlocked(state) && state.ducks.length > 0 && (
+          <PostsCard engine={engine} state={state} />
+        )}
+
+        {tab === 'breeding' && state.ducks.length > 0 && (
           <Breeding
             engine={engine}
             state={state}
@@ -999,8 +1034,9 @@ function FlockPanelInner({
             {/* Bulk release: cull the SHOWN set (current filters) whose match-to-
                 target is below the cutoff, in one sweep. Only READ ducks are
                 eligible (an unread "?" can't be judged). Protects secured (prize)
-                + paired (in-use) birds — use the per-row release for those. */}
-            {shown.length > 0 && (() => {
+                + paired (in-use) birds — use the per-row release for those.
+                Roster tab only — it's a management tool, not a breeding one. */}
+            {tab === 'roster' && shown.length > 0 && (() => {
               const underCutoff = shown.filter(
                 (d) =>
                   !d.secured &&
@@ -1101,6 +1137,17 @@ function FlockPanelInner({
                   const picked = d.id === mateDrakeId || d.id === mateHenId;
                   // Wintering hens can't join a pair — breeding is home-only (6d).
                   const canPick = d.stage === 'adult' && !d.wounded && !isPaired && d.site !== 'winter' && !d.post;
+                  // KIN DOT (9b UI): with one mate picked, every candidate of the
+                  // other sex shows its kinship to the pick — line-tracking as a
+                  // glance, not homework. Lineage is public (no reader needed).
+                  const pickedMate =
+                    tab === 'breeding' && !picked
+                      ? d.sex === 'hen'
+                        ? state.ducks.find((x) => x.id === mateDrakeId)
+                        : state.ducks.find((x) => x.id === mateHenId)
+                      : undefined;
+                  const kinToPick = pickedMate && canPick ? kinship(pickedMate, d) : 0;
+                  const kinColor = kinToPick >= 0.5 ? '#e26d6d' : kinToPick >= 0.25 ? '#e8935a' : '#e8c45a';
                   return (
                     <div
                       key={d.id}
@@ -1113,7 +1160,7 @@ function FlockPanelInner({
                       }`}
                     >
                       <ColorSwatch color={phenotype(d.genotype)} size={10} />
-                      {namingId === d.id ? (
+                      {tab === 'roster' && namingId === d.id ? (
                         <input
                           autoFocus
                           value={nameDraft}
@@ -1134,17 +1181,23 @@ function FlockPanelInner({
                           placeholder="name her…"
                         />
                       ) : d.name ? (
+                        // Rename is a roster affordance; elsewhere the name is
+                        // just identity. Gen rides along as flavor ("· G7").
                         <button
                           onClick={() => {
+                            if (tab !== 'roster') return;
                             setNamingId(d.id);
                             setNameDraft(d.name ?? '');
                           }}
-                          className="max-w-28 shrink-0 truncate font-bold text-[#f5ecd8] hover:text-[#ffe9a8]"
-                          title={`${d.name} — click to rename`}
+                          className={`max-w-28 shrink-0 truncate font-bold text-[#f5ecd8] ${
+                            tab === 'roster' ? 'hover:text-[#ffe9a8]' : 'cursor-default'
+                          }`}
+                          title={`${d.name}${d.gen ? ` — generation ${d.gen}` : ''}${tab === 'roster' ? ' — click to rename' : ''}`}
                         >
                           {d.name}
+                          {d.gen != null && <span className="ml-1 font-normal text-[#7a6a4a]">G{d.gen}</span>}
                         </button>
-                      ) : d.stage === 'adult' ? (
+                      ) : tab === 'roster' && d.stage === 'adult' ? (
                         <button
                           onClick={() => {
                             setNamingId(d.id);
@@ -1222,26 +1275,37 @@ function FlockPanelInner({
                           <HealIcon size={12} />
                         </button>
                       )}
-                      {isPaired ? (
-                        <span className="rounded px-1 py-0.5 text-[10px] font-bold text-[#9a86c0]" title="Already in a breeding pair">
-                          paired
-                        </span>
-                      ) : canPick ? (
-                        <button
-                          onClick={() => {
-                            if (d.sex === 'drake') setMateDrakeId(picked ? '' : d.id);
-                            else setMateHenId(picked ? '' : d.id);
-                          }}
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
-                            picked
-                              ? 'bg-[#6b4f9e] text-[#fff4d6]'
-                              : 'text-[#9a86c0] hover:bg-[#33271c] hover:text-[#b9a6e0]'
-                          }`}
-                          title={picked ? 'Picked for a new pair — tap to unpick' : `Pick this ${d.sex} for a new breeding pair`}
-                        >
-                          {picked ? 'picked' : 'breed'}
-                        </button>
-                      ) : null}
+                      {tab === 'breeding' && kinToPick >= BALANCE.GENOME.KINSHIP.WARN_AT && (
+                        <span
+                          className="inline-block h-2 w-2 shrink-0 rounded-full"
+                          style={{ background: kinColor }}
+                          title={`Close kin to your pick (${kinToPick}) — offspring slots degrade to Dud ${Math.round(
+                            kinToPick * BALANCE.GENOME.KINSHIP.DUD_CHANCE * 100,
+                          )}% of the time. Cross an unrelated line instead.`}
+                        />
+                      )}
+                      {tab === 'breeding' &&
+                        (isPaired ? (
+                          <span className="rounded px-1 py-0.5 text-[10px] font-bold text-[#9a86c0]" title="Already in a breeding pair">
+                            paired
+                          </span>
+                        ) : canPick ? (
+                          <button
+                            onClick={() => {
+                              if (d.sex === 'drake') setMateDrakeId(picked ? '' : d.id);
+                              else setMateHenId(picked ? '' : d.id);
+                            }}
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
+                              picked
+                                ? 'bg-[#6b4f9e] text-[#fff4d6]'
+                                : 'text-[#9a86c0] hover:bg-[#33271c] hover:text-[#b9a6e0]'
+                            }`}
+                            title={picked ? 'Picked for a new pair — tap to unpick' : `Pick this ${d.sex} for a new breeding pair`}
+                          >
+                            {picked ? 'picked' : 'breed'}
+                          </button>
+                        ) : null)}
+                      {tab === 'roster' && (
                       <button
                         onClick={() => engine.setSecured(d.id, !d.secured)}
                         disabled={!canSecure}
@@ -1262,7 +1326,8 @@ function FlockPanelInner({
                       >
                         <ShieldIcon size={12} />
                       </button>
-                      {postsUnlocked(state) && d.stage === 'adult' && d.site !== 'winter' && (() => {
+                      )}
+                      {tab === 'posts' && postsUnlocked(state) && d.stage === 'adult' && d.site !== 'winter' && (() => {
                         // Phase 9a: the post cycle button — none → sentry →
                         // forager → broody (skipping full posts and
                         // broody-for-drakes) → back to the flock. Same
@@ -1311,7 +1376,7 @@ function FlockPanelInner({
                           </button>
                         );
                       })()}
-                      {winterOpen && d.stage === 'adult' && d.sex === 'hen' && (() => {
+                      {tab === 'roster' && winterOpen && d.stage === 'adult' && d.sex === 'hen' && (() => {
                         // Mirror assignToWinter's gates HERE so a refusal is
                         // never a silent no-op (playtest: clicking a paired
                         // hen's snowflake did nothing, with no reason shown).
@@ -1353,6 +1418,7 @@ function FlockPanelInner({
                           </button>
                         );
                       })()}
+                      {tab === 'roster' && (
                       <button
                         onClick={() => {
                           if (armedCull !== d.id) {
@@ -1372,6 +1438,7 @@ function FlockPanelInner({
                       >
                         {armedCull === d.id ? 'sure?' : 'release'}
                       </button>
+                      )}
                     </div>
                   );
                   };

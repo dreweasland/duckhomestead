@@ -267,6 +267,9 @@ export interface Duck {
    *  ids]. Lives ON the duck (never looked up) so culling an ancestor can't
    *  hide a relationship. Seeded/migrated ducks carry none → unrelated. */
   ancestors?: string[];
+  /** Generation, stamped at hatch (max of parents + 1; founders are 0/absent).
+   *  Pure FLAVOR — surfaced on named ducks ("Petunia · G7"), never a mechanic. */
+  gen?: number;
   /** In an Infirmary recovery slot: healing over time, holds a slot, eats extra feed,
    *  lays nothing, and no longer escalates. Set by Admit; cleared when recovered. */
   recovering?: boolean;

@@ -100,6 +100,8 @@ describe('hatches record their lineage', () => {
     expect(hatched).toBeDefined();
     expect(hatched!.ancestors).toEqual(['sire', 'dam', 'gpa', 'gma']);
     expect(childAncestors(s.ducks[0], s.ducks[1])).toEqual(['sire', 'dam', 'gpa', 'gma']);
+    // Generation flavor: founders carry none (gen 0), so the hatch is G1.
+    expect(hatched!.gen).toBe(1);
   });
 
   it('sibling hatches from the same pair read as full kin', () => {
