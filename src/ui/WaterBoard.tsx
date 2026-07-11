@@ -629,6 +629,42 @@ export function WaterBoard({
                         L{feat.level}
                       </text>
                     )}
+                    {/* Build-mode upgrade hint (the YARD grammar, playtest ask
+                        2026-07-11): with this feature's tool armed, clicking it
+                        upgrades in place — so show the cost right on the tile,
+                        green = affordable, red = not, MAX at the level cap. */}
+                    {!isFlow && pick === feat.type && (() => {
+                      const maxed = pondFeatureMaxed(feat);
+                      const cost = pondFeatureUpgradeCost(state, x, y);
+                      const ok = state.resources.eggs >= cost;
+                      const col = maxed ? '#9a8a6a' : ok ? '#8fe388' : '#d95f5f';
+                      const cx = px + TILE / 2;
+                      const cy = py + TILE / 2;
+                      const label = maxed ? 'MAX' : String(cost);
+                      const w = Math.max(44, label.length * 7 + (maxed ? 14 : 22));
+                      return (
+                        <g pointerEvents="none">
+                          <rect x={cx - w / 2} y={cy - 9} width={w} height={18} rx={4} fill="#16110b" opacity={0.82} />
+                          {!maxed && (
+                            <polygon
+                              points={`${cx - w / 2 + 5},${cy + 4} ${cx - w / 2 + 9},${cy - 3} ${cx - w / 2 + 13},${cy + 4}`}
+                              fill={col}
+                            />
+                          )}
+                          <text
+                            x={maxed ? cx : cx - w / 2 + 17}
+                            y={cy + 4}
+                            textAnchor={maxed ? 'middle' : 'start'}
+                            fontSize={11}
+                            fontWeight="bold"
+                            fill={col}
+                            fontFamily="monospace"
+                          >
+                            {label}
+                          </text>
+                        </g>
+                      );
+                    })()}
                   </g>
                 )}
                 {/* selection ring (layout mode) */}
