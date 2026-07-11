@@ -5,7 +5,8 @@ import { STATION_DEFS, ZONE_DEFS, zoneDef, type StationType } from '../config/ba
 import { BALANCE } from '../config/balance';
 import { producerMaxed, stationStatus, upgradeCost } from '../game/actions';
 import type { GameEngine } from '../game/engine';
-import { isBlockedTile, phenotype, stationAt, type Color, type Resource, type Station } from '../game/state';
+import { currentSeasonId, seasonsActive } from '../game/season';
+import { isBlockedTile, phenotype, stationAt, type Color, type GameState, type Resource, type Station } from '../game/state';
 import { GROUND_URLS, groundVariant, loadTextures, type GameTextures } from './assets';
 
 const TILE = 56;
@@ -127,7 +128,10 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         const duckLayer = new Container(); // ambient ducks roam above the ground
         const overlay = new Graphics();
         const floatLayer = new Container(); // rising +XP feedback, on top
-        app.stage.addChild(gridLayer, stationLayer, duckLayer, overlay, floatLayer);
+        // weatherLayer (9c): precipitation over the whole scene, under the
+        // interaction overlay + floats so it never obscures feedback.
+        const weatherLayer = new Graphics();
+        app.stage.addChild(gridLayer, stationLayer, duckLayer, weatherLayer, overlay, floatLayer);
         // Locked zone: a dimmed silhouette tease (no stations, no input).
         gridLayer.alpha = unlocked ? 1 : 0.4;
 
@@ -140,6 +144,9 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
         // playtest 2026-07-05). Blocked (pond) tiles get animated water.
         const groundSet = zoneDef(zoneId)?.winter ? textures.groundSnow : textures.ground;
         const haveGround = groundSet.some(Boolean);
+        // 9c board dressing: the season re-textures/tints these live (see the
+        // render loop's applySeason) — Winterstead stays permanent winter.
+        const groundTiles: { sprite: Sprite; variant: number }[] = [];
         const haveWater = textures.water.some(Boolean);
         const waterTiles: Sprite[] = [];
         for (let gy = 0; gy < GRID.height; gy++) {
@@ -159,6 +166,7 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
               tile.position.set(px, py);
               tile.scale.set(SCALE);
               gridLayer.addChild(tile);
+              groundTiles.push({ sprite: tile, variant: v }); // 9c visuals: seasons redress these
             } else {
               const g = new Graphics();
               g.rect(px + 1, py + 1, TILE - 2, TILE - 2).fill((gx + gy) % 2 === 0 ? 0x3a2e22 : 0x352a1f);
@@ -580,11 +588,92 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
           return { sp, x, y, tx: rand(fieldX0, fieldX1), ty: rand(fieldY0, fieldY1), facing: 1, frame: 0, frameT: 0, pause: 0, color };
         };
 
+        // ── 9c board dressing: the yard wears the season ─────────────────
+        // Winter re-textures the grass with the baked snow set; autumn tints
+        // it toward brown; spring gets the faintest fresh cast (the rain is
+        // its real signal); summer is the baseline. Winterstead zones are
+        // permanent winter and never re-dress. Cheap: a string compare per
+        // frame, real work only on the transition frame.
+        const isWinterZone = !!zoneDef(zoneId)?.winter;
+        let dressedSeason = '';
+        const SEASON_TINT: Record<string, number> = {
+          spring: 0xf2ffe8,
+          summer: 0xffffff,
+          autumn: 0xdda76a,
+          winter: 0xffffff, // snow textures carry it
+        };
+        const applySeason = (state: GameState) => {
+          if (isWinterZone || !haveGround || groundTiles.length === 0) return 'summer';
+          const id = seasonsActive(state) ? currentSeasonId(state) : 'summer';
+          if (id !== dressedSeason) {
+            dressedSeason = id;
+            const snow = id === 'winter' && textures.groundSnow.some(Boolean);
+            const set = snow ? textures.groundSnow : textures.ground;
+            for (const { sprite, variant } of groundTiles) {
+              sprite.texture = set[variant] ?? set.find(Boolean)!;
+              sprite.tint = SEASON_TINT[id] ?? 0xffffff;
+            }
+            // The decorative pond ices over in winter (pale, desaturated),
+            // warms back up the rest of the year.
+            for (const w of waterTiles) w.tint = id === 'winter' ? 0xcfe8f5 : 0xffffff;
+          }
+          return id;
+        };
+
+        // Precipitation particles (spring drizzle / winter snowfall). Honors
+        // the OS reduce-motion setting — the ground dressing alone carries the
+        // season there. Pooled plain objects, one Graphics redraw per frame.
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        const fieldW = GRID.width * TILE;
+        const fieldH = GRID.height * TILE;
+        const flakes = Array.from({ length: 42 }, () => ({
+          x: Math.random() * fieldW,
+          y: Math.random() * fieldH,
+          spd: 0.7 + Math.random() * 0.6,
+          phase: Math.random() * Math.PI * 2,
+        }));
+        let weatherT = 0;
+        const drawWeather = (seasonId: string, dt: number) => {
+          weatherLayer.clear();
+          if (reduceMotion || isWinterZone || !unlocked) return;
+          if (seasonId !== 'spring' && seasonId !== 'winter') return;
+          weatherT += dt;
+          if (seasonId === 'spring') {
+            // A gentle slanted drizzle — April on the yard.
+            for (const f of flakes) {
+              f.y += 240 * f.spd * dt;
+              f.x += 55 * f.spd * dt;
+              if (f.y > fieldH) {
+                f.y -= fieldH;
+                f.x = Math.random() * fieldW;
+              }
+              const x = OX + (f.x % fieldW);
+              const y = OY + f.y;
+              weatherLayer
+                .moveTo(x, y)
+                .lineTo(x - 2, y - 8)
+                .stroke({ width: 1, color: 0x9fd0ec, alpha: 0.4 });
+            }
+          } else {
+            // Winter: slow drifting flakes.
+            for (const f of flakes) {
+              f.y += 26 * f.spd * dt;
+              if (f.y > fieldH) {
+                f.y -= fieldH;
+                f.x = Math.random() * fieldW;
+              }
+              const x = OX + ((f.x + Math.sin(weatherT * 1.4 + f.phase) * 7 + fieldW) % fieldW);
+              weatherLayer.rect(x, OY + f.y, 2, 2).fill({ color: 0xf5faff, alpha: 0.85 });
+            }
+          }
+        };
+
         const render = () => {
           const state = engine.state;
           overlay.clear();
           // Locked tease: nothing to simulate on the board.
           if (!unlocked) return;
+          drawWeather(applySeason(state), app.ticker.deltaMS / 1000);
 
           // Refill the scratch buffers for this zone in a single pass (also counts
           // coops for the duck flock-size below — no extra filter alloc).
