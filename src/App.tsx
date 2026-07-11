@@ -545,10 +545,10 @@ export default function App() {
           the full-width build row + footer line up exactly with the right
           column's edge, and a long hint can't stretch the whole thing wider. */}
       <div
-        className="mx-auto flex w-full max-w-full flex-col gap-4 md:w-[var(--cw)]"
+        className="mx-auto flex w-full max-w-full flex-col gap-4 lg:w-[var(--cw)]"
         style={{ '--cw': `${COLS_WIDTH}px` } as CSSProperties}
       >
-        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         {/* Canvas — the board. */}
         <div className="flex min-w-0 max-w-full flex-col items-center gap-3">
           <ZoneBar
@@ -639,7 +639,7 @@ export default function App() {
         </div>
 
         {/* Side panel */}
-        <div className="flex w-full flex-col gap-4 md:w-[300px]">
+        <div className="flex w-full flex-col gap-4 lg:w-[300px]">
           <HUD state={state} />
           {hasCoop && (
             <button

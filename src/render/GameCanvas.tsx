@@ -86,7 +86,18 @@ export function GameCanvas({ engine, selectedId, zoneId, unlocked, buildType, on
     // (its plugins aren't wired yet — destroy() would throw). So teardown is
     // always chained off `ready` and runs only after init has fully resolved.
     const ready = app
-      .init({ width: W, height: H, background: 0x2a2018, antialias: false })
+      // resolution: render at device density (capped — 2x is where the gain
+      // flattens) so the small text (level badges, upgrade costs) stays crisp
+      // on Retina and under CSS scaling. NOT autoDensity: that would inline
+      // style the canvas to a fixed CSS size, fighting the .board-host rule
+      // that lets the board shrink on narrow screens.
+      .init({
+        width: W,
+        height: H,
+        background: 0x2a2018,
+        antialias: false,
+        resolution: Math.min(2, window.devicePixelRatio || 1),
+      })
       .then(async () => {
         if (disposed) return; // unmounted mid-init; cleanup will destroy.
         let textures: GameTextures = {
