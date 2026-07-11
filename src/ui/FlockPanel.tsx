@@ -274,7 +274,14 @@ export function ColorSwatch({ color, size = 14 }: { color: Color; size?: number 
  * the hatchery are earning right now.
  */
 function PostsCard({ engine, state }: { engine: GameEngine; state: GameState }) {
+  const [help, setHelp] = useState(false);
   const rates = forageRates(state);
+  // Which read each post cares about, in the same color as the phenotype pips
+  // — the zero-click link between "post" and "band" (playtest, 2026-07-11).
+  const axisChip = (id: PostId): { label: string; color: string } =>
+    id === 'show'
+      ? { label: 'Standard', color: '#ffe9a8' }
+      : { label: AXIS_META[POST_META[id].axis].label, color: AXIS_META[POST_META[id].axis].color };
   const rows: { id: PostId; effect: string }[] = [
     {
       id: 'sentry',
@@ -296,12 +303,14 @@ function PostsCard({ engine, state }: { engine: GameEngine; state: GameState }) 
     <div className="mb-3 rounded-md bg-[#1f1812] px-3 py-2">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a]">Posts</span>
-        <span
-          className="text-[9px] text-[#7a6a4a]"
-          title="Posted ducks stop laying and eat the drake maintenance ration — an underfed pool slows post output. Assign from the duck rows below; recall any time."
+        <button
+          onClick={() => setHelp(true)}
+          className="inline-flex items-center gap-1 rounded-full bg-[#241c14] px-2 py-0.5 text-[9px] font-bold text-[#c9b88f] ring-1 ring-[#3a2e22] hover:bg-[#2e2318]"
+          aria-label="Which genes work which posts?"
         >
-          workers eat the drake ration
-        </span>
+          <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-[#3a2e22] text-[9px] text-[#ffe9a8]">?</span>
+          which genes?
+        </button>
       </div>
       <div className="flex flex-col gap-1">
         {rows.map((r) => {
@@ -310,6 +319,17 @@ function PostsCard({ engine, state }: { engine: GameEngine; state: GameState }) 
           return (
             <div key={r.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
               <span className="w-14 shrink-0 font-bold text-[#c9b88f]">{POST_META[r.id].label}</span>
+              <span
+                className="rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide"
+                style={{ color: axisChip(r.id).color, background: '#171009' }}
+                title={
+                  r.id === 'show'
+                    ? 'Judged against the tier Standard (Prime wildcards always match) + flock condition'
+                    : `Reads the ${axisChip(r.id).label} band — the free pips every duck shows`
+                }
+              >
+                {axisChip(r.id).label}
+              </span>
               <span className="tabular-nums text-[#9a8a6a]">
                 {occupants.length}/{postCapacity(r.id)}
               </span>
@@ -334,6 +354,70 @@ function PostsCard({ engine, state }: { engine: GameEngine; state: GameState }) 
             </div>
           );
         })}
+      </div>
+
+      {help && <PostsHelp state={state} onClose={() => setHelp(false)} />}
+    </div>
+  );
+}
+
+/** The posts reference sheet (the WaterHelp pattern): which genes work which
+ *  post, with the real numbers — a reference, not a tutorial (the Almanac
+ *  page teaches the concept once; this answers "who do I assign?"). */
+function PostsHelp({ state, onClose }: { state: GameState; onClose: () => void }) {
+  const P = BALANCE.POSTS;
+  const gene = (g: Gene) => (
+    <span className="font-bold" style={{ color: GENE_META[g].color }}>
+      {GENE_META[g].label} ({g})
+    </span>
+  );
+  const showOpen = state.legacyTier >= BALANCE.CONTRACTS.UNLOCK_TIER;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:max-h-[88vh] sm:rounded-xl bg-[#2a2018] p-5 ring-2 ring-[#3a2e22]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-lg font-black text-[#ffe9a8]">Who works which post?</h2>
+          <button onClick={onClose} className="rounded p-1.5 text-[#9a8a6a] hover:bg-[#1f1812] hover:text-[#f5ecd8]" aria-label="Close">
+            <CloseIcon size={14} />
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-[#9a8a6a]">
+          Each post reads ONE band — the free Lay/Vigor/Hardy pips every duck shows, no gene reader
+          needed. Scores add per gene, so a half-{GENE_META.H.label} duck does half the work.
+        </p>
+        <div className="flex flex-col gap-2.5 text-xs text-[#c9b88f]">
+          <div className="rounded-md bg-[#1f1812] px-3 py-2">
+            <div className="font-bold text-[#f5ecd8]">Sentry — wants {gene('H')}</div>
+            Stretches every dive’s wind-up (up to +{Math.round(P.SENTRY.WINDUP_CAP * 100)}% with two
+            full-Hardy sentries) and repels attacks outright at guard/away. Prime counts as half a
+            Hardy here.
+          </div>
+          <div className="rounded-md bg-[#1f1812] px-3 py-2">
+            <div className="font-bold text-[#f5ecd8]">Forager — wants {gene('V')}</div>
+            Gathers peas + mealworms into storage. Output is {Math.round(P.FORAGER.SCORE_FLOOR * 100)}%
+            floor + the rest by Vigor — a full-Vigor forager gathers{' '}
+            {(1 / P.FORAGER.SCORE_FLOOR).toFixed(1)}× what a dud does.
+          </div>
+          <div className="rounded-md bg-[#1f1812] px-3 py-2">
+            <div className="font-bold text-[#f5ecd8]">Broody — wants {gene('V')}</div>
+            Speeds every duckling’s grow-out, up to ×{(1 + P.BROODY.MATURE_PER_SCORE).toFixed(1)} at a
+            full-Vigor hen. Stacks with the duckling ration and Husbandry.
+          </div>
+          {showOpen && (
+            <div className="rounded-md bg-[#1f1812] px-3 py-2">
+              <div className="font-bold text-[#f5ecd8]">Show — wants the Standard</div>
+              Exhibitions judge the bench against the tier’s Standard plus flock condition — the asked
+              color, in fine feather. {gene('P')} wildcards always count as a match.
+            </div>
+          )}
+        </div>
+        <p className="mt-3 text-[10px] text-[#7a6a4a]">
+          Posted ducks stop laying and eat the drake maintenance ration — an underfed pool works
+          slower (never stops). Wounded workers stand down until healed. Recall is always free.
+        </p>
       </div>
     </div>
   );
