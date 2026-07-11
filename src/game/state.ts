@@ -577,6 +577,8 @@ export interface GameState {
   /** The rotating offer board + at most one active contract. Wiped by prestige
    *  (composed fresh in initialState()) exactly like every other run field. */
   contracts: ContractsState;
+  /** Phase 9e: the Peddler's cart (rank 20+). Wiped by prestige. */
+  peddler: PeddlerState;
   /** Transient: delivery contracts that hit their deadline this tick, drained by
    *  the engine for a quiet "contract expired" toast. Only ever set online
    *  (expiry clocks are online-only), so it can't accrue during catch-up. */
@@ -822,6 +824,41 @@ export function initialContracts(): ContractsState {
   };
 }
 
+// ── Phase 9e: THE PEDDLER (goods for goods, blood for eggs) ──────────
+/** A barter: his `gives` for your `wants`, priced against you (see
+ *  BALANCE.PEDDLER.BARTER_RATE). `seasonal` marks the season's scarce line. */
+export interface BarterOffer {
+  id: string;
+  kind: 'barter';
+  gives: Ingredient;
+  givesAmount: number;
+  wants: Ingredient;
+  wantsAmount: number;
+  seasonal?: boolean;
+}
+/** A bloodline duck: NO ancestors — kinship 0 against the whole flock by
+ *  construction (9b's outcross valve). Price snapshotted at roll. */
+export interface BloodlineOffer {
+  id: string;
+  kind: 'bloodline';
+  sex: 'drake' | 'hen';
+  genotype: Genotype;
+  genome: Genome;
+  priceEggs: number;
+}
+export type PeddlerOffer = BarterOffer | BloodlineOffer;
+
+export interface PeddlerState {
+  offers: PeddlerOffer[];
+  /** Seconds until the whole cart restocks (online-only, like the Grange). */
+  refreshRemaining: number;
+  nextOfferId: number;
+}
+
+export function initialPeddler(): PeddlerState {
+  return { offers: [], refreshRemaining: BALANCE.PEDDLER.REFRESH_S, nextOfferId: 1 };
+}
+
 /** Fresh per-predator state from the defs: first window is a full interval out. */
 export function initialPredators(): Record<string, PredatorState> {
   const out: Record<string, PredatorState> = {};
@@ -1041,6 +1078,7 @@ export function initialState(now: number): GameState {
     purchasedBoosts: {},
     legacyHall: [],
     contracts: initialContracts(),
+    peddler: initialPeddler(),
     lastSeen: now,
   };
 }

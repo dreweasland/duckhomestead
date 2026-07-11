@@ -29,6 +29,15 @@ export interface Milestone {
 /** Milestones earned at given ranks. */
 export const MILESTONES: Milestone[] = [
   {
+    // Rank 20's marquee beat (it shadows the Warden title promotion — the
+    // title still lives on the rank bar; an institution outranks a name).
+    rank: BALANCE.PEDDLER.INTRO_RANK,
+    title: 'The Peddler',
+    description:
+      'A wandering cart now calls at the homestead: goods for goods at his prices — he tends to carry whatever the season makes scarce — and, now and then, a bird of clean outside blood. Unrelated to every duck you own: the outcross your lines have been waiting for.',
+    kind: 'zone',
+  },
+  {
     rank: BALANCE.PREDATORS.PAIRED_HUNT.INTRO_RANK,
     title: 'The Paired Hunt',
     description:

@@ -461,6 +461,46 @@ export const BALANCE = {
     },
   },
 
+  // ── Phase 9e: THE PEDDLER (rank 20 — goods for goods, blood for eggs) ─
+  // A wandering cart, deliberately NOT the Grange: the Grange pays meta-
+  // currency for jobs; the Peddler moves GOODS — and never touches dust/
+  // shards/XP. Two offer shapes:
+  //   BARTER — his X for your Y at a rate priced AGAINST you (a relief valve
+  //   for a seasonal crunch, never a producer replacement). Seasonally
+  //   biased: he tends to carry the season's scarce line.
+  //   BLOODLINE — an adult duck with NO lineage: kinship 0 against your
+  //   whole flock by construction (9b's outcross valve). Honest stock, never
+  //   Prime (mutation-only stays law), priced in peak-rate seconds.
+  // No sell-for-eggs direction: eggs flow IN here, never out (foragers +
+  // an uncapped currency make a sell path a money printer waiting for a
+  // tuning mistake). Board clock is online-only; wiped by prestige.
+  PEDDLER: {
+    INTRO_RANK: 20, // the "Warden" rank finally carries an institution
+    OFFER_SLOTS: 3,
+    /** Online seconds between full board rotations (off-cadence from the
+     *  Grange's 600 so the two boards never rotate in lockstep). */
+    REFRESH_S: 480,
+    /** Barter value ratio AGAINST the player (matrix-worth of what he wants
+     *  vs what he gives) — you can buy out of a crunch, at a real premium. */
+    BARTER_RATE: 1.6,
+    /** His side of a barter, as a fraction of the live Feed Store cap — big
+     *  enough to matter, never a substitute for producers. */
+    BARTER_CAP_FRACTION: 0.2,
+    BARTER_MIN_UNITS: 10,
+    /** Chance he tends the SEASON's scarce ingredient (when seasons run). */
+    BARTER_SEASONAL_CHANCE: 0.6,
+    /** Chance an offer slot rolls a BLOODLINE duck instead of a barter. */
+    DUCK_CHANCE: 0.25,
+    /** Duck price: seconds of the run's peak egg rate (the clutch/net/pond
+     *  pricing base), floored for cold starts. Snapshotted at roll. */
+    DUCK_PRICE_PEAK_SECONDS: 45,
+    DUCK_PRICE_MIN: 120,
+    /** Rolled genome weights — a notch above seed stock (occasional gem,
+     *  mostly honest middling birds): the point is the CLEAN LINEAGE, not
+     *  power. Never includes P. */
+    DUCK_GENE_WEIGHTS: { L: 2, V: 2, H: 2, D: 3 } as Record<string, number>,
+  },
+
   // ── Milestones ──────────────────────────────────────────────────────
   /** Rank at which the Auto-Haul Cart unlocks (auto-collect output). */
   MILESTONE_AUTOHAUL_RANK: 5,

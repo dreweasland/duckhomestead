@@ -7,6 +7,7 @@ import { cycleMult, yieldMult } from './loot';
 import { husbandryBoostMult, outputBoostMult, speedBoostMult } from './prestige';
 import { runNutrition, runDucklingNutrition, runDrakeNutrition, runWinterNutrition } from './nutrition';
 import { broodyMatureMult, runForagers } from './posts';
+import { runPeddler } from './peddler';
 import { advanceSeason, seasonClutchRate, seasonProducerMult } from './season';
 import { runBreeding, runOvercrowding } from './breeding';
 import { runPredators } from './predators';
@@ -244,4 +245,8 @@ export function tick(state: GameState, dt: number, opts: TickOptions): void {
   // The active flag pauses a provision order's deadline at guard — a clock
   // never runs while you're not actually there (same law as offline).
   if (online) runContracts(state, dt, activeDefense);
+
+  // THE PEDDLER (9e): the cart restocks on its own online clock — board
+  // upkeep like the Grange's, never advanced by catch-up.
+  if (online) runPeddler(state, dt);
 }

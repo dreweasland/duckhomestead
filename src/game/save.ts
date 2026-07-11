@@ -118,6 +118,18 @@ export function deserialize(raw: string, now: number): GameState {
         elapsed: Number.isFinite(parsed.season?.elapsed) ? Math.max(0, parsed.season!.elapsed) : 0,
       },
       pendingSeasonChange: undefined,
+      // Phase 9e: the Peddler's cart — pre-9e saves start empty (it restocks
+      // on the first online tick); unknown offer shapes are dropped like
+      // retired contracts.
+      peddler: {
+        offers: (parsed.peddler?.offers ?? []).filter(
+          (o) => o?.kind === 'barter' || o?.kind === 'bloodline',
+        ),
+        refreshRemaining: Number.isFinite(parsed.peddler?.refreshRemaining)
+          ? Math.max(0, parsed.peddler!.refreshRemaining)
+          : base.peddler.refreshRemaining,
+        nextOfferId: parsed.peddler?.nextOfferId ?? 1,
+      },
       doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,
       // Phase 3 loot defaults for older saves.
       inventory: parsed.inventory ?? [],

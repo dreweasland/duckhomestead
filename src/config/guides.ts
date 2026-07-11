@@ -60,7 +60,8 @@ export type GuideOpenTarget =
   // Arms the SILO build tool on the Yard (no panel — the fix is a placement).
   | 'build-silo'
   // Switches the board to `cta.zone` (the zone-unlockable announcements).
-  | 'zone';
+  | 'zone'
+  | 'peddler';
 
 export interface GuideDef {
   /** localStorage key suffix: duck-homestead-guide-<id>. Stable — renaming a
@@ -177,6 +178,16 @@ export const GUIDE_DEFS: GuideDef[] = [
   // zone's full gate is MET (rank + eggs + tier), say so — a locked tab is
   // easy to stop seeing, and 20k banked eggs shouldn't sit on an unopened
   // Winterstead. Each fires once, when genuinely affordable.
+  {
+    // Catch-up for saves already past rank 20 (the milestone DING only fires
+    // on the crossing); redundant-but-harmless for fresh crossers.
+    id: 'peddler',
+    title: 'The Peddler calls',
+    icon: GrangeIcon,
+    body: 'A wandering cart now stops at the homestead: goods for goods at HIS prices — he tends to carry whatever the season makes scarce — and, now and then, a bird of clean outside blood, unrelated to every duck you own. A trade is a relief valve, not a producer; the bird is an outcross, not a shortcut.',
+    when: (state) => state.rank >= BALANCE.PEDDLER.INTRO_RANK,
+    cta: { label: 'Open the cart', open: 'peddler' },
+  },
   {
     id: 'pond-ready',
     title: 'The Pond is within reach',

@@ -47,7 +47,9 @@ export function GenomeTiles({
   target,
   size = 14,
 }: {
-  duck: Duck;
+  /** Only the genome fields are read — a Peddler OFFER previews with the
+   *  same tiles a flock row uses (9e). */
+  duck: Pick<Duck, 'genome' | 'genomeKnown'>;
   target?: Gene[];
   size?: number;
 }) {
@@ -101,7 +103,7 @@ function tierWord(tier: number): string {
  * intrinsic tier. Free and visible for every duck, read or not — the phone-it-in
  * floor. Never shows exact genes (that's GenomeTiles, reader-gated).
  */
-function PhenoBands({ genome, width = 22 }: { genome: Gene[]; width?: number }) {
+export function PhenoBands({ genome, width = 22 }: { genome: Gene[]; width?: number }) {
   const tiers = BALANCE.PHENOTYPE.TIERS;
   const title = PHENO_AXES.map((a) => `${AXIS_META[a].label}: ${tierWord(axisTier(genome, a))}`).join(' · ');
   return (

@@ -22,13 +22,14 @@ import { championGoal } from './game/prestige';
 import { ActiveContractStrip, GrangePanel } from './ui/GrangePanel';
 import { LegacyPanel } from './ui/LegacyPanel';
 import { defenseFloor, flockRatio, rackSockets, RARITIES, stationAt, zoneUnlocked, type FlowFeatureType, type PondFeatureType } from './game/state';
-import { DuckIcon, GrangeIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
+import { CartIcon, DuckIcon, GrangeIcon, LegacyIcon, ModuleIcon, NutritionIcon, OwlIcon } from './ui/icons';
 import { PredatorBanner } from './ui/PredatorBanner';
 import { WatchPanel } from './ui/WatchPanel';
 import { ZoneBar, ZoneUnlockCard } from './ui/ZoneBar';
 import { StatusPills } from './ui/StatusPills';
 import { useGame } from './game/useGame';
 import { GameCanvas, MAX_BOARD_WIDTH } from './render/GameCanvas';
+import { PeddlerPanel } from './ui/PeddlerPanel';
 import { AwayModal } from './ui/AwayModal';
 import { BackupControls } from './ui/BackupPanel';
 import { BuildBar } from './ui/BuildBar';
@@ -270,6 +271,7 @@ export default function App() {
   const [watchOpen, setWatchOpen] = useState(false);
   const [legacyOpen, setLegacyOpen] = useState(false);
   const [grangeOpen, setGrangeOpen] = useState(false);
+  const [peddlerOpen, setPeddlerOpen] = useState(false);
   const [nutritionTab, setNutritionTab] = useState<NutritionTab>('layers');
 
   const state = engine.state;
@@ -316,7 +318,7 @@ export default function App() {
   // overlay is up — the away modal, a DING/loot/dex banner, an in-flight
   // predator dive, or any open panel — so a guide never fights a moment.
   const anyPanelOpen =
-    nutritionOpen || modulesOpen || flockOpen || watchOpen || legacyOpen || grangeOpen;
+    nutritionOpen || modulesOpen || flockOpen || watchOpen || legacyOpen || grangeOpen || peddlerOpen;
   const predatorDiving = Object.values(state.predators).some((p) => p.strike != null);
   // Stable identity — the FlockPanel memo comparator checks onClose equality.
   const closeFlock = useCallback(() => setFlockOpen(false), []);
@@ -366,6 +368,9 @@ export default function App() {
           setActiveZone(cta.zone);
           setBuildType(null); // a yard tool is meaningless on another board
         }
+        break;
+      case 'peddler':
+        setPeddlerOpen(true);
         break;
     }
   }, []);
@@ -511,6 +516,7 @@ export default function App() {
       {watchOpen && <WatchPanel engine={engine} state={state} onClose={() => setWatchOpen(false)} />}
       {legacyOpen && <LegacyPanel engine={engine} state={state} onClose={() => setLegacyOpen(false)} />}
       {grangeOpen && <GrangePanel engine={engine} state={state} onClose={() => setGrangeOpen(false)} />}
+      {peddlerOpen && <PeddlerPanel engine={engine} state={state} onClose={() => setPeddlerOpen(false)} />}
 
       {/* THE ALMANAC (Phase 7): one guide card at a time, non-modal — the
           homestead stays visible and playable behind it. */}
@@ -742,6 +748,21 @@ export default function App() {
                 </button>
               );
             })()}
+          {state.rank >= BALANCE.PEDDLER.INTRO_RANK && (
+            <button
+              onClick={() => setPeddlerOpen(true)}
+              className="flex items-center justify-between rounded-md bg-[#3a2c1c] px-3 py-2 text-sm font-bold text-[#e0c98a] transition hover:bg-[#463522]"
+            >
+              <span className="flex items-center gap-1.5">
+                <CartIcon size={16} /> The Peddler
+              </span>
+              <span className="tabular-nums">
+                {state.peddler.offers.some((o) => o.kind === 'bloodline')
+                  ? 'outside blood in!'
+                  : `${state.peddler.offers.length} offers`}
+              </span>
+            </button>
+          )}
           {(predActive ||
             state.deterrents > 0 ||
             state.secureCoops > 0 ||

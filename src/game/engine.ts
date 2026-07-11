@@ -50,6 +50,7 @@ import {
 } from './contracts';
 import { goodGeneCount } from './genetics';
 import { flockRatio, type Duck } from './state';
+import { acceptBarter, buyBloodline } from './peddler';
 import { rewindWoundsToBrink, scareOff, type ScareResult } from './predators';
 import { tryTendDrop } from './loot';
 import { conditionTarget } from './nutrition';
@@ -987,6 +988,20 @@ export class GameEngine {
   /** Present the active EXHIBITION (9d) — the show bench is judged in place. */
   presentExhibition(): ActionResult<unknown> {
     const r = presentExhibition(this.state);
+    this.notify();
+    return r;
+  }
+
+  // ── The Peddler (9e: goods for goods, blood for eggs) ───────────────
+  /** Take a barter — your stock for his, at his prices. */
+  acceptBarter(offerId: string): ActionResult<unknown> {
+    const r = acceptBarter(this.state, offerId);
+    this.notify();
+    return r;
+  }
+  /** Buy a bloodline duck — clean outside blood, unrelated to the flock. */
+  buyBloodline(offerId: string): ActionResult<unknown> {
+    const r = buyBloodline(this.state, offerId);
     this.notify();
     return r;
   }
