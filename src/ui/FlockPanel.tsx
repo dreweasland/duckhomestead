@@ -126,8 +126,11 @@ const GENE_ORDER: Gene[] = ['L', 'V', 'H', 'D'];
 
 /** Flock-browser sort keys. `match`/`good` read the EXACT genome (reader-gated);
  *  the band sorts (`lay`/`vigor`/`hardy`) read the free coarse tier, so they work
- *  on unread ducks too — the pre-reader selection tool. `new` reads the id. */
-type SortKey = 'match' | 'good' | 'prime' | 'lay' | 'vigor' | 'hardy' | 'new';
+ *  on unread ducks too — the pre-reader selection tool. `new` reads the id.
+ *  `kin` (9b tooling) reads PUBLIC lineage: least related first (cleanest
+ *  outcross on top), measured against the picked mate or, with none picked,
+ *  your current breeding pairs. */
+type SortKey = 'match' | 'good' | 'prime' | 'kin' | 'lay' | 'vigor' | 'hardy' | 'new';
 const SORT_LABEL: Record<SortKey, string> = {
   lay: 'Lay band',
   vigor: 'Vigor band',
@@ -135,6 +138,7 @@ const SORT_LABEL: Record<SortKey, string> = {
   match: 'Target match',
   good: 'Good genes',
   prime: 'Prime genes',
+  kin: 'Outcross (kin)',
   new: 'Newest',
 };
 /** Numeric tail of a duck id (e.g. "d12" → 12) for the "Newest" sort. */
@@ -933,6 +937,44 @@ function FlockPanelInner({
     true,
     (v) => typeof v === 'boolean',
   );
+  // Bulk-release outcross protection (9b tooling, playtest 2026-07-12: 'want
+  // to cull a bad-gened drake, but not if it's a clean bloodline'). Spares
+  // ducks UNRELATED to the current breeding pairs; inert with no pairs (then
+  // everything is unrelated and the toggle would deaden the tool).
+  const [keepClean, setKeepClean] = usePersistentState<boolean>(
+    'flock-keep-clean',
+    true,
+    (v) => typeof v === 'boolean',
+  );
+
+  // Index paired ducks once (O(pairs)) — the per-row checks, the bulk-release
+  // filter, and the kinship reference below all read this.
+  const pairedIds = new Set(state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
+
+  // ── Kinship reference (9b tooling): who "related" is measured AGAINST ──
+  // With exactly one mate picked, it's that pick (the pair you're building);
+  // otherwise it's your current breeding pairs (the program a cull or an
+  // outcross matters to). O(flock × refs) with a per-render memo — refs are a
+  // pick or a few dozen breeders, never the whole flock.
+  const kinRefs: Duck[] = (() => {
+    const picked = [mateDrakeId, mateHenId]
+      .map((id) => state.ducks.find((d) => d.id === id))
+      .filter((d): d is Duck => !!d);
+    // Pick-relative only while BUILDING a pair; everywhere else (roster culls,
+    // the posts tab) relatedness means "to the breeding program".
+    if (tab === 'breeding' && picked.length === 1) return picked;
+    return state.ducks.filter((d) => pairedIds.has(d.id));
+  })();
+  const kinMemo = new Map<string, number>();
+  const kinOf = (d: Duck): number => {
+    let v = kinMemo.get(d.id);
+    if (v === undefined) {
+      v = 0;
+      for (const r of kinRefs) if (r.id !== d.id) v = Math.max(v, kinship(r, d));
+      kinMemo.set(d.id, v);
+    }
+    return v;
+  };
 
   const geneQueryActive = queryGene !== 'any';
   const matchesGeneQuery = (d: Duck): boolean => {
@@ -945,6 +987,9 @@ function FlockPanelInner({
     good: (d) => goodGeneCount(d.genome),
     // The Prime chase: P-carriers first (by count), quality as the tiebreak.
     prime: (d) => d.genome.filter((g) => g === 'P').length * 10 + targetMatch(d.genome, target),
+    // Outcross first: least related to the pick/breeders on top (negated —
+    // the list sorts descending). Public lineage; no reader needed.
+    kin: (d) => -kinOf(d),
     lay: (d) => axisTier(d.genome, 'lay'),
     vigor: (d) => axisTier(d.genome, 'vigor'),
     hardy: (d) => axisTier(d.genome, 'hardy'),
@@ -969,10 +1014,8 @@ function FlockPanelInner({
       }
       return sortStat[sortKey](b) - sortStat[sortKey](a);
     });
-  // Index paired ducks once (O(pairs)) — both the per-row "is this duck in a pair"
-  // check and the bulk-release filter run over the shown list (up to 216), so a
-  // linear `.some` per duck made those O(shown × pairs) per render (~15Hz while open).
-  const pairedIds = new Set(state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
+  // (pairedIds + the kinship reference now live above sortStat — the kin sort
+  // and the row dots both read them.)
   // Faceted counts: each filter row's badges reflect the OTHER active filter (and
   // the color tab), so the badge on the selected option always equals the number
   // of rows shown.
@@ -1195,8 +1238,13 @@ function FlockPanelInner({
               // Prime carriers are spared while the toggle is on: a single P in
               // a junk genome scores low on target match but is precious stock
               // for the Prime chase. The spared count keeps the rule VISIBLE.
-              const spared = keepPrime ? underCutoff.filter((d) => d.genome.includes('P')).length : 0;
-              const eligible = keepPrime ? underCutoff.filter((d) => !d.genome.includes('P')) : underCutoff;
+              // Clean-blood outcross stock gets the same protection (9b): junk
+              // genes breed back in a generation; a lost clean line doesn't.
+              const cleanGuardLive = keepClean && kinRefs.length > 0;
+              const isSpared = (d: Duck) =>
+                (keepPrime && d.genome.includes('P')) || (cleanGuardLive && kinOf(d) === 0);
+              const spared = underCutoff.filter(isSpared).length;
+              const eligible = underCutoff.filter((d) => !isSpared(d));
               const n = eligible.length;
               const step = (delta: number) =>
                 setCullQuality((v) => Math.max(0, Math.min(SLOTS, v + delta)));
@@ -1255,12 +1303,30 @@ function FlockPanelInner({
                       }`}
                       title={
                         keepPrime
-                          ? `Prime carriers are spared from this sweep${spared > 0 ? ` (${spared} under the cutoff right now)` : ''} — click to include them.`
+                          ? 'Prime carriers are spared from this sweep — click to include them.'
                           : 'Prime carriers are INCLUDED in this sweep — click to spare them.'
                       }
                     >
-                      {keepPrime ? `keep P carriers${spared > 0 ? ` · sparing ${spared}` : ''}` : 'P carriers included'}
+                      {keepPrime ? 'keep P carriers' : 'P carriers included'}
                     </button>
+                    {kinRefs.length > 0 && (
+                      <button
+                        onClick={() => setKeepClean((v) => !v)}
+                        className={`rounded-full px-1.5 py-0.5 font-bold transition ${
+                          keepClean
+                            ? 'bg-[#1a2a1f] text-[#8fc8a0] ring-1 ring-[#2e4a38]'
+                            : 'bg-[#241c14] text-[#6a5a3a] ring-1 ring-[#3a2e22]'
+                        }`}
+                        title={
+                          keepClean
+                            ? 'Ducks UNRELATED to your breeding pairs are spared — junk genes breed back in a generation; a lost clean line doesn’t. Click to include them.'
+                            : 'Clean-blood outcross stock is INCLUDED in this sweep — click to spare it.'
+                        }
+                      >
+                        {keepClean ? 'keep clean blood' : 'clean blood included'}
+                      </button>
+                    )}
+                    {spared > 0 && <span className="text-[#7a6a4a]">sparing {spared}</span>}
                   </div>
                 </div>
               );
@@ -1285,17 +1351,18 @@ function FlockPanelInner({
                   const picked = d.id === mateDrakeId || d.id === mateHenId;
                   // Wintering hens can't join a pair — breeding is home-only (6d).
                   const canPick = d.stage === 'adult' && !d.wounded && !isPaired && d.site !== 'winter' && !d.post;
-                  // KIN DOT (9b UI): with one mate picked, every candidate of the
-                  // other sex shows its kinship to the pick — line-tracking as a
-                  // glance, not homework. Lineage is public (no reader needed).
-                  const pickedMate =
-                    tab === 'breeding' && !picked
-                      ? d.sex === 'hen'
-                        ? state.ducks.find((x) => x.id === mateDrakeId)
-                        : state.ducks.find((x) => x.id === mateHenId)
-                      : undefined;
-                  const kinToPick = pickedMate && canPick ? kinship(pickedMate, d) : 0;
-                  const kinColor = kinToPick >= 0.5 ? '#e26d6d' : kinToPick >= 0.25 ? '#e8935a' : '#e8c45a';
+  // KIN READ (9b UI): relatedness to the kin reference (the pick while
+                  // building a pair; your breeding pairs everywhere else) —
+                  // line-tracking and cull safety as a glance, not homework.
+                  // Lineage is public (no reader needed).
+                  const kinVal = kinRefs.length > 0 && !picked && !pairedIds.has(d.id) ? kinOf(d) : 0;
+                  const kinColor = kinVal >= 0.5 ? '#e26d6d' : kinVal >= 0.25 ? '#e8935a' : '#e8c45a';
+                  const kinWarn = kinVal >= BALANCE.GENOME.KINSHIP.WARN_AT;
+                  // The cull-safety read: a duck UNRELATED to the program is
+                  // outcross stock — releasing it costs blood you can't breed
+                  // back. Roster only (where releases happen), adults only.
+                  const kinClean =
+                    tab === 'roster' && kinRefs.length > 0 && kinVal === 0 && !pairedIds.has(d.id) && d.stage === 'adult';
                   return (
                     <div
                       key={d.id}
@@ -1423,14 +1490,24 @@ function FlockPanelInner({
                           <HealIcon size={12} />
                         </button>
                       )}
-                      {tab === 'breeding' && kinToPick >= BALANCE.GENOME.KINSHIP.WARN_AT && (
+                      {(tab === 'breeding' || tab === 'roster') && kinWarn && (
                         <span
                           className="inline-block h-2 w-2 shrink-0 rounded-full"
                           style={{ background: kinColor }}
-                          title={`Close kin to your pick (${kinToPick}) — offspring slots degrade to Dud ${Math.round(
-                            kinToPick * BALANCE.GENOME.KINSHIP.DUD_CHANCE * 100,
-                          )}% of the time. Cross an unrelated line instead.`}
+                          title={`Related (${kinVal}) to ${
+                            tab === 'breeding' ? 'your pick' : 'your breeding pairs'
+                          } — a cross degrades offspring slots to Dud ${Math.round(
+                            kinVal * BALANCE.GENOME.KINSHIP.DUD_CHANCE * 100,
+                          )}% of the time.`}
                         />
+                      )}
+                      {kinClean && (
+                        <span
+                          className="shrink-0 text-[9px] font-bold text-[#6a9a7a]"
+                          title="Unrelated to your breeding pairs — outcross stock. Releasing this bird costs clean blood you can't breed back."
+                        >
+                          clean
+                        </span>
                       )}
                       {tab === 'breeding' &&
                         (isPaired ? (
