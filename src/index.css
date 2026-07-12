@@ -342,6 +342,20 @@ body {
   animation: waterduck-bob 1.6s ease-in-out infinite;
 }
 
+/* Spring rain on the water canvases (9c): the streak pattern repeats every
+   pond-height (340px), so translating exactly that far loops seamlessly. */
+@keyframes water-rain-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(340px);
+  }
+}
+.water-rain {
+  animation: water-rain-fall 0.9s linear infinite;
+}
+
 /* Respect the OS "reduce motion" setting: kill the looping, spinning, and flashing
    animations (motion-sensitivity / photosensitivity) while keeping every threat cue
    VISIBLE as a static state, so the owl encounter stays fully playable. The owl and
@@ -387,6 +401,12 @@ body {
   .waterduck-drift,
   .waterduck-bob {
     animation: none;
+  }
+  /* Spring rain on the water canvases — the seasonal water tint alone carries
+     the season without motion. */
+  .water-rain {
+    animation: none;
+    opacity: 0;
   }
 }
 

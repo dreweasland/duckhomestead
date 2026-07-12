@@ -14,6 +14,7 @@ import {
   type PondFeatureType,
 } from '../game/state';
 import { playPlace, playUpgrade } from '../audio/sfx';
+import { currentSeasonId, seasonsActive } from '../game/season';
 import { loadDuckTintImages } from '../render/assets';
 import { CloseIcon, EggIcon, WaterIcon } from './icons';
 
@@ -367,10 +368,47 @@ export function WaterBoard({
   const outgrowing = state.ducks.length > 0 && provision < requirement * 0.999;
   const stagnating = view.features.filter((f) => !f.covered && f.freshness < 0.85).length;
 
+  // 9c board dressing: the water wears the season too — fresher blue under
+  // spring rain, murkier in autumn (with drifting leaves), ICED pale in
+  // winter (and nobody swims a frozen pond). Summer is the baseline.
+  const seasonId = seasonsActive(state) ? currentSeasonId(state) : 'summer';
+  const frozen = seasonId === 'winter';
+  const waterFill =
+    seasonId === 'spring' ? '#1a4055' : seasonId === 'autumn' ? '#1d3a3d' : frozen ? '#9fc0d4' : '#163243';
+  // Deterministic decoration positions (no per-render randomness — CSS drives
+  // all motion): ice flecks in winter, floating leaves in autumn.
+  const flecks = useMemo(
+    () =>
+      Array.from({ length: 46 }, (_, i) => ({
+        x: ((i * 97) % (GW - 12)) + 6,
+        y: ((i * 61) % (GH - 12)) + 6,
+        w: 2 + ((i * 7) % 4),
+      })),
+    [],
+  );
+  const leaves = useMemo(
+    () =>
+      Array.from({ length: 9 }, (_, i) => ({
+        x: ((i * 151) % (GW - 20)) + 10,
+        y: ((i * 83) % (GH - 20)) + 10,
+      })),
+    [],
+  );
+  // Rain streaks: fixed pattern repeating every GH so the CSS translate loops
+  // seamlessly (see .water-rain in index.css; killed under reduced motion).
+  const rain = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => ({
+        x: ((i * 113) % (GW - 8)) + 4,
+        y: ((i * 71) % GH) - GH,
+      })),
+    [],
+  );
+
   // Ambient swimmers: recomputed only when the swimmer count or the pond's
   // feature LAYOUT changes — never on freshness/covered churn, which updates
   // every tick and would otherwise restart every drift animation constantly.
-  const swimCount = swimmerCount(access, requirement);
+  const swimCount = frozen ? 0 : swimmerCount(access, requirement);
   const featureLayoutKey = view.features.map((f) => `${f.x},${f.y}`).join('|');
   const swimmers = useMemo<Swimmer[]>(() => {
     if (swimCount <= 0) return [];
@@ -504,8 +542,23 @@ export function WaterBoard({
         shapeRendering="crispEdges"
         style={{ imageRendering: 'pixelated' }}
       >
-        {/* pond water base (offset below the pump rail in circulation mode) */}
-        <rect x={0} y={isFlow ? TILE : 0} width={GW} height={GH} rx={10} fill="#163243" />
+        {/* pond water base (offset below the pump rail in circulation mode) —
+            seasonally dressed (9c): iced pale in winter, murky in autumn. */}
+        <rect x={0} y={isFlow ? TILE : 0} width={GW} height={GH} rx={10} fill={waterFill} />
+        {frozen && (
+          <g pointerEvents="none" transform={isFlow ? `translate(0, ${TILE})` : undefined}>
+            {flecks.map((f, i) => (
+              <rect key={i} x={f.x} y={f.y} width={f.w} height={2} fill="#f5faff" opacity={0.45} />
+            ))}
+          </g>
+        )}
+        {seasonId === 'autumn' && (
+          <g pointerEvents="none" transform={isFlow ? `translate(0, ${TILE})` : undefined}>
+            {leaves.map((l, i) => (
+              <rect key={i} x={l.x} y={l.y} width={5} height={3} rx={1} fill={i % 2 ? '#c8853f' : '#a86a32'} opacity={0.8} />
+            ))}
+          </g>
+        )}
         {isFlow && (
           <>
             {/* THE RAILS: pumps mount above the pond, drains below — water
@@ -585,7 +638,25 @@ export function WaterBoard({
                   width={TILE - 2}
                   height={TILE - 2}
                   rx={4}
-                  fill={covered.has(key) ? '#1d4a55' : (x + y) % 2 ? '#1a3a4c' : '#173443'}
+                  // 9c: the tiles wear the season (winter ices pale; the
+                  // covered-vs-stagnant read survives every palette).
+                  fill={
+                    frozen
+                      ? covered.has(key)
+                        ? '#b7d6e6'
+                        : (x + y) % 2
+                          ? '#a4c6d9'
+                          : '#98bcd1'
+                      : covered.has(key)
+                        ? '#1d4a55'
+                        : seasonId === 'autumn'
+                          ? (x + y) % 2
+                            ? '#1c3d42'
+                            : '#193740'
+                          : (x + y) % 2
+                            ? '#1a3a4c'
+                            : '#173443'
+                  }
                 />
                 {/* Terrain (Phase 5 juice, water assessment fix ③): a blocked
                     tile — rock or reeds, alternating for variety — never
@@ -776,6 +847,21 @@ export function WaterBoard({
                 </g>
               );
             })}
+          </g>
+        )}
+        {/* Spring rain (9c): a fixed streak pattern the CSS loops downward by
+            one pond-height — seamless, and killed under reduced motion. */}
+        {seasonId === 'spring' && (
+          <g pointerEvents="none" transform={isFlow ? `translate(0, ${TILE})` : undefined}>
+            <g className="water-rain">
+              {rain.map((r, i) => (
+                <g key={i}>
+                  <line x1={r.x} y1={r.y} x2={r.x - 3} y2={r.y - 10} stroke="#9fd0ec" strokeWidth={1} opacity={0.38} />
+                  <line x1={r.x} y1={r.y + GH} x2={r.x - 3} y2={r.y + GH - 10} stroke="#9fd0ec" strokeWidth={1} opacity={0.38} />
+                  <line x1={r.x} y1={r.y + GH * 2} x2={r.x - 3} y2={r.y + GH * 2 - 10} stroke="#9fd0ec" strokeWidth={1} opacity={0.38} />
+                </g>
+              ))}
+            </g>
           </g>
         )}
       </svg>
