@@ -7,15 +7,32 @@
  */
 
 const MUTE_KEY = 'duck-homestead-muted';
+const VOLUME_KEY = 'duck-homestead-volume';
 
 let ctx: AudioContext | null = null;
+/** Master gain every effect routes through — the volume knob (playtest,
+ *  2026-07-12: 'incredibly loud when on'). Squared for a perceptual-ish
+ *  taper, so 50% reads as half as loud, not slightly-less-deafening. */
+let master: GainNode | null = null;
 let muted = readMuted();
+let volume = readVolume();
 
 function readMuted(): boolean {
   try {
     return localStorage.getItem(MUTE_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+function readVolume(): number {
+  try {
+    const raw = localStorage.getItem(VOLUME_KEY);
+    if (raw == null) return 0.5; // half by default — full blast is opt-in now
+    const v = Number(raw);
+    return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
+  } catch {
+    return 0.5;
   }
 }
 
@@ -32,8 +49,22 @@ export function setMuted(v: boolean): void {
   }
 }
 
+export function getVolume(): number {
+  return volume;
+}
+
+export function setVolume(v: number): void {
+  volume = Math.max(0, Math.min(1, v));
+  if (master) master.gain.value = volume * volume;
+  try {
+    localStorage.setItem(VOLUME_KEY, String(volume));
+  } catch {
+    /* ignore */
+  }
+}
+
 function audio(): AudioContext | null {
-  if (muted) return null;
+  if (muted || volume <= 0) return null;
   try {
     if (!ctx) {
       const Ctx =
@@ -41,11 +72,21 @@ function audio(): AudioContext | null {
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       ctx = new Ctx();
     }
+    if (!master) {
+      master = ctx.createGain();
+      master.gain.value = volume * volume;
+      master.connect(ctx.destination);
+    }
     if (ctx.state === 'suspended') void ctx.resume();
     return ctx;
   } catch {
     return null;
   }
+}
+
+/** Where every effect connects — the master bus (never raw destination). */
+function bus(c: AudioContext): AudioNode {
+  return master ?? c.destination;
 }
 
 /** One enveloped oscillator note. */
@@ -64,7 +105,7 @@ function note(
   gain.gain.setValueAtTime(0.0001, start);
   gain.gain.exponentialRampToValueAtTime(peak, start + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(bus(c));
   osc.start(start);
   osc.stop(start + dur + 0.02);
 }
@@ -90,7 +131,7 @@ export function playPlace() {
   osc.frequency.exponentialRampToValueAtTime(110, t + 0.12);
   gain.gain.setValueAtTime(0.18, t);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(bus(c));
   osc.start(t);
   osc.stop(t + 0.16);
 }
@@ -115,7 +156,7 @@ export function playRemove() {
   osc.frequency.exponentialRampToValueAtTime(98, t + 0.18);
   gain.gain.setValueAtTime(0.16, t);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(bus(c));
   osc.start(t);
   osc.stop(t + 0.22);
 }
@@ -161,7 +202,7 @@ export function playDive() {
   osc.frequency.exponentialRampToValueAtTime(760, t + 0.3); // rising = closing in
   gain.gain.setValueAtTime(0.12, t);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(bus(c));
   osc.start(t);
   osc.stop(t + 0.36);
 }
@@ -180,7 +221,7 @@ export function playScare() {
   osc.frequency.exponentialRampToValueAtTime(1320, t + 0.22);
   gain.gain.setValueAtTime(0.16, t);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(bus(c));
   osc.start(t);
   osc.stop(t + 0.28);
   // Two quick wing-flap thumps trailing the whoosh.
@@ -200,7 +241,7 @@ export function playAttack() {
   osc.frequency.exponentialRampToValueAtTime(120, t + 0.22);
   gain.gain.setValueAtTime(0.2, t);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(bus(c));
   osc.start(t);
   osc.stop(t + 0.28);
 }

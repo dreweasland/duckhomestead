@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { isMuted, setMuted } from '../audio/sfx';
+import { getVolume, isMuted, playCollect, setMuted, setVolume } from '../audio/sfx';
 import type { GameState, Resource } from '../game/state';
 import { rankProgress, rankTitle, xpForLevel } from '../game/rank';
 import { fmt } from './format';
@@ -23,6 +23,7 @@ export function HUD({ state }: { state: GameState }) {
   const prog = rankProgress(state.rank, state.xp);
   const need = xpForLevel(state.rank);
   const [muted, setMutedState] = useState(isMuted());
+  const [vol, setVolState] = useState(() => Math.round(getVolume() * 100));
   const [ranksOpen, setRanksOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const { display: eggDisplay, flashKey } = useEasedCounter(state.resources.eggs);
@@ -50,13 +51,34 @@ export function HUD({ state }: { state: GameState }) {
       <div className="flex items-center gap-2">
         <DuckIcon size={28} title="Duck Homestead" />
         <h1 className="text-lg font-bold tracking-wide">Duck Homestead</h1>
+        {/* Volume: the knob (playtest 2026-07-12: full blast was the only
+            "on"). Sliding while muted unmutes — you asked for sound. */}
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={muted ? 0 : vol}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setVolState(v);
+            setVolume(v / 100);
+            if (muted && v > 0) {
+              setMuted(false);
+              setMutedState(false);
+            }
+          }}
+          onPointerUp={() => playCollect()} // hear the level you just set
+          className="ml-auto w-16 accent-[#e2b94f]"
+          title={`Volume ${muted ? 0 : vol}%`}
+          aria-label="Volume"
+        />
         <button
           onClick={() => {
             const v = !muted;
             setMuted(v);
             setMutedState(v);
           }}
-          className="ml-auto rounded p-1 text-[#9a8a6a] hover:bg-[#2a2018] hover:text-[#f5ecd8]"
+          className="rounded p-1 text-[#9a8a6a] hover:bg-[#2a2018] hover:text-[#f5ecd8]"
           title={muted ? 'Unmute' : 'Mute'}
           aria-label={muted ? 'Unmute' : 'Mute'}
         >
