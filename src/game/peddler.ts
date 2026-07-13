@@ -70,23 +70,22 @@ function rollBarter(state: GameState, id: string, rng: () => number): BarterOffe
   return { id, kind: 'barter', gives, givesAmount, wants, wantsAmount, seasonal: seasonal || undefined };
 }
 
-function rollBloodline(state: GameState, id: string, rng: () => number): BloodlineOffer {
+/** One weighted draw from the cart's honest stock (never P — see weights). */
+function rollStockGene(rng: () => number): Gene {
   const weights = P.DUCK_GENE_WEIGHTS;
   const genes = Object.keys(weights) as Gene[];
   const total = genes.reduce((a, g) => a + weights[g], 0);
-  const genome: Genome = [];
-  for (let i = 0; i < BALANCE.GENOME.SLOTS; i++) {
-    let r = rng() * total;
-    let pick: Gene = 'D';
-    for (const g of genes) {
-      r -= weights[g];
-      if (r < 0) {
-        pick = g;
-        break;
-      }
-    }
-    genome.push(pick);
+  let r = rng() * total;
+  for (const g of genes) {
+    r -= weights[g];
+    if (r < 0) return g;
   }
+  return 'D';
+}
+
+function rollBloodline(state: GameState, id: string, rng: () => number): BloodlineOffer {
+  const genome: Genome = [];
+  for (let i = 0; i < BALANCE.GENOME.SLOTS; i++) genome.push(rollStockGene(rng));
   const allele = () => (rng() < 0.5 ? 'Bl' : 'bl');
   const genotype = [allele(), allele()] as Genotype;
   const peak = state.contracts.peakEggRate ?? 0;
@@ -109,6 +108,7 @@ export function generatePeddlerOffer(state: GameState, rng: () => number = Math.
 function restock(state: GameState, rng: () => number = Math.random): void {
   state.peddler.offers = [];
   for (let i = 0; i < P.OFFER_SLOTS; i++) state.peddler.offers.push(generatePeddlerOffer(state, rng));
+  delete state.peddler.commissionUsed; // a fresh cart takes a fresh order
 }
 
 /** Board upkeep — online-only (tick.ts gates it), like the Grange: the cart
@@ -171,5 +171,71 @@ export function buyBloodline(state: GameState, offerId: string): ActionResult<Du
   };
   state.ducks.push(duck);
   state.peddler.offers.splice(idx, 1);
+  return done(duck);
+}
+
+/** Spin the cart early for dust — the Grange reroll's sibling. New goods, a
+ *  fresh commission slot; the natural restock clock is untouched. */
+export function restockNow(state: GameState, rng: () => number = Math.random): ActionResult<unknown> {
+  if (!peddlerOpen(state)) return fail('The Peddler hasn’t come yet');
+  const cost = P.RESTOCK_DUST;
+  if (state.dust < cost) return fail(`Need ${cost} dust`);
+  state.dust -= cost;
+  state.peddler.offers = [];
+  restock(state, rng);
+  return done(true);
+}
+
+/** A commission's slot locks: one entry per genome slot — a good gene to lock
+ *  it to, or null to roll from his stock. */
+export type CommissionLocks = readonly (Gene | null)[];
+
+/** What a made-to-order bird costs: minutes of peak rate, scaling per locked
+ *  slot, floored well above the walk-up bloodline. */
+export function commissionPrice(state: GameState, lockCount: number): number {
+  const peak = state.contracts.peakEggRate ?? 0;
+  const seconds = P.COMMISSION_PEAK_SECONDS_BASE + P.COMMISSION_PEAK_SECONDS_PER_LOCK * lockCount;
+  return Math.max(P.COMMISSION_PRICE_MIN, Math.round(peak * seconds));
+}
+
+/**
+ * Commission a bloodline duck to spec: lock 1..MAX good slots (L/V/H only —
+ * never Prime, and he won't take money to place a Dud), the rest rolls his
+ * honest stock. Arrives adult with no lineage (kinship 0), auto-read only if
+ * the reader is built, color never fills the dex — every bloodline law holds.
+ * One order per cart visit; any restock (natural or dust-bought) reopens it.
+ */
+export function commissionBloodline(
+  state: GameState,
+  sex: 'drake' | 'hen',
+  locks: CommissionLocks,
+  rng: () => number = Math.random,
+): ActionResult<Duck> {
+  if (!peddlerOpen(state)) return fail('The Peddler hasn’t come yet');
+  if (state.peddler.commissionUsed) return fail('His order book is full — after the next restock');
+  if (locks.length !== BALANCE.GENOME.SLOTS) return fail('Bad commission');
+  const lockCount = locks.filter((g) => g != null).length;
+  if (lockCount < 1) return fail('Name at least one slot');
+  if (lockCount > P.COMMISSION_MAX_LOCKS) return fail(`He'll take at most ${P.COMMISSION_MAX_LOCKS} slots to order`);
+  if (locks.some((g) => g != null && g !== 'L' && g !== 'V' && g !== 'H')) return fail('He deals in good genes only');
+  const price = commissionPrice(state, lockCount);
+  if (state.resources.eggs < price) return fail(`Need ${price} eggs`);
+  const home = state.ducks.filter((d) => d.site !== 'winter').length;
+  if (home >= coopCapacity(state)) return fail('No housing — build or upgrade a coop first');
+  state.resources.eggs -= price;
+  const genome: Genome = locks.map((g) => g ?? rollStockGene(rng));
+  const allele = () => (rng() < 0.5 ? 'Bl' : 'bl');
+  const duck: Duck = {
+    id: `d${state.nextDuckId++}`,
+    genotype: [allele(), allele()] as Genotype,
+    genome,
+    genomeKnown: state.geneReader, // the reader reads every arrival — never a per-duck click
+    sex,
+    stage: 'adult',
+    ageTicks: 0,
+    // No ancestors, no gen: founder blood — kinship 0 by construction.
+  };
+  state.ducks.push(duck);
+  state.peddler.commissionUsed = true;
   return done(duck);
 }

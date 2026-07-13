@@ -499,6 +499,27 @@ export const BALANCE = {
      *  mostly honest middling birds): the point is the CLEAN LINEAGE, not
      *  power. Never includes P. */
     DUCK_GENE_WEIGHTS: { L: 2, V: 2, H: 2, D: 3 } as Record<string, number>,
+    /** RESTOCK NOW: spend dust to spin the cart early — the Grange reroll's
+     *  sibling, pointing the glutted currency at the endgame chase (a good
+     *  barter or bloodline is worth hunting). The natural clock is untouched
+     *  (same law as the Grange's manual reroll); the commission slot refreshes
+     *  with the cart — a restock IS a fresh visit. */
+    RESTOCK_DUST: 8,
+    /**
+     * COMMISSIONS (2026-07-13 — the quality phase's BIG egg sink): a made-to-
+     * order bloodline. Name up to MAX_LOCKS slots of the genome (good genes
+     * only — locking a Dud is a trap, and Prime stays mutation-only law); the
+     * rest rolls his honest DUCK_GENE_WEIGHTS stock. Priced steeply above the
+     * walk-up bird — minutes of peak rate, scaling per locked slot — so a
+     * commission is the endgame treasury purchase the culling phase never had.
+     * One order per cart visit (he crafts slowly); guardrails hold: never
+     * Prime, no lineage (kinship 0), the dex is bred, never bought — and with
+     * locks capped at 3 of 6, a perfect duck is still BRED, never bought.
+     */
+    COMMISSION_MAX_LOCKS: 3,
+    COMMISSION_PEAK_SECONDS_BASE: 180,
+    COMMISSION_PEAK_SECONDS_PER_LOCK: 240,
+    COMMISSION_PRICE_MIN: 1000,
   },
 
   // ── Milestones ──────────────────────────────────────────────────────
@@ -977,6 +998,19 @@ export const BALANCE = {
      */
     CLUTCH_COST_PEAK_SECONDS: 25,
     CLUTCH_COST_MIN: 8,
+    /**
+     * DOUBLE CLUTCH (2026-07-13 — the quality phase gets a price): a per-pair
+     * toggle that lays a double-size clutch at a steep premium (2× ducklings
+     * for 3× the eggs — per-duckling 1.5× the base rate). The breeding
+     * endgame's activity is generating and filtering genome rolls, and the
+     * culling phase bought NOTHING (culls yield/cost zero, coops stop
+     * mattering) — this sells that phase hatch THROUGHPUT, on the same
+     * scale-proof peak-seconds base as the clutch itself. Toggle off and the
+     * pair is a plain budget line again; the premium only tempts a homestead
+     * with surplus to burn, which is exactly the player it's for.
+     */
+    DOUBLE_CLUTCH_SIZE_MULT: 2,
+    DOUBLE_CLUTCH_COST_MULT: 3,
     INCUBATE_S: 60, // fertilized egg -> duckling
     MATURE_DUCKLING_S: 180, // duckling -> juvenile (gated by duckling ration)
     MATURE_JUVENILE_S: 180, // juvenile -> adult

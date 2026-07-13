@@ -168,21 +168,21 @@ export function resourceFlow(state: GameState, resource: Resource): { in: number
     // FERTILIZED_EGG_COST per interval, scaled by the drake-ration breed rate.
     const B = BALANCE.BREEDING;
     const byId = new Map(state.ducks.map((d) => [d.id, d]));
-    let pairs = 0;
+    let costPerInterval = 0; // Σ per-pair clutch cost — double-clutch pairs pay their premium
     for (const p of state.breedingPairs) {
       const dr = byId.get(p.drakeId);
       const he = byId.get(p.henId);
       if (!dr || dr.sex !== 'drake' || dr.stage !== 'adult' || dr.wounded) continue;
       if (!he || he.sex !== 'hen' || he.stage !== 'adult' || he.wounded) continue;
-      pairs++;
+      costPerInterval += clutchCost(state, p.doubleClutch);
     }
     // A packed flock pins every clutch clock (hens don't nest without housing
     // headroom) — the drain is zero until space frees, and the panel says so.
     let homeCount = 0;
     for (const d of state.ducks) if (d.site !== 'winter') homeCount++;
-    if (pairs > 0 && homeCount < coopCapacity(state)) {
+    if (costPerInterval > 0 && homeCount < coopCapacity(state)) {
       const breedRate = state.drakeNutrition?.breedRate ?? 1;
-      outflow += (pairs * clutchCost(state) * breedRate) / B.CLUTCH_INTERVAL_S;
+      outflow += (costPerInterval * breedRate) / B.CLUTCH_INTERVAL_S;
     }
   }
   if ((INGREDIENTS as readonly string[]).includes(resource)) {
@@ -659,6 +659,18 @@ export function removePair(state: GameState, pairId: string): ActionResult<unkno
   const idx = state.breedingPairs.findIndex((p) => p.id === pairId);
   if (idx < 0) return fail('No such pair');
   state.breedingPairs.splice(idx, 1);
+  return done(true);
+}
+
+/** Toggle a pair's double clutch — 2× the ducklings at 3× the egg cost, the
+ *  endgame throughput premium. A plain toggle: the next clutch to fire pays
+ *  (and lays) at whatever the flag says then; eggs already incubating keep
+ *  their paid size. */
+export function setDoubleClutch(state: GameState, pairId: string, on: boolean): ActionResult<unknown> {
+  const pair = state.breedingPairs.find((p) => p.id === pairId);
+  if (!pair) return fail('No such pair');
+  if (on) pair.doubleClutch = true;
+  else delete pair.doubleClutch;
   return done(true);
 }
 

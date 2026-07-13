@@ -653,8 +653,23 @@ function Breeding({
                 </span>
               </button>
               <button
+                onClick={() => engine.setDoubleClutch(p.id, !p.doubleClutch)}
+                title={
+                  p.doubleClutch
+                    ? 'Double clutch ON — 2× the ducklings per clutch at 3× the egg cost. Tap to drop back to a plain clutch.'
+                    : 'Double clutch: the pair lays 2× the ducklings per clutch at 3× the egg cost — pay the premium to push a breeding program faster.'
+                }
+                className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
+                  p.doubleClutch
+                    ? 'bg-[#3a3218] text-[#e8c45a] ring-1 ring-[#e8c45a]'
+                    : 'text-[#7a6a4a] hover:bg-[#33271c] hover:text-[#c9b88f]'
+                }`}
+              >
+                2×
+              </button>
+              <button
                 onClick={() => engine.unpair(p.id)}
-                className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
+                className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-[#b06a6a] hover:bg-[#33271c]"
               >
                 unpair
               </button>
@@ -683,17 +698,18 @@ function Breeding({
                 waiting — coops full (clutch ready)
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating`}
               </div>
-            ) : next <= 0 && state.resources.eggs < clutchCost(state) ? (
+            ) : next <= 0 && state.resources.eggs < clutchCost(state, p.doubleClutch) ? (
               <div
                 className="mt-0.5 text-[10px] font-bold text-[#e8a35a]"
                 title="A clutch IS eggs — laying one draws them from storage (priced off your run's peak lay rate). It fires the moment you can afford it."
               >
-                clutch ready — needs {clutchCost(state)} eggs
+                clutch ready — needs {clutchCost(state, p.doubleClutch)} eggs
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
               </div>
             ) : (
               <div className="mt-0.5 text-[10px] text-[#9a8a6a]">
-                clutch {Math.ceil(next)}s · {clutchCost(state)} eggs
+                clutch {Math.ceil(next)}s · {clutchCost(state, p.doubleClutch)} eggs
+                {p.doubleClutch && <span className="font-bold text-[#e8c45a]"> · 2× brood</span>}
                 {p.incubating.length > 0 && ` · ${p.incubating.length} incubating (hatch ${Math.ceil(soonest)}s)`}
               </div>
             )}

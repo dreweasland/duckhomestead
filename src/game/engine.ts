@@ -21,6 +21,7 @@ import {
   removePair,
   moveStation,
   placeStation,
+  setDoubleClutch,
   setDuckName,
   setGenomeTarget,
   rerollModule,
@@ -50,7 +51,7 @@ import {
 } from './contracts';
 import { goodGeneCount } from './genetics';
 import { flockRatio, type Duck } from './state';
-import { acceptBarter, buyBloodline } from './peddler';
+import { acceptBarter, buyBloodline, commissionBloodline, restockNow, type CommissionLocks } from './peddler';
 import { rewindWoundsToBrink, scareOff, type ScareResult } from './predators';
 import { tryTendDrop } from './loot';
 import { conditionTarget } from './nutrition';
@@ -708,6 +709,12 @@ export class GameEngine {
     this.notify();
     return r;
   }
+  /** Toggle a pair's double clutch — 2× ducklings at 3× cost (the premium). */
+  setDoubleClutch(pairId: string, on: boolean): ActionResult<unknown> {
+    const r = setDoubleClutch(this.state, pairId, on);
+    this.notify();
+    return r;
+  }
   /** Build the gene-reader: reveals the whole flock now + auto-reads new ducks. */
   buildGeneReader(): ActionResult<{ revealed: number }> {
     const r = buildGeneReader(this.state);
@@ -1002,6 +1009,18 @@ export class GameEngine {
   /** Buy a bloodline duck — clean outside blood, unrelated to the flock. */
   buyBloodline(offerId: string): ActionResult<unknown> {
     const r = buyBloodline(this.state, offerId);
+    this.notify();
+    return r;
+  }
+  /** Spin the cart early for dust — new goods, a fresh commission slot. */
+  restockPeddler(): ActionResult<unknown> {
+    const r = restockNow(this.state);
+    this.notify();
+    return r;
+  }
+  /** Commission a bloodline to spec — locked slots to order, the rest his stock. */
+  commissionBloodline(sex: 'drake' | 'hen', locks: CommissionLocks): ActionResult<unknown> {
+    const r = commissionBloodline(this.state, sex, locks);
     this.notify();
     return r;
   }

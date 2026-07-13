@@ -129,6 +129,8 @@ export function deserialize(raw: string, now: number): GameState {
           ? Math.max(0, parsed.peddler!.refreshRemaining)
           : base.peddler.refreshRemaining,
         nextOfferId: parsed.peddler?.nextOfferId ?? 1,
+        // One commission per visit — anything but an explicit true reopens it.
+        ...(parsed.peddler?.commissionUsed === true ? { commissionUsed: true } : {}),
       },
       doseCooldownRemaining: parsed.doseCooldownRemaining ?? 0,
       // Phase 3 loot defaults for older saves.

@@ -288,6 +288,9 @@ export interface BreedingPair {
   clutchProgress: number;
   /** Incubation progress (seconds) per fertilized egg currently incubating. */
   incubating: number[];
+  /** Double clutch: this pair lays 2× the ducklings at 3× the egg cost — the
+   *  endgame throughput premium (see BALANCE.BREEDING.DOUBLE_CLUTCH_*). */
+  doubleClutch?: boolean;
 }
 
 /** Condition-stress drain (playtest rework): harm events knock a chunk off the
@@ -853,6 +856,9 @@ export interface PeddlerState {
   /** Seconds until the whole cart restocks (online-only, like the Grange). */
   refreshRemaining: number;
   nextOfferId: number;
+  /** One made-to-order bloodline per cart visit — set by a commission,
+   *  cleared by any restock (natural or dust-bought). */
+  commissionUsed?: boolean;
 }
 
 export function initialPeddler(): PeddlerState {

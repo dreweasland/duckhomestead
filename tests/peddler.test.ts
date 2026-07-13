@@ -4,8 +4,11 @@ import { kinship } from '../src/game/genetics';
 import {
   acceptBarter,
   buyBloodline,
+  commissionBloodline,
+  commissionPrice,
   generatePeddlerOffer,
   ingredientWorth,
+  restockNow,
   runPeddler,
 } from '../src/game/peddler';
 import { deserialize, serialize } from '../src/game/save';
@@ -165,5 +168,100 @@ describe('bloodline: the outcross valve, honestly priced, never a shortcut', () 
     s.resources.eggs = o.priceEggs;
     expect(buyBloodline(s, o.id).ok).toBe(true);
     expect(s.dexSeen).toHaveLength(0);
+  });
+});
+
+describe('restock now: dust spins the cart, the clock keeps ticking', () => {
+  it('deducts dust, rerolls the goods, leaves the natural clock alone', () => {
+    const s = atRank();
+    runPeddler(s, 1); // fill the board, start the clock
+    const clock0 = s.peddler.refreshRemaining;
+    const firstIds = s.peddler.offers.map((o) => o.id);
+    s.dust = P.RESTOCK_DUST - 1;
+    expect(restockNow(s).ok).toBe(false); // dust short
+    expect(s.peddler.offers.map((o) => o.id)).toEqual(firstIds);
+    s.dust = P.RESTOCK_DUST;
+    expect(restockNow(s).ok).toBe(true);
+    expect(s.dust).toBe(0);
+    expect(s.peddler.offers).toHaveLength(P.OFFER_SLOTS);
+    expect(s.peddler.offers.map((o) => o.id)).not.toEqual(firstIds);
+    expect(s.peddler.refreshRemaining).toBe(clock0); // the Grange law: a manual spin never resets the clock
+  });
+
+  it('a spin reopens the commission slot — a restock IS a fresh visit', () => {
+    const s = atRank();
+    runPeddler(s, 1);
+    s.peddler.commissionUsed = true;
+    s.dust = P.RESTOCK_DUST;
+    expect(restockNow(s).ok).toBe(true);
+    expect(s.peddler.commissionUsed).toBeUndefined();
+  });
+});
+
+describe('commissions: made to order, priced like a treasury purchase', () => {
+  const LOCKS_2 = ['L', null, 'H', null, null, null] as const;
+
+  it('prices off the peak per locked slot, floored well above the walk-up bird', () => {
+    const s = atRank();
+    expect(commissionPrice(s, 1)).toBe(P.COMMISSION_PRICE_MIN); // peak 0 → the floor
+    s.contracts.peakEggRate = 100;
+    expect(commissionPrice(s, 1)).toBe(100 * (P.COMMISSION_PEAK_SECONDS_BASE + P.COMMISSION_PEAK_SECONDS_PER_LOCK));
+    expect(commissionPrice(s, 3)).toBe(
+      100 * (P.COMMISSION_PEAK_SECONDS_BASE + 3 * P.COMMISSION_PEAK_SECONDS_PER_LOCK),
+    );
+    // The point of the price: a full commission dwarfs the walk-up bloodline.
+    expect(commissionPrice(s, 3)).toBeGreaterThan(100 * P.DUCK_PRICE_PEAK_SECONDS * 10);
+  });
+
+  it('he deals in good genes only, 1 to MAX locks, one order per visit', () => {
+    const s = build({ coop: 1 });
+    s.rank = P.INTRO_RANK;
+    s.resources.eggs = 1_000_000;
+    expect(commissionBloodline(s, 'hen', [null, null, null, null, null, null]).ok).toBe(false); // no locks
+    expect(commissionBloodline(s, 'hen', ['L', 'L', 'L', 'L', null, null]).ok).toBe(false); // over the cap
+    expect(commissionBloodline(s, 'hen', ['D', null, null, null, null, null]).ok).toBe(false); // a paid Dud is a trap
+    expect(commissionBloodline(s, 'hen', ['P', null, null, null, null, null]).ok).toBe(false); // Prime stays mutation-only
+    expect(commissionBloodline(s, 'hen', ['L', null, null, null, null]).ok).toBe(false); // malformed
+    expect(commissionBloodline(s, 'hen', [...LOCKS_2]).ok).toBe(true);
+    expect(commissionBloodline(s, 'hen', [...LOCKS_2]).ok).toBe(false); // the order book is full
+  });
+
+  it('the bird lands to spec: locked slots guaranteed, the rest honest stock, every bloodline law held', () => {
+    const s = build({ coop: 1 });
+    s.rank = P.INTRO_RANK;
+    s.contracts.peakEggRate = 10;
+    s.dexSeen = [];
+    for (const d of s.ducks) d.ancestors = ['x1', 'x2']; // fake deep lineage on the seed flock
+    const price = commissionPrice(s, 2);
+    s.resources.eggs = price - 1;
+    expect(commissionBloodline(s, 'drake', [...LOCKS_2]).ok).toBe(false); // eggs short
+    s.resources.eggs = price;
+    const before = s.ducks.length;
+    const r = commissionBloodline(s, 'drake', [...LOCKS_2]);
+    expect(r.ok).toBe(true);
+    expect(s.resources.eggs).toBe(0);
+    expect(s.ducks).toHaveLength(before + 1);
+    const bird = s.ducks[s.ducks.length - 1];
+    expect(bird.sex).toBe('drake');
+    expect(bird.stage).toBe('adult');
+    expect(bird.genome[0]).toBe('L');
+    expect(bird.genome[2]).toBe('H');
+    expect(bird.genome.includes('P')).toBe(false); // never Prime
+    expect(bird.ancestors).toBeUndefined();
+    for (const d of s.ducks) if (d !== bird) expect(kinship(bird, d)).toBe(0);
+    expect(s.dexSeen).toHaveLength(0); // the dex is bred, never bought
+  });
+
+  it('refuses without housing; the natural restock reopens the book', () => {
+    const s = build({ coop: 1 });
+    s.rank = P.INTRO_RANK;
+    s.resources.eggs = 1_000_000;
+    while (s.ducks.length < 4) s.ducks.push({ ...(s.ducks[0] as Duck), id: `f${s.ducks.length}` });
+    expect(commissionBloodline(s, 'hen', [...LOCKS_2]).ok).toBe(false); // packed coop
+    s.ducks = s.ducks.slice(0, 2);
+    expect(commissionBloodline(s, 'hen', [...LOCKS_2]).ok).toBe(true);
+    runPeddler(s, P.REFRESH_S + 1); // the cart's own clock rotates the board
+    expect(s.peddler.commissionUsed).toBeUndefined();
+    expect(commissionBloodline(s, 'hen', [...LOCKS_2]).ok).toBe(true);
   });
 });

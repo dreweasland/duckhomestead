@@ -10,12 +10,18 @@ const B = BALANCE.BREEDING;
  * What one clutch draws from storage — priced in seconds of the RUN'S PEAK egg
  * rate (the delivery-quota base, tracked all-tiers in contracts.ts), so a
  * clutch costs the same FRACTION of your economy at any scale; MIN floors the
- * cold start. The single source of truth for the sim, the flow panel, and the
- * pair card.
+ * cold start. A double-clutch pair pays the premium multiple on the same base.
+ * The single source of truth for the sim, the flow panel, and the pair card.
  */
-export function clutchCost(state: GameState): number {
+export function clutchCost(state: GameState, double = false): number {
   const peak = state.contracts.peakEggRate ?? 0;
-  return Math.max(B.CLUTCH_COST_MIN, Math.round(peak * B.CLUTCH_COST_PEAK_SECONDS));
+  const base = Math.max(B.CLUTCH_COST_MIN, Math.round(peak * B.CLUTCH_COST_PEAK_SECONDS));
+  return double ? base * B.DOUBLE_CLUTCH_COST_MULT : base;
+}
+
+/** Fertilized eggs per clutch for a pair — doubled while the premium is on. */
+export function pairClutchSize(pair: { doubleClutch?: boolean }): number {
+  return pair.doubleClutch ? B.CLUTCH_SIZE * B.DOUBLE_CLUTCH_SIZE_MULT : B.CLUTCH_SIZE;
 }
 
 /**
@@ -107,16 +113,17 @@ export function runBreeding(state: GameState, step: number, matureRate = 1, bree
     // so a full flock pins the clutch clock too, and freeing space triggers
     // lay → real incubation → hatch, in that order. (Eggs already incubating
     // when housing fills still park at hatch-ready — they're paid for.)
-    const cost = clutchCost(state);
+    const cost = clutchCost(state, pair.doubleClutch);
+    const size = pairClutchSize(pair);
     while (
       pair.clutchProgress >= B.CLUTCH_INTERVAL_S &&
-      pair.incubating.length + B.CLUTCH_SIZE <= B.CLUTCH_SIZE * 2 &&
+      pair.incubating.length + size <= size * 2 && // queue holds two clutches at the pair's size
       homeCount < capacity
     ) {
       if (state.resources.eggs < cost) break; // waits — progress clamps below
       state.resources.eggs -= cost;
       pair.clutchProgress -= B.CLUTCH_INTERVAL_S;
-      for (let i = 0; i < B.CLUTCH_SIZE; i++) pair.incubating.push(0);
+      for (let i = 0; i < size; i++) pair.incubating.push(0);
     }
     if (pair.clutchProgress > B.CLUTCH_INTERVAL_S) pair.clutchProgress = B.CLUTCH_INTERVAL_S; // cap if queue full
 
