@@ -444,13 +444,15 @@ function FlockHealth({ engine, state }: { engine: GameEngine; state: GameState }
   // Ducks currently carrying an overcrowding wound (persist until treated) — the
   // flock-context surfacing of the injuries (treat them in The Watch).
   const injured = state.ducks.filter((d) => d.wounded && d.woundSource === 'overcrowd').length;
-  // What "cull excess" can ACTUALLY release — unsecured, non-paired drakes — capped
-  // at the excess. Paired/secured studs are kept, so this can be < excess.
+  // What "cull excess" can ACTUALLY release — unsecured, unposted, non-paired
+  // drakes (the exact keeper set cullExcessDrakes skips) — capped at the excess.
+  // Paired/secured/posted studs are kept, so this can be < excess.
   const pairedIds = new Set(state.breedingPairs.flatMap((p) => [p.drakeId, p.henId]));
   const cullable = Math.min(
     r.excess,
-    state.ducks.filter((d) => d.stage === 'adult' && d.sex === 'drake' && !d.secured && !pairedIds.has(d.id))
-      .length,
+    state.ducks.filter(
+      (d) => d.stage === 'adult' && d.sex === 'drake' && !d.secured && !d.post && !pairedIds.has(d.id),
+    ).length,
   );
   return (
     <div className={`mb-3 rounded-md px-3 py-2 ${r.injuring ? 'bg-[#2a1818] ring-1 ring-[#5a2a2a]' : 'bg-[#1f1812]'}`}>
@@ -1241,12 +1243,16 @@ function FlockPanelInner({
             {/* Bulk release: cull the SHOWN set (current filters) whose match-to-
                 target is below the cutoff, in one sweep. Only READ ducks are
                 eligible (an unread "?" can't be judged). Protects secured (prize)
-                + paired (in-use) birds — use the per-row release for those.
-                Roster tab only — it's a management tool, not a breeding one. */}
+                + paired (in-use) + posted (working) birds — the same keeper set
+                cullDucks skips, so the count IS the sweep (a posted duck once
+                inflated the button to a "Release 6" that released nothing).
+                Use the per-row release for a keeper. Roster tab only — it's a
+                management tool, not a breeding one. */}
             {tab === 'roster' && shown.length > 0 && (() => {
               const underCutoff = shown.filter(
                 (d) =>
                   !d.secured &&
+                  !d.post &&
                   !pairedIds.has(d.id) &&
                   d.genomeKnown &&
                   targetMatch(d.genome, target) < cullQuality,
@@ -1309,7 +1315,7 @@ function FlockPanelInner({
                     </button>
                   </div>
                   <div className="mt-1 flex items-center gap-1.5 text-[9px] text-[#7a6a4a]">
-                    <span>matches the {target.map((g) => g).join('')} target · keeps secured + paired</span>
+                    <span>matches the {target.map((g) => g).join('')} target · keeps secured + paired + posted</span>
                     <button
                       onClick={() => setKeepPrime((v) => !v)}
                       className={`rounded-full px-1.5 py-0.5 font-bold transition ${
