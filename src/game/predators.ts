@@ -118,34 +118,35 @@ export function attackChance(state: GameState, def: PredatorDef, present: boolea
   return def.baseAttackChance * (1 - defenseFloor(state, def.defense)) * (1 - presence);
 }
 
-/** The most urgent predator state for the UI telegraph: an open window outranks
- *  an incoming one; among equals, the soonest. Null when all is calm. Pure read
- *  off GameState (the UI never simulates). */
+/** A predator state for the UI telegraph. Pure read off GameState (the UI
+ *  never simulates). */
 export interface Threat {
   def: PredatorDef;
   phase: 'open' | 'incoming';
   /** Seconds left in the open window, or seconds until the incoming one opens. */
   seconds: number;
 }
-export function currentThreat(state: GameState): Threat | null {
-  if (!predatorsActive(state)) return null;
-  let best: Threat | null = null;
+/** EVERY live threat, most urgent first: open windows before incoming ones,
+ *  soonest first within each phase. Overlapping windows (owl + raccoon can
+ *  hunt at once) are all reported — the telegraph shows the whole night, never
+ *  just the winner. Empty when all is calm. */
+export function currentThreats(state: GameState): Threat[] {
+  if (!predatorsActive(state)) return [];
+  const out: Threat[] = [];
   for (const def of PREDATOR_DEFS) {
     const ps = state.predators[def.id];
     if (!ps) continue;
-    let t: Threat | null = null;
-    if (windowOpen(ps)) t = { def, phase: 'open', seconds: ps.windowRemaining };
-    else if (incoming(ps, def)) t = { def, phase: 'incoming', seconds: ps.timeToNextWindow };
-    if (!t) continue;
-    if (!best) {
-      best = t;
-    } else if (t.phase === 'open' && best.phase === 'incoming') {
-      best = t;
-    } else if (t.phase === best.phase && t.seconds < best.seconds) {
-      best = t;
-    }
+    if (windowOpen(ps)) out.push({ def, phase: 'open', seconds: ps.windowRemaining });
+    else if (incoming(ps, def)) out.push({ def, phase: 'incoming', seconds: ps.timeToNextWindow });
   }
-  return best;
+  return out.sort((a, b) =>
+    a.phase !== b.phase ? (a.phase === 'open' ? -1 : 1) : a.seconds - b.seconds,
+  );
+}
+/** The single most urgent threat — the head of currentThreats (for the spots
+ *  that only fit one: the Watch header, guide gating, layout offsets). */
+export function currentThreat(state: GameState): Threat | null {
+  return currentThreats(state)[0] ?? null;
 }
 
 /** Ducks that may be targeted by a fresh attack: not secured, not already

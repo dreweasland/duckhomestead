@@ -21,6 +21,7 @@ import {
   windowOpen,
   activeStrike,
   currentThreat,
+  currentThreats,
   rewindWoundsToBrink,
   rollWindowAttacks,
   rollWoundSeverity,
@@ -142,6 +143,24 @@ describe('currentThreat — the UI telegraph selector', () => {
     const t = currentThreat(s);
     expect(t?.phase).toBe('open');
     expect(t?.seconds).toBe(30);
+  });
+
+  it('overlapping windows are ALL reported, most urgent first — never collapsed to the winner', () => {
+    const s = flock(4);
+    // Owl and raccoon hunting AT ONCE (independent clocks): both must show.
+    setOwl(s, { windowRemaining: 30, windowElapsed: 5, attacksFired: 0 });
+    s.predators.raccoon = { timeToNextWindow: 0, windowRemaining: 12, windowElapsed: 5, attacksFired: 0 };
+    const both = currentThreats(s);
+    expect(both).toHaveLength(2);
+    expect(both.map((t) => t.def.id)).toEqual(['raccoon', 'owl']); // both open → soonest-ending first
+    expect(both.every((t) => t.phase === 'open')).toBe(true);
+    expect(currentThreat(s)?.def.id).toBe('raccoon'); // the head stays the single-slot pick
+
+    // One hunting + one incoming: the open window leads, the incoming still shows.
+    const rac = PREDATOR_DEFS.find((d) => d.id === 'raccoon')!;
+    s.predators.raccoon = { timeToNextWindow: rac.warningLeadSec - 1, windowRemaining: 0, windowElapsed: 0, attacksFired: 0 };
+    const mixed = currentThreats(s);
+    expect(mixed.map((t) => `${t.def.id}:${t.phase}`)).toEqual(['owl:open', 'raccoon:incoming']);
   });
 });
 
