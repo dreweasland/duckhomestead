@@ -1720,6 +1720,11 @@ function FlockPanelInner({
                     { id: 'rest', label: 'The Flock', icon: <DuckRowIcon />, ducks: shown.filter((d) => !d.secured && d.site !== 'winter' && !d.post && !d.name) },
                   ].filter((sec) => sec.ducks.length > 0);
                   const soloFlock = sections.length === 1 && sections[0].id === 'rest';
+                  // A hidden header must never enforce its persisted collapse:
+                  // "The Flock" collapsed at scale, then a prestige shrinking
+                  // the roster to solo, left a BLANK list with no toggle to
+                  // expand it (playtest 2026-07-16) — solo always shows rows.
+                  const isCollapsed = (id: string) => !soloFlock && collapsedSections.has(id);
                   return sections.map((sec) => (
                     <div key={sec.id}>
                       {!soloFlock && (
@@ -1733,15 +1738,15 @@ function FlockPanelInner({
                             })
                           }
                           className="mb-1 flex w-full items-center gap-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-[#7a6a4a] hover:text-[#9a8a6a]"
-                          title={collapsedSections.has(sec.id) ? 'Expand' : 'Collapse'}
+                          title={isCollapsed(sec.id) ? 'Expand' : 'Collapse'}
                         >
-                          <span className="w-2">{collapsedSections.has(sec.id) ? '▸' : '▾'}</span>
+                          <span className="w-2">{isCollapsed(sec.id) ? '▸' : '▾'}</span>
                           {sec.icon} {sec.label}
                           <span className="font-normal text-[#5a4d3a]">{sec.ducks.length}</span>
                           <span className="ml-1 h-px flex-1 bg-[#3a2e22]" />
                         </button>
                       )}
-                      {!collapsedSections.has(sec.id) && (
+                      {!isCollapsed(sec.id) && (
                         <div className="flex flex-col gap-1">
                           {(expandedRows.has(sec.id) ? sec.ducks : sec.ducks.slice(0, SECTION_ROW_CAP)).map(renderDuck)}
                           {!expandedRows.has(sec.id) && sec.ducks.length > SECTION_ROW_CAP && (
