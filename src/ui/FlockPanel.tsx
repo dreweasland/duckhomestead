@@ -1355,10 +1355,32 @@ function FlockPanelInner({
             })()}
 
             {shown.length === 0 ? (
+              // Filters PERSIST across runs (the workbench law) — so a fresh
+              // prestige flock can be entirely hidden by last run's color tab,
+              // stage filter, or gene query ("flock says 3/4, list shows
+              // nothing", playtest 2026-07-16). A dead-end message isn't
+              // enough: name the count and offer the one-tap way out.
               <div className="py-6 text-center text-sm text-[#9a8a6a]">
-                {inColor.length === 0 && colorTab !== 'all'
-                  ? `No ${COLOR_META[colorTab].label.toLowerCase()} ducks yet.`
-                  : 'No ducks match these filters.'}
+                <div>
+                  {inColor.length === 0 && colorTab !== 'all'
+                    ? `No ${COLOR_META[colorTab].label.toLowerCase()} ducks yet.`
+                    : 'No ducks match these filters.'}
+                </div>
+                {state.ducks.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setColorTab('all');
+                      setSexFilter('all');
+                      setStageFilter('all');
+                      setQueryGene('any');
+                      setQuerySlot(-1);
+                    }}
+                    className="mt-2 rounded-md bg-[#3a2e22] px-2.5 py-1 text-[11px] font-bold text-[#ffe9a8] hover:bg-[#4a3a2a]"
+                    title="Clear the color tab, sex/stage filters, and the gene query — show the whole flock"
+                  >
+                    Show all {state.ducks.length} duck{state.ducks.length > 1 ? 's' : ''}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="flex flex-col gap-2.5">
